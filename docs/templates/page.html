@@ -1,0 +1,19 @@
+{% include "header.html" %}
+{% include "nav.html" %}
+<div class="docs-container">
+  {% include "sidebar.html" %}
+  <main class="docs-main{% if not page.toc %} no-toc{% endif %}">
+    <h1>{{ page.title }}</h1>
+    {{ content }}
+    <footer class="docs-footer">
+      <p><a href="https://github.com/hahwul/doma" target="_blank" rel="noopener">GitHub</a> · <a href="https://github.com/hahwul/doma/edit/main/docs/content{{ page.url }}.md" target="_blank" rel="noopener">Edit this page</a></p>
+    </footer>
+  </main>
+  {% if page.toc %}
+  <aside class="docs-toc">
+    <div class="toc-title">On this page</div>
+    {{ toc }}
+  </aside>
+  {% endif %}
+</div>
+{% include "footer.html" %}

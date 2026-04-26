@@ -1,0 +1,24 @@
+{% include "header.html" %}
+{% include "nav.html" %}
+<div class="docs-container">
+  {% include "sidebar.html" %}
+  <main class="docs-main">
+    <h1>{{ section.title }}</h1>
+    {% if section.description %}
+    <p>{{ section.description }}</p>
+    {% endif %}
+    {{ content }}
+    {% if section.pages_count > 0 %}
+    <h2>In this section</h2>
+    <ul class="page-list">
+      {% for p in section.pages %}
+      <li><a href="{{ p.url }}">{{ p.title }}</a></li>
+      {% endfor %}
+    </ul>
+    {% endif %}
+    <footer class="docs-footer">
+      <p><a href="https://github.com/hahwul/doma" target="_blank" rel="noopener">GitHub</a></p>
+    </footer>
+  </main>
+</div>
+{% include "footer.html" %}

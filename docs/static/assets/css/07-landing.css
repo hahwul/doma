@@ -1,0 +1,215 @@
+/* =============================================================================
+   Landing — kept minimal on purpose. The page reads like a short note,
+   not a marketing site, so we avoid the grid/card/hero-canvas patterns
+   from a typical SSG demo.
+   ============================================================================= */
+
+.landing-body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    margin: 0;
+    min-height: 100vh;
+    line-height: 1.7;
+}
+
+.landing-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.5rem 2rem;
+    max-width: 760px;
+    margin: 0 auto;
+}
+
+.landing-header .brand {
+    font-family: var(--font-mono);
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: 0.02em;
+    text-decoration: none;
+}
+
+.landing-header .brand::before {
+    content: "▌";
+    color: var(--primary);
+    margin-right: 0.4rem;
+    font-weight: 400;
+}
+
+.landing-header nav {
+    display: flex;
+    gap: 1.5rem;
+    align-items: center;
+}
+
+.landing-header nav a {
+    color: var(--text-secondary);
+    font-size: 0.92rem;
+    text-decoration: none;
+    transition: color var(--transition-fast);
+}
+
+.landing-header nav a:hover {
+    color: var(--text);
+}
+
+.landing-header .github-link svg {
+    color: var(--text-secondary);
+    transition: color var(--transition-fast);
+}
+
+.landing-header .github-link:hover svg {
+    color: var(--text);
+}
+
+/* The single content column. No sidebars, no hero overlay — every line
+   sits in the same gentle margin so it reads like a written note. */
+.landing-main {
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 2rem 2rem 4rem;
+}
+
+.landing-intro h1 {
+    font-size: 2.2rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin: 1.5rem 0 0.4rem;
+    color: var(--text);
+}
+
+.landing-intro .tagline {
+    font-size: 1.05rem;
+    color: var(--text-secondary);
+    margin: 0 0 1.5rem;
+}
+
+.landing-intro p {
+    color: var(--text-secondary);
+    font-size: 1rem;
+    margin: 1.1rem 0;
+}
+
+.landing-intro p strong,
+.landing-intro p b {
+    color: var(--text);
+    font-weight: 600;
+}
+
+.landing-intro a {
+    color: var(--primary);
+    text-decoration: none;
+    border-bottom: 1px dotted var(--primary-dim);
+    transition: all var(--transition-fast);
+}
+
+.landing-intro a:hover {
+    color: var(--primary-hover);
+    border-bottom-color: var(--primary-hover);
+}
+
+/* Code block on the landing — looks like a transcript, not a fenced
+   syntax-highlighted block. Soft warm bg, no language label. */
+.landing-snippet {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    padding: 1rem 1.25rem;
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    line-height: 1.7;
+    color: var(--text);
+    margin: 1.5rem 0 2rem;
+    overflow-x: auto;
+}
+
+.landing-snippet .comment {
+    color: var(--text-muted);
+}
+
+.landing-snippet .prompt {
+    color: var(--primary);
+    user-select: none;
+    margin-right: 0.5rem;
+}
+
+/* Buttons: deliberate restraint. One filled (primary), one ghost. */
+.landing-cta-row {
+    display: flex;
+    gap: 0.75rem;
+    margin: 1.5rem 0 2.5rem;
+    flex-wrap: wrap;
+}
+
+.btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.55rem 1.1rem;
+    border-radius: var(--radius-md);
+    font-size: 0.9rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition: all var(--transition-fast);
+    border: 1px solid transparent;
+}
+
+.btn-primary {
+    background: var(--primary);
+    color: var(--bg);
+}
+
+.btn-primary:hover {
+    background: var(--primary-hover);
+    color: var(--bg);
+}
+
+.btn-ghost {
+    background: transparent;
+    color: var(--text-secondary);
+    border-color: var(--border-light);
+}
+
+.btn-ghost:hover {
+    color: var(--text);
+    border-color: var(--text-muted);
+}
+
+.landing-footer {
+    max-width: 680px;
+    margin: 3rem auto 2rem;
+    padding: 1.5rem 2rem 0;
+    border-top: 1px solid var(--border);
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.landing-footer a {
+    color: var(--text-secondary);
+    text-decoration: none;
+    transition: color var(--transition-fast);
+}
+
+.landing-footer a:hover {
+    color: var(--text);
+}
+
+@media (max-width: 600px) {
+    .landing-header,
+    .landing-main,
+    .landing-footer {
+        padding-left: 1.25rem;
+        padding-right: 1.25rem;
+    }
+
+    .landing-intro h1 {
+        font-size: 1.8rem;
+    }
+}

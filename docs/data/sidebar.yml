@@ -1,0 +1,44 @@
+- title: Start
+  items:
+    - title: Overview
+      url: /start/
+    - title: Installation
+      url: /start/installation/
+    - title: Quickstart
+      url: /start/quickstart/
+    - title: Shell integration
+      url: /start/shell-integration/
+- title: Usage
+  items:
+    - title: Overview
+      url: /usage/
+    - title: Tagging directories
+      url: /usage/tagging/
+    - title: Navigation (cd)
+      url: /usage/navigation/
+    - title: TTL & marks
+      url: /usage/ttl-and-marks/
+    - title: Bulk run
+      url: /usage/run/
+    - title: Search & stats
+      url: /usage/search-and-stats/
+    - title: Pipelines
+      url: /usage/pipelines/
+    - title: Snapshots
+      url: /usage/snapshots/
+- title: Reference
+  items:
+    - title: Overview
+      url: /reference/
+    - title: Commands
+      url: /reference/commands/
+    - title: Configuration
+      url: /reference/config/
+    - title: Environment
+      url: /reference/env/
+- title: AI agents
+  items:
+    - title: Overview
+      url: /ai/
+    - title: Claude Code skill
+      url: /ai/claude-skill/
