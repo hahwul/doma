@@ -19,6 +19,13 @@ module Doma
       target = path || Doma::Config.db_path
       Doma::Config.ensure_home! if target == Doma::Config.db_path
 
+      # Catch obvious misconfigurations up front so the user gets a
+      # clean ConfigError instead of an empty-message
+      # `DB::ConnectionRefused` from the SQLite layer.
+      if Dir.exists?(target)
+        raise Doma::ConfigError.new("DOMA_DB points at a directory, not a file: #{target}")
+      end
+
       # DSN-encoded pragmas apply on every pool connection (setting them
       # once via `db.exec PRAGMA …` only affects whichever connection ran
       # the exec). The trio matters:
@@ -29,7 +36,12 @@ module Doma
       #                          shells at once
       #   - busy_timeout      →  on lock contention, sleep-retry for up to
       #                          5s instead of failing immediately
-      raw = DB.open("sqlite3://#{target}?foreign_keys=on&journal_mode=wal&busy_timeout=5000")
+      raw = begin
+        DB.open("sqlite3://#{target}?foreign_keys=on&journal_mode=wal&busy_timeout=5000")
+      rescue ex
+        message = ex.message.presence || ex.class.name
+        raise Doma::Error.new("cannot open database (#{target}): #{message}")
+      end
       Migrations.run(raw)
       new(raw, target)
     end

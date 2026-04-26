@@ -27,6 +27,7 @@ module Doma::CLI
       begin
         if raw = output
           path = Doma::Validator.canonicalize(raw)
+          validate_output_path!(path)
           write_atomic(db, format, path)
           Doma::Logger.success "exported to #{path}"
         else
@@ -37,15 +38,31 @@ module Doma::CLI
       end
     end
 
+    # Catch the obviously-bad output paths up front with a clean
+    # ValidationError, so the user gets "output path is a directory"
+    # instead of the raw rename/open error the runtime would surface.
+    private def validate_output_path!(path : String)
+      if Dir.exists?(path)
+        raise Doma::ValidationError.new("output path is a directory: #{path}")
+      end
+      parent = File.dirname(path)
+      unless Dir.exists?(parent)
+        raise Doma::ValidationError.new("output directory does not exist: #{parent}")
+      end
+    end
+
     # Atomic write via temp + rename so a crashed export never leaves a
-    # half-written file in place of a previous good snapshot. The rescue
-    # guards against leaving the `.tmp` file behind if the write itself
-    # fails (disk full, permission error mid-stream, etc.).
+    # half-written file in place of a previous good snapshot. Translates
+    # IO failures into a friendly Doma::Error so the runner's generic
+    # rescue (which prints "internal error:") never sees them.
     private def write_atomic(db : Doma::Database, format : Doma::Exporter::Format, path : String)
       tmp = "#{path}.#{Process.pid}.tmp"
       begin
         File.open(tmp, "w") { |f| Doma::Exporter.write(db, format, f) }
         File.rename(tmp, path)
+      rescue ex : File::AccessDeniedError | File::Error | IO::Error
+        File.delete(tmp) if File.exists?(tmp)
+        raise Doma::Error.new("export failed: #{ex.message}")
       rescue ex
         File.delete(tmp) if File.exists?(tmp)
         raise ex

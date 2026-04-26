@@ -36,8 +36,23 @@ module Doma
       File.join(home, ".cd-hint-shown")
     end
 
+    # Make sure the home directory exists, translating the common
+    # misconfiguration ("$DOMA_HOME points at a regular file") into a
+    # ConfigError with a clear message instead of letting the
+    # `mkdir_p`'s raw "Unable to create directory" leak as an internal
+    # error.
     def ensure_home!
-      FileUtils.mkdir_p(home)
+      target = home
+      if File.file?(target)
+        raise ConfigError.new(
+          "DOMA_HOME points at a file, not a directory: #{target}"
+        )
+      end
+      FileUtils.mkdir_p(target)
+    rescue ex : ConfigError
+      raise ex
+    rescue ex
+      raise ConfigError.new("cannot create DOMA_HOME (#{target}): #{ex.message}")
     end
   end
 

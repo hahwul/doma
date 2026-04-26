@@ -121,6 +121,89 @@ describe "doma add" do
   end
 end
 
+describe "doma misconfigured env paths" do
+  bin = File.expand_path("../bin/doma", __DIR__)
+
+  it "[bug] DOMA_HOME pointing at a file gives a friendly ConfigError" do
+    pending! "binary not built" unless File.exists?(bin)
+    bad = File.tempname("doma-home-as-file")
+    File.write(bad, "")
+
+    sink = IO::Memory.new
+    err = IO::Memory.new
+    status = Process.run(bin, ["list"], env: {"DOMA_HOME" => bad}, output: sink, error: err)
+    status.exit_code.should eq(5)
+    err.to_s.should contain("DOMA_HOME points at a file")
+    err.to_s.should_not contain("internal error:")
+  ensure
+    File.delete(bad) if bad && File.exists?(bad)
+  end
+
+  it "[bug] DOMA_DB pointing at a directory gives a friendly ConfigError" do
+    pending! "binary not built" unless File.exists?(bin)
+    bad = File.tempname("doma-db-as-dir")
+    FileUtils.mkdir_p(bad)
+
+    sink = IO::Memory.new
+    err = IO::Memory.new
+    status = Process.run(bin, ["list"], env: {"DOMA_DB" => bad}, output: sink, error: err)
+    status.exit_code.should eq(5)
+    err.to_s.should contain("DOMA_DB points at a directory")
+    err.to_s.should_not contain("internal error:")
+  ensure
+    FileUtils.rm_rf(bad) if bad
+  end
+end
+
+describe "doma export -o bad paths" do
+  bin = File.expand_path("../bin/doma", __DIR__)
+
+  it "[bug] errors cleanly when output path is a directory" do
+    pending! "binary not built" unless File.exists?(bin)
+    home = File.tempname("doma-export-dir")
+    target = File.tempname("doma-export-target")
+    FileUtils.mkdir_p(home)
+    FileUtils.mkdir_p(target)
+
+    sink = IO::Memory.new
+    Process.run(bin, ["add", "/tmp", "-t", "x"], env: {"DOMA_HOME" => home}, output: sink, error: sink)
+
+    err = IO::Memory.new
+    status = Process.run(
+      bin, ["export", "-o", target],
+      env: {"DOMA_HOME" => home}, output: sink, error: err,
+    )
+    status.exit_code.should eq(2)
+    combined = err.to_s + sink.to_s
+    combined.should contain("is a directory")
+    combined.should_not contain("internal error:")
+  ensure
+    FileUtils.rm_rf(home) if home
+    FileUtils.rm_rf(target) if target
+  end
+
+  it "[bug] errors cleanly when parent directory doesn't exist" do
+    pending! "binary not built" unless File.exists?(bin)
+    home = File.tempname("doma-export-noparent")
+    FileUtils.mkdir_p(home)
+
+    sink = IO::Memory.new
+    Process.run(bin, ["add", "/tmp", "-t", "x"], env: {"DOMA_HOME" => home}, output: sink, error: sink)
+
+    err = IO::Memory.new
+    status = Process.run(
+      bin, ["export", "-o", "/no/such/dir/snap.json"],
+      env: {"DOMA_HOME" => home}, output: sink, error: err,
+    )
+    status.exit_code.should eq(2)
+    combined = err.to_s + sink.to_s
+    combined.should contain("does not exist")
+    combined.should_not contain("internal error:")
+  ensure
+    FileUtils.rm_rf(home) if home
+  end
+end
+
 describe "doma doctor with corrupted DB" do
   bin = File.expand_path("../bin/doma", __DIR__)
 
