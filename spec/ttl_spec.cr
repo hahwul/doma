@@ -143,6 +143,60 @@ describe "Database#prune_expired!" do
   end
 end
 
+describe "Database#directories_by_short_id_prefix" do
+  it "returns all matches for a prefix" do
+    with_temp_db do |db|
+      tmp_a = File.tempname("doma-pfx-a")
+      tmp_b = File.tempname("doma-pfx-b")
+      FileUtils.mkdir_p(tmp_a)
+      FileUtils.mkdir_p(tmp_b)
+      begin
+        db.add(tmp_a, [] of String)
+        db.add(tmp_b, [] of String)
+        # The empty prefix matches every directory — useful as a
+        # sentinel for "give me everything via this resolver".
+        all = db.directories_by_short_id_prefix("")
+        all.size.should eq(2)
+      ensure
+        FileUtils.rm_rf(tmp_a)
+        FileUtils.rm_rf(tmp_b)
+      end
+    end
+  end
+
+  it "resolves a unique 2-char prefix" do
+    with_temp_db do |db|
+      tmp = File.tempname("doma-pfx-uniq")
+      FileUtils.mkdir_p(tmp)
+      begin
+        db.add(tmp, [] of String)
+        full = db.directories.first.short_id
+        hits = db.directories_by_short_id_prefix(full[0, 2])
+        hits.size.should eq(1)
+        hits.first.short_id.should eq(full)
+      ensure
+        FileUtils.rm_rf(tmp)
+      end
+    end
+  end
+
+  it "is empty for non-matching prefixes" do
+    with_temp_db do |db|
+      tmp = File.tempname("doma-pfx-miss")
+      FileUtils.mkdir_p(tmp)
+      begin
+        db.add(tmp, [] of String)
+        # `xyz` is hex-illegal, but the DB query doesn't care — it just
+        # returns nothing. The cd command's hex precheck is what guards
+        # against weird tag-typos pulling in unrelated short_ids.
+        db.directories_by_short_id_prefix("zzzzzzz").should be_empty
+      ensure
+        FileUtils.rm_rf(tmp)
+      end
+    end
+  end
+end
+
 describe "Schema v3: short_id" do
   it "every directory has a unique 7-char short_id" do
     with_temp_db do |db|

@@ -98,13 +98,16 @@ module Doma::CLI
 
         color = Doma::Logger.color_enabled?
         entries.each do |e|
+          # short_id is shown dim so the eye lands on path/tags first
+          # but it's still copy-pasteable for `doma cd <id>`.
+          short_str = color ? e.short_id.colorize(:dark_gray).to_s : e.short_id
           path_str = color ? e.path.colorize(:cyan).to_s : e.path
           tags_str = e.tags.empty? ? "" : e.tags.map { |t| color ? "##{t}".colorize(:yellow).to_s : "##{t}" }.join(' ')
           marker = ""
           if check_existence && !Dir.exists?(e.path)
             marker = color ? " #{"[gone]".colorize(:red)}" : " [gone]"
           end
-          puts "#{path_str}\t#{tags_str}#{marker}"
+          puts "#{short_str}  #{path_str}\t#{tags_str}#{marker}"
         end
       ensure
         db.close

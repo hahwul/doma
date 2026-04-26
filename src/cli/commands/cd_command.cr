@@ -66,7 +66,7 @@ module Doma::CLI
 
       Doma::Logger.warn "doma cd printed the path but didn't change directory."
       STDERR.puts "  The shell wrapper isn't loaded. Set it up once with:"
-      STDERR.puts "      doma install"
+      STDERR.puts "      doma setup install"
       STDERR.puts "  (this hint won't appear again)"
 
       Doma::Config.ensure_home!
@@ -78,12 +78,22 @@ module Doma::CLI
     private def run_for_tag(tag : String, mode : Doma::Settings::SelectorMode?, index : Int32?)
       db = Doma::Database.open
       begin
+        # Resolution order:
+        #   1. Tag name match — the typical case
+        #   2. short_id prefix — `doma cd 0dc0db9` (or any unique
+        #      prefix). Only consulted when there's no tag match, so
+        #      a literal tag named `abc` still wins over a short_id
+        #      that happens to start with `abc`.
         paths = db.paths_for_tag(tag)
         if paths.empty?
-          # `tag_names` only fires on the not-found branch — saves a query
-          # in the common (path-found) case.
+          if direct = resolve_short_id(db, tag)
+            bump_used_safe(db, direct)
+            puts direct
+            return
+          end
+
           raise Doma::NotFoundError.new(
-            "no directories tagged '#{tag}'",
+            "no directories tagged '#{tag}' (and no matching short_id)",
             hint: Doma::Suggester.hint_for(tag, db.tag_names)
           )
         end
@@ -105,6 +115,31 @@ module Doma::CLI
         puts chosen
       ensure
         db.close
+      end
+    end
+
+    # Returns the path for a unique short_id prefix match, or raises
+    # ValidationError on ambiguity. Returns nil for "no match at all"
+    # so the caller can produce the combined "tag/short_id not found"
+    # error in one place.
+    private def resolve_short_id(db : Doma::Database, prefix : String) : String?
+      # Skip the lookup unless the input *could* be a short_id — every
+      # short_id we generate is hex. This avoids quietly resolving a
+      # weird tag-typo to an unrelated directory whose short_id starts
+      # with non-hex characters that happen to match.
+      return unless prefix.matches?(/\A[0-9a-fA-F]+\z/)
+
+      hits = db.directories_by_short_id_prefix(prefix.downcase)
+      case hits.size
+      when 0
+        nil
+      when 1
+        hits.first.path
+      else
+        list = hits.map(&.short_id).join(", ")
+        raise Doma::ValidationError.new(
+          "short_id prefix '#{prefix}' is ambiguous (matches: #{list})"
+        )
       end
     end
 

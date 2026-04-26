@@ -382,6 +382,23 @@ module Doma
       @db.query_all("SELECT name FROM tags ORDER BY name", as: String)
     end
 
+    # Resolves a short_id prefix to matching directories. The cd
+    # command uses this to support both the bare form (`cd 0dc0db9`)
+    # and prefix typing (`cd 0d` if unique). Empty result = no match;
+    # multiple = ambiguous. Caller decides what to do with each.
+    def directories_by_short_id_prefix(prefix : String) : Array(Entry)
+      pattern = "#{prefix}%"
+      rows = @db.query_all(
+        <<-SQL, pattern, as: {Int64, String, String, String, String?}
+          SELECT d.id, d.short_id, d.path, d.basename, #{TAGS_GROUP_CONCAT_ACTIVE}
+          FROM directories d
+          WHERE d.short_id LIKE ? ESCAPE '\\'
+          ORDER BY d.short_id
+          SQL
+      )
+      rows.map { |row| build_entry(row) }
+    end
+
     # Paths matching a tag (or tag-glob), sorted by recency. A tag
     # containing `*` or `?` triggers GLOB matching so `doma cd 'work*'`
     # resolves to every directory tagged `work-foo`, `work-bar`, etc.

@@ -126,7 +126,7 @@ module Doma
         {"tags", "List all tags with counts"},
         {"rename <old> <new>", "Rename or merge a tag"},
         {"list [<query>] [-t TAG]", "List/search directories (--json, --paths)"},
-        {"cd [<tag>]", "Resolve a directory (interactive picker)"},
+        {"cd [<tag>|<id>]", "Resolve a directory (tag or short_id prefix)"},
         {"stats", "Top tags + recently added paths"},
         {"run <tag> -- <cmd>", "Run a command in every tagged directory"},
         {"export", "Dump the database (--json | --yaml)"},
