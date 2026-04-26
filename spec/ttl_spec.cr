@@ -143,6 +143,92 @@ describe "Database#prune_expired!" do
   end
 end
 
+describe "doma mark CLI alias" do
+  bin = File.expand_path("../bin/doma", __DIR__)
+
+  it "[ergonomics] tags cwd with --tmp default (single tag)" do
+    pending! "binary not built" unless File.exists?(bin)
+    home = File.tempname("doma-mark-1")
+    workdir = File.tempname("doma-mark-cwd1")
+    FileUtils.mkdir_p(home)
+    FileUtils.mkdir_p(workdir)
+    begin
+      sink = IO::Memory.new
+      status = Process.run(
+        bin, ["mark", "reading"],
+        env: {"DOMA_HOME" => home}, chdir: workdir, output: sink, error: sink,
+      )
+      status.success?.should be_true
+
+      Doma::Database.open(File.join(home, "doma.db")).tap do |db|
+        begin
+          db.paths_for_tag("reading").size.should eq(1)
+          # The tag must have a TTL — that's the whole point of mark.
+          # Re-query the row directly to confirm expires_at != NULL.
+          row = db.db.query_one?(
+            "SELECT dt.expires_at FROM directory_tags dt " \
+            "INNER JOIN tags t ON t.id = dt.tag_id " \
+            "WHERE t.name = ?",
+            "reading", as: Int64?
+          )
+          row.should_not be_nil
+        ensure
+          db.close
+        end
+      end
+    ensure
+      FileUtils.rm_rf(home)
+      FileUtils.rm_rf(workdir)
+    end
+  end
+
+  it "[ergonomics] accepts multiple tags as positional args" do
+    pending! "binary not built" unless File.exists?(bin)
+    home = File.tempname("doma-mark-2")
+    workdir = File.tempname("doma-mark-cwd2")
+    FileUtils.mkdir_p(home)
+    FileUtils.mkdir_p(workdir)
+    begin
+      sink = IO::Memory.new
+      Process.run(
+        bin, ["mark", "spike", "skim", "review"],
+        env: {"DOMA_HOME" => home}, chdir: workdir, output: sink, error: sink,
+      )
+
+      Doma::Database.open(File.join(home, "doma.db")).tap do |db|
+        begin
+          db.paths_for_tag("spike").size.should eq(1)
+          db.paths_for_tag("skim").size.should eq(1)
+          db.paths_for_tag("review").size.should eq(1)
+        ensure
+          db.close
+        end
+      end
+    ensure
+      FileUtils.rm_rf(home)
+      FileUtils.rm_rf(workdir)
+    end
+  end
+
+  it "[ergonomics] rejects empty tag list" do
+    pending! "binary not built" unless File.exists?(bin)
+    home = File.tempname("doma-mark-3")
+    FileUtils.mkdir_p(home)
+    begin
+      sink = IO::Memory.new
+      err = IO::Memory.new
+      status = Process.run(
+        bin, ["mark"],
+        env: {"DOMA_HOME" => home}, output: sink, error: err,
+      )
+      status.exit_code.should eq(2)
+      err.to_s.should contain("at least one tag")
+    ensure
+      FileUtils.rm_rf(home)
+    end
+  end
+end
+
 describe "Database#directories_by_short_id_prefix" do
   it "returns all matches for a prefix" do
     with_temp_db do |db|

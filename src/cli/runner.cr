@@ -3,6 +3,7 @@ require "../utils/errors"
 require "../utils/logger"
 require "../utils/suggester"
 require "./commands/add_command"
+require "./commands/mark_command"
 require "./commands/rm_command"
 require "./commands/list_command"
 require "./commands/tags_command"
@@ -19,7 +20,7 @@ module Doma
   module CLI
     class Runner
       KNOWN_COMMANDS = %w[
-        add rm remove list ls tags rename move mv
+        add mark rm remove list ls tags rename move mv
         stats cd run export import setup
         version help -V --version -h --help
       ]
@@ -43,6 +44,8 @@ module Doma
           print_help
         when "add"
           AddCommand.new.run(args)
+        when "mark"
+          MarkCommand.new.run(args)
         when "rm", "remove"
           RmCommand.new.run(args)
         when "list", "ls"
@@ -121,6 +124,7 @@ module Doma
       # docs continue to make sense; only the visual grouping is gone.
       COMMAND_LISTING = [
         {"add [<path>]", "Register a path (defaults to .) with tags"},
+        {"mark <tag> ...", "Tag cwd with temporary (7d) tags  (alias of add . -t … --tmp)"},
         {"rm <path>", "Remove tag(s) or the path itself"},
         {"move <old> <new>", "Move a registered path (tags carry over)"},
         {"tags", "List all tags with counts"},
