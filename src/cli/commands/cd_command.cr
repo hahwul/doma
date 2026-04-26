@@ -90,17 +90,19 @@ module Doma::CLI
         )
       end
 
-      if idx = index
-        unless idx >= 1 && idx <= paths.size
-          raise Doma::ValidationError.new("index out of range (1..#{paths.size})")
-        end
-        puts paths[idx - 1]
-        return
-      end
+      chosen = if idx = index
+                 unless idx >= 1 && idx <= paths.size
+                   raise Doma::ValidationError.new("index out of range (1..#{paths.size})")
+                 end
+                 paths[idx - 1]
+               else
+                 result = Doma::Selector.pick(paths, prompt: "doma cd #{tag}", mode: mode)
+                 raise Doma::Error.new("selection cancelled", 130) if result.cancelled
+                 result.value
+               end
 
-      result = Doma::Selector.pick(paths, prompt: "doma cd #{tag}", mode: mode)
-      raise Doma::Error.new("selection cancelled", 130) if result.cancelled
-      puts result.value
+      bump_used(chosen)
+      puts chosen
     end
 
     # Full browse: every registered directory, with tags rendered as a
@@ -122,7 +124,9 @@ module Doma::CLI
 
       case effective
       in Doma::Settings::SelectorMode::First
-        puts entries.first.path
+        chosen = entries.first.path
+        bump_used(chosen)
+        puts chosen
       in Doma::Settings::SelectorMode::Builtin
         items = entries.map do |e|
           tags_hint = e.tags.empty? ? nil : e.tags.map { |t| "##{t}" }.join(' ')
@@ -140,11 +144,28 @@ module Doma::CLI
         result = Doma::Picker.pick(initial, "doma cd")
         raise Doma::Error.new("selection cancelled", 130) if result.cancelled
         if value = result.value
+          bump_used(value)
           puts value
         end
       in Doma::Settings::SelectorMode::Auto
         # Already resolved above; this branch satisfies exhaustiveness.
         puts entries.first.path
+      end
+    end
+
+    # Stamp the resolved path as just-used. Opens its own DB handle
+    # because the upstream open/close pair has already finished — keeps
+    # the bump out of the hot path so the user sees the chosen path
+    # printed immediately, and a write failure here never breaks the
+    # actual `cd`.
+    private def bump_used(path : String)
+      db = Doma::Database.open
+      begin
+        db.bump_used!(path)
+      rescue
+        # Frecency is best-effort; never let it fail the command.
+      ensure
+        db.close
       end
     end
   end

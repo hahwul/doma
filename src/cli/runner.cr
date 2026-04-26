@@ -139,7 +139,7 @@ module Doma
         puts ""
 
         section "Paths", color, [
-          {"add <path>", "Register a path with tags  (-t crystal,web)"},
+          {"add [<path>]", "Register a path (defaults to .) with tags"},
           {"rm <path>", "Remove tag(s) or the path itself"},
           {"move <old> <new>", "Move a registered path (tags carry over)"},
         ]
@@ -182,6 +182,12 @@ module Doma
         puts ""
         puts "  Without the wrapper, `doma cd` only prints the resolved path —"
         puts "  use `cd \"$(doma cd <tag>)\"` to apply it manually."
+        puts ""
+        puts "  Pipelines:"
+        puts "    doma list -t crystal --paths            # one path per line"
+        puts "    doma list -t crystal -0 | xargs -0 ...  # NUL-safe for spaces"
+        puts "    doma list -t crystal --json | jq        # structured"
+        puts "    doma tags --names                       # just tag names"
         puts ""
       end
 

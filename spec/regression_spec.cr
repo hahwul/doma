@@ -88,6 +88,39 @@ describe "Database#remove_tags" do
   end
 end
 
+describe "doma add" do
+  it "[ergonomics] defaults to the current directory when path is omitted" do
+    home = File.tempname("doma-add-default")
+    FileUtils.mkdir_p(home)
+    workdir = File.tempname("doma-cwd")
+    FileUtils.mkdir_p(workdir)
+    bin = File.expand_path("../bin/doma", __DIR__)
+    pending! "binary not built" unless File.exists?(bin)
+    begin
+      sink = IO::Memory.new
+      status = Process.run(
+        bin, ["add", "-t", "auto-default"],
+        env: {"DOMA_HOME" => home},
+        chdir: workdir, output: sink, error: sink,
+      )
+      status.success?.should be_true
+
+      Doma::Database.open(File.join(home, "doma.db")).tap do |db|
+        begin
+          paths = db.paths_for_tag("auto-default")
+          paths.size.should eq(1)
+          paths.first.should eq(Doma::Validator.canonicalize(workdir))
+        ensure
+          db.close
+        end
+      end
+    ensure
+      FileUtils.rm_rf(home)
+      FileUtils.rm_rf(workdir)
+    end
+  end
+end
+
 describe "Validator.canonicalize symlink + trailing slash" do
   it "[completion] strips trailing slash" do
     Doma::Validator.canonicalize("/tmp/").should eq(Doma::Validator.canonicalize("/tmp"))

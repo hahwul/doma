@@ -169,6 +169,36 @@ module Doma
       result
     end
 
+    # ---------- Maintenance ----------
+
+    # Returns entries whose registered path no longer exists on disk.
+    # `Dir.exists?` rather than `File.exists?` because we explicitly
+    # store directories — a path that's been replaced by a regular file
+    # is just as broken for our purposes.
+    def dead_paths : Array(Entry)
+      directories.reject { |e| Dir.exists?(e.path) }
+    end
+
+    # Removes every directory whose path no longer exists on disk.
+    # Single transaction so a partial failure can't leave half-pruned
+    # state. Returns the number of rows actually deleted.
+    def prune_dead! : Int32
+      removed = 0
+      @db.transaction do |tx|
+        cnn = tx.connection
+        cnn.query_all(
+          "SELECT id, path FROM directories", as: {Int64, String}
+        ).each do |row|
+          id, path = row
+          next if Dir.exists?(path)
+          cnn.exec("DELETE FROM directories WHERE id = ?", id)
+          removed += 1
+        end
+        cleanup_orphans_tx(cnn)
+      end
+      removed
+    end
+
     # Wipes every row. Used by `import --replace`.
     def clear!
       @db.transaction do |tx|
@@ -185,21 +215,37 @@ module Doma
 
     # ---------- Queries ----------
 
-    def directories(tag : String? = nil) : Array(Entry)
+    enum SortBy
+      Path
+      Recent # most-recently-used first
+    end
+
+    # SQLite's GLOB operator supports `*` (any chars) and `?` (any one
+    # char) — same syntax users already know from shell. We pick GLOB
+    # over LIKE so users don't have to remember to escape `_`/`%`,
+    # which are valid characters inside tag names.
+    private def tag_match_clause(tag : String) : String
+      tag.includes?('*') || tag.includes?('?') ? "GLOB" : "="
+    end
+
+    def directories(tag : String? = nil, *, sort : SortBy = SortBy::Path) : Array(Entry)
       rows = if tag
+               op = tag_match_clause(tag)
+               order = order_clause(sort, prefix: "d.")
                @db.query_all(
                  <<-SQL, tag, as: {Int64, String, String}
-                   SELECT d.id, d.path, d.basename
+                   SELECT DISTINCT d.id, d.path, d.basename
                    FROM directories d
                    INNER JOIN directory_tags dt ON dt.directory_id = d.id
                    INNER JOIN tags t ON t.id = dt.tag_id
-                   WHERE t.name = ?
-                   ORDER BY d.path
+                   WHERE t.name #{op} ?
+                   #{order}
                    SQL
                )
              else
+               order = order_clause(sort, prefix: "")
                @db.query_all(
-                 "SELECT id, path, basename FROM directories ORDER BY path",
+                 "SELECT id, path, basename FROM directories #{order}",
                  as: {Int64, String, String}
                )
              end
@@ -207,6 +253,13 @@ module Doma
       rows.map do |row|
         id, path, basename = row
         Entry.new(id, path, basename, tags_for(id))
+      end
+    end
+
+    private def order_clause(sort : SortBy, *, prefix : String) : String
+      case sort
+      in SortBy::Path   then "ORDER BY #{prefix}path"
+      in SortBy::Recent then "ORDER BY #{prefix}last_used_at DESC, #{prefix}path ASC"
       end
     end
 
@@ -239,16 +292,32 @@ module Doma
       @db.query_all("SELECT name FROM tags ORDER BY name", as: String)
     end
 
+    # Paths matching a tag (or tag-glob), sorted by recency. A tag
+    # containing `*` or `?` triggers GLOB matching so `doma cd 'work*'`
+    # resolves to every directory tagged `work-foo`, `work-bar`, etc.
     def paths_for_tag(tag : String) : Array(String)
+      op = tag_match_clause(tag)
       @db.query_all(
         <<-SQL, tag, as: String
-          SELECT d.path
+          SELECT DISTINCT d.path
           FROM directories d
           INNER JOIN directory_tags dt ON dt.directory_id = d.id
           INNER JOIN tags t ON t.id = dt.tag_id
-          WHERE t.name = ?
-          ORDER BY d.path
+          WHERE t.name #{op} ?
+          ORDER BY d.last_used_at DESC, d.path ASC
           SQL
+      )
+    end
+
+    # Stamps a directory as just-used. Idempotent on missing paths
+    # (silently no-ops) so callers don't need to gate the bump on
+    # existence — `cd` still wants to print whatever was selected even
+    # if the underlying row got pruned in a parallel session.
+    def bump_used!(path : String)
+      abs = Validator.canonicalize(path)
+      @db.exec(
+        "UPDATE directories SET last_used_at = ? WHERE path = ?",
+        Time.utc.to_unix, abs
       )
     end
 
@@ -334,9 +403,10 @@ module Doma
       total_directories : Int64,
       total_tags : Int64,
       top_tags : Array(TagSummary),
-      recent : Array(NamedTuple(path: String, created_at: Int64))
+      recent : Array(NamedTuple(path: String, created_at: Int64)),
+      most_used : Array(NamedTuple(path: String, last_used_at: Int64))
 
-    def stats(top_n : Int32 = 10, recent_n : Int32 = 5) : Stats
+    def stats(top_n : Int32 = 10, recent_n : Int32 = 5, used_n : Int32 = 5) : Stats
       total_dirs = @db.scalar("SELECT COUNT(*) FROM directories").as(Int64)
       total_tags = @db.scalar("SELECT COUNT(*) FROM tags").as(Int64)
 
@@ -360,7 +430,20 @@ module Doma
           SQL
       ).map { |row| {path: row[0], created_at: row[1]} }
 
-      Stats.new(total_dirs, total_tags, top, recent)
+      # Filter out never-used rows (last_used_at = 0) so a fresh DB
+      # doesn't show a meaningless "Most used" section listing things
+      # the user has never actually opened.
+      most_used = @db.query_all(
+        <<-SQL, used_n, as: {String, Int64}
+          SELECT path, last_used_at
+          FROM directories
+          WHERE last_used_at > 0
+          ORDER BY last_used_at DESC, path ASC
+          LIMIT ?
+          SQL
+      ).map { |row| {path: row[0], last_used_at: row[1]} }
+
+      Stats.new(total_dirs, total_tags, top, recent, most_used)
     end
 
     # SQLite LIKE uses '\' as the configured escape character below. We wrap

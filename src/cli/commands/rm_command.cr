@@ -8,13 +8,15 @@ module Doma::CLI
   class RmCommand
     def run(args : Array(String))
       tags = [] of String
+      gone = false
       positional = [] of String
 
       parser = OptionParser.new do |p|
-        p.banner = "Usage: doma rm <path> [-t TAG ...]"
+        p.banner = "Usage: doma rm [<path> ...] [-t TAG ...] [--gone]"
         p.on("-t TAG", "--tag=TAG", "Remove this tag (repeatable, comma-separated allowed)") do |t|
           t.split(',').each { |x| tags << x.strip unless x.strip.empty? }
         end
+        p.on("--gone", "Remove every entry whose path no longer exists on disk") { gone = true }
         p.on("-h", "--help", "Show help") do
           puts p
           exit 0
@@ -26,7 +28,18 @@ module Doma::CLI
       end
       parser.parse(args)
 
-      raise Doma::ValidationError.new("path is required") if positional.empty?
+      if gone
+        # `--gone` is mutually exclusive with explicit paths/tags: it's a
+        # bulk maintenance operation, not a per-entry action. Refusing
+        # the combination prevents surprises like "I asked to remove a
+        # specific path, why did 12 others also disappear?"
+        unless positional.empty? && tags.empty?
+          raise Doma::ValidationError.new("--gone cannot be combined with paths or -t")
+        end
+        return run_gone
+      end
+
+      raise Doma::ValidationError.new("path is required (or use --gone)") if positional.empty?
 
       db = Doma::Database.open
       begin
@@ -45,6 +58,26 @@ module Doma::CLI
             end
           end
         end
+      ensure
+        db.close
+      end
+    end
+
+    private def run_gone
+      db = Doma::Database.open
+      begin
+        # List first so the user sees what was removed; reporting the
+        # count alone leaves them guessing whether anything important
+        # got swept up.
+        dead = db.dead_paths
+        if dead.empty?
+          Doma::Logger.info "no missing paths to prune"
+          return
+        end
+
+        dead.each { |e| Doma::Logger.info "  #{e.path}" }
+        removed = db.prune_dead!
+        Doma::Logger.success "pruned #{removed} missing path(s)"
       ensure
         db.close
       end

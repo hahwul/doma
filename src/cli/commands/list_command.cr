@@ -20,13 +20,33 @@ module Doma::CLI
       tag : String? = nil
       json_mode = false
       paths_only = false
+      null_sep = false
+      check_existence = false
+      sort = Doma::Database::SortBy::Path
       positional = [] of String
 
       parser = OptionParser.new do |p|
-        p.banner = "Usage: doma list [<query>] [-t TAG] [--json] [--paths]"
+        p.banner = "Usage: doma list [<query>] [-t TAG] [--by path|recent] [--check] [--json] [--paths] [-0]"
         p.on("-t TAG", "--tag=TAG", "Filter by exact tag") { |t| tag = t }
+        p.on("--by SORT", "Sort by 'path' (default) or 'recent'") do |val|
+          sort = case val
+                 when "path" then Doma::Database::SortBy::Path
+                 when "recent",
+                      "used",
+                      "recency" then Doma::Database::SortBy::Recent
+                 else
+                   raise Doma::ValidationError.new("--by must be 'path' or 'recent', got '#{val}'")
+                 end
+        end
+        p.on("--check", "Mark entries whose path is gone from disk") { check_existence = true }
         p.on("--json", "Output as JSON") { json_mode = true }
         p.on("--paths", "Print paths only") { paths_only = true }
+        # `-0` implies `--paths` so a pipeline call stays short:
+        # `doma list -t crystal -0 | xargs -0 grep TODO`
+        p.on("-0", "--print0", "Print paths only, NUL-separated (xargs -0)") do
+          paths_only = true
+          null_sep = true
+        end
         p.on("-h", "--help", "Show help") do
           puts p
           exit 0
@@ -42,16 +62,18 @@ module Doma::CLI
 
       db = Doma::Database.open
       begin
-        entries = collect(db, tag, query)
+        entries = collect(db, tag, query, sort)
 
         if json_mode
           payload = entries.map do |e|
-            {
-              "id"       => e.id,
-              "path"     => e.path,
-              "basename" => e.basename,
-              "tags"     => e.tags,
+            row = {
+              "id"       => JSON::Any.new(e.id),
+              "path"     => JSON::Any.new(e.path),
+              "basename" => JSON::Any.new(e.basename),
+              "tags"     => JSON::Any.new(e.tags.map { |t| JSON::Any.new(t) }),
             }
+            row["exists"] = JSON::Any.new(Dir.exists?(e.path)) if check_existence
+            row
           end
           puts payload.to_json
           return
@@ -63,7 +85,11 @@ module Doma::CLI
         end
 
         if paths_only
-          entries.each { |e| puts e.path }
+          # Each value is *terminated* (not just separated) by the chosen
+          # delimiter, matching `find -print0` semantics so xargs -0 sees
+          # a clean N-record stream.
+          sep = null_sep ? '\0' : '\n'
+          entries.each { |e| STDOUT.print(e.path); STDOUT.print(sep) }
           return
         end
 
@@ -71,7 +97,11 @@ module Doma::CLI
         entries.each do |e|
           path_str = color ? e.path.colorize(:cyan).to_s : e.path
           tags_str = e.tags.empty? ? "" : e.tags.map { |t| color ? "##{t}".colorize(:yellow).to_s : "##{t}" }.join(' ')
-          puts "#{path_str}\t#{tags_str}"
+          marker = ""
+          if check_existence && !Dir.exists?(e.path)
+            marker = color ? " #{"[gone]".colorize(:red)}" : " [gone]"
+          end
+          puts "#{path_str}\t#{tags_str}#{marker}"
         end
       ensure
         db.close
@@ -81,16 +111,16 @@ module Doma::CLI
     # Compose the two filters. Doing the intersection client-side keeps
     # the SQL straightforward — both `directories(tag)` and `search(query)`
     # already exist and are tested in isolation.
-    private def collect(db : Doma::Database, tag : String?, query : String?) : Array(Doma::Entry)
+    private def collect(db : Doma::Database, tag : String?, query : String?, sort : Doma::Database::SortBy) : Array(Doma::Entry)
       if tag && query
-        tagged = db.directories(tag).map(&.id).to_set
+        tagged = db.directories(tag, sort: sort).map(&.id).to_set
         db.search(query).select { |e| tagged.includes?(e.id) }
       elsif tag
-        db.directories(tag)
+        db.directories(tag, sort: sort)
       elsif query
         db.search(query)
       else
-        db.directories
+        db.directories(sort: sort)
       end
     end
 

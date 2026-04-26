@@ -16,7 +16,7 @@ module Doma::CLI
       positional = [] of String
 
       parser = OptionParser.new do |p|
-        p.banner = "Usage: doma add <path> [-t TAG ...] [--auto-tag] [--git-tag] [--dry-run]"
+        p.banner = "Usage: doma add [<path> ...] [-t TAG ...] [--auto-tag] [--git-tag] [--dry-run]"
         p.on("-t TAG", "--tag=TAG", "Add a tag (repeatable, comma-separated allowed)") do |t|
           raw_tags << t
         end
@@ -36,7 +36,10 @@ module Doma::CLI
       end
       parser.parse(args)
 
-      raise Doma::ValidationError.new("path is required") if positional.empty?
+      # Default to the current directory when no path is given. This is
+      # the typical "I'm in the dir I want to tag" flow — `cd ~/proj &&
+      # doma add -t crystal` with no path argument should Just Work.
+      positional << "." if positional.empty?
 
       cfg = Doma::Settings.current
       # `!!` collapses `Bool?` into a real `Bool` after the nil check —

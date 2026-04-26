@@ -65,6 +65,10 @@ module Doma::CLI
         stats = db.stats(top_n: 0, recent_n: 0)
         kv "directories", stats.total_directories.to_s
         kv "tags", stats.total_tags.to_s
+        missing = db.dead_paths.size
+        if missing > 0
+          kv "missing on disk", "#{missing} (run `doma rm --gone` to prune)"
+        end
         kv "schema", "v#{Doma::Snapshot::SCHEMA_VERSION}"
       rescue ex
         kv "status", "READ ERROR — #{ex.message}"
