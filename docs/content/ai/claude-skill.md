@@ -14,6 +14,16 @@ The repo ships [`skills/doma/SKILL.md`](https://github.com/hahwul/doma/blob/main
 
 ## Installing the skill
 
+The recommended path is [Vercel Skills](https://github.com/vercel-labs/skills), which fetches the file straight from this repo:
+
+```bash
+npx skills add hahwul/doma
+```
+
+That drops `SKILL.md` into your agent's skill directory and you're done — restart your agent session to pick it up.
+
+If you prefer a manual install (no node toolchain, or you want a working-tree symlink so edits land live), copy the file by hand:
+
 ```bash
 # from inside doma's checkout, copy to your agent's skill dir:
 cp -r skills/doma ~/.claude/skills/
@@ -22,7 +32,7 @@ cp -r skills/doma ~/.claude/skills/
 ln -s "$(pwd)/skills/doma" ~/.claude/skills/doma
 ```
 
-After that the agent will load the skill on next session start.
+Either way, the agent will load the skill on next session start.
 
 ## What the skill does *not* do
 

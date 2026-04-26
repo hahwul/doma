@@ -14,6 +14,14 @@ doma list -t crystal --paths
 
 …and gets exactly the directories the user has already curated under that label. Then it iterates with its own tools.
 
+## Quick install
+
+```bash
+npx skills add hahwul/doma
+```
+
+That pulls the [bundled `SKILL.md`](https://github.com/hahwul/doma/blob/main/skills/doma/SKILL.md) into your agent's skill directory via [Vercel Skills](https://github.com/vercel-labs/skills). Restart your agent session and it's available.
+
 ## Pages here
 
 - [Claude Code skill](./claude-skill/) — the bundled `SKILL.md` and what it teaches an agent about when (and when not) to invoke doma.

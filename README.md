@@ -147,7 +147,21 @@ doma list -t auth-review --paths
 
 ## AI agents
 
-doma ships a [Claude Code skill](skills/doma/SKILL.md) that teaches an agent when to query the database for a path list ("update CI for all my Crystal projects") and when to register or bookmark a directory ("track this", "remember this for later"). Drop the file into your agent's skill directory, or read it as a reference for what doma exposes.
+doma ships a [Claude Code skill](skills/doma/SKILL.md) that teaches an agent when to query the database for a path list ("update CI for all my Crystal projects") and when to register or bookmark a directory ("track this", "remember this for later").
+
+Install via [Vercel Skills](https://github.com/vercel-labs/skills):
+
+```bash
+npx skills add hahwul/doma
+```
+
+Or copy the file by hand into your agent's skill directory:
+
+```bash
+cp -r skills/doma ~/.claude/skills/
+# or symlink so updates land automatically:
+ln -s "$(pwd)/skills/doma" ~/.claude/skills/doma
+```
 
 ## Contributing
 
