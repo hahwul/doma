@@ -121,6 +121,50 @@ describe "doma add" do
   end
 end
 
+describe "doma cd --query in non-TTY" do
+  # The browse path used to ignore --query in non-TTY (First) mode and
+  # silently return the first overall entry. This regression spec drives
+  # the binary to confirm filtering happens before mode dispatch.
+  bin = File.expand_path("../bin/doma", __DIR__)
+
+  it "[bug] errors on no match instead of returning first entry" do
+    pending! "binary not built" unless File.exists?(bin)
+    home = File.tempname("doma-cdq")
+    FileUtils.mkdir_p(home)
+    sink = IO::Memory.new
+    Process.run(bin, ["add", "/tmp", "-t", "scratch"], env: {"DOMA_HOME" => home}, output: sink, error: sink)
+    Process.run(bin, ["add", "/var", "-t", "fs"], env: {"DOMA_HOME" => home}, output: sink, error: sink)
+
+    stdout_buf = IO::Memory.new
+    stderr_buf = IO::Memory.new
+    status = Process.run(
+      bin,
+      ["cd", "--query", "totally-nonexistent"],
+      env: {"DOMA_HOME" => home}, output: stdout_buf, error: stderr_buf,
+    )
+    status.exit_code.should eq(3)
+    stdout_buf.to_s.should be_empty
+    stderr_buf.to_s.should contain("no directories match")
+  ensure
+    FileUtils.rm_rf(home) if home
+  end
+
+  it "[bug] returns the matching entry when --query matches one" do
+    pending! "binary not built" unless File.exists?(bin)
+    home = File.tempname("doma-cdq2")
+    FileUtils.mkdir_p(home)
+    sink = IO::Memory.new
+    Process.run(bin, ["add", "/tmp", "-t", "a"], env: {"DOMA_HOME" => home}, output: sink, error: sink)
+    Process.run(bin, ["add", "/var", "-t", "b"], env: {"DOMA_HOME" => home}, output: sink, error: sink)
+
+    stdout_buf = IO::Memory.new
+    Process.run(bin, ["cd", "--query", "tmp"], env: {"DOMA_HOME" => home}, output: stdout_buf, error: STDERR)
+    stdout_buf.to_s.strip.should contain("tmp")
+  ensure
+    FileUtils.rm_rf(home) if home
+  end
+end
+
 describe "Validator.canonicalize symlink + trailing slash" do
   it "[completion] strips trailing slash" do
     Doma::Validator.canonicalize("/tmp/").should eq(Doma::Validator.canonicalize("/tmp"))

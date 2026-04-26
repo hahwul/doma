@@ -118,29 +118,31 @@ module Doma::CLI
         entries = db.directories
         raise Doma::NotFoundError.new("no directories registered") if entries.empty?
 
+        # Apply --query *before* mode dispatch so it works in every
+        # context — including non-TTY (First) where there's no picker
+        # to do the filtering interactively. Earlier, the First branch
+        # ignored --query and silently returned the first overall entry.
+        items = entries.map do |e|
+          tags_hint = e.tags.empty? ? nil : e.tags.map { |t| "##{t}" }.join(' ')
+          Doma::Picker::Item.new(value: e.path, label: e.path, hint: tags_hint)
+        end
+        items = Doma::Picker.filter(items, query) if query
+
+        if items.empty?
+          raise Doma::NotFoundError.new("no directories match '#{query}'") if query
+          raise Doma::NotFoundError.new("no directories registered")
+        end
+
         effective = mode || Doma::Settings.current.selector
         effective = STDIN.tty? ? Doma::Settings::SelectorMode::Builtin : Doma::Settings::SelectorMode::First if effective == Doma::Settings::SelectorMode::Auto
 
         case effective
         in Doma::Settings::SelectorMode::First
-          chosen = entries.first.path
+          chosen = items.first.value
           bump_used_safe(db, chosen)
           puts chosen
         in Doma::Settings::SelectorMode::Builtin
-          items = entries.map do |e|
-            tags_hint = e.tags.empty? ? nil : e.tags.map { |t| "##{t}" }.join(' ')
-            Doma::Picker::Item.new(value: e.path, label: e.path, hint: tags_hint)
-          end
-          # Pre-filter via the same logic the picker uses, in case the
-          # caller passed --query: a small UX win that lets `doma cd
-          # --query foo` skip directly to the filtered view.
-          initial = query ? Doma::Picker.filter(items, query) : items
-          if initial.empty?
-            raise Doma::NotFoundError.new("no directories match '#{query}'") if query
-            raise Doma::NotFoundError.new("no directories registered")
-          end
-
-          result = Doma::Picker.pick(initial, "doma cd")
+          result = Doma::Picker.pick(items, "doma cd")
           raise Doma::Error.new("selection cancelled", 130) if result.cancelled
           if value = result.value
             bump_used_safe(db, value)
@@ -148,7 +150,7 @@ module Doma::CLI
           end
         in Doma::Settings::SelectorMode::Auto
           # Already resolved above; this branch satisfies exhaustiveness.
-          puts entries.first.path
+          puts items.first.value
         end
       ensure
         db.close
