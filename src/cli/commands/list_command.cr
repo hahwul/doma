@@ -22,11 +22,12 @@ module Doma::CLI
       paths_only = false
       null_sep = false
       check_existence = false
+      include_expired = false
       sort = Doma::Database::SortBy::Path
       positional = [] of String
 
       parser = OptionParser.new do |p|
-        p.banner = "Usage: doma list [<query>] [-t TAG] [--by path|recent] [--check] [--json] [--paths] [-0]"
+        p.banner = "Usage: doma list [<query>] [-t TAG] [--by path|recent] [--check] [--include-expired] [--json] [--paths] [-0]"
         p.on("-t TAG", "--tag=TAG", "Filter by exact tag") { |t| tag = t }
         p.on("--by SORT", "Sort by 'path' (default) or 'recent'") do |val|
           sort = case val
@@ -39,6 +40,7 @@ module Doma::CLI
                  end
         end
         p.on("--check", "Mark entries whose path is gone from disk") { check_existence = true }
+        p.on("--include-expired", "Show tags whose TTL has elapsed") { include_expired = true }
         p.on("--json", "Output as JSON") { json_mode = true }
         p.on("--paths", "Print paths only") { paths_only = true }
         # `-0` implies `--paths` so a pipeline call stays short:
@@ -62,12 +64,13 @@ module Doma::CLI
 
       db = Doma::Database.open
       begin
-        entries = collect(db, tag, query, sort)
+        entries = collect(db, tag, query, sort, include_expired)
 
         if json_mode
           payload = entries.map do |e|
             row = {
               "id"       => JSON::Any.new(e.id),
+              "short_id" => JSON::Any.new(e.short_id),
               "path"     => JSON::Any.new(e.path),
               "basename" => JSON::Any.new(e.basename),
               "tags"     => JSON::Any.new(e.tags.map { |t| JSON::Any.new(t) }),
@@ -111,16 +114,16 @@ module Doma::CLI
     # Compose the two filters. Doing the intersection client-side keeps
     # the SQL straightforward — both `directories(tag)` and `search(query)`
     # already exist and are tested in isolation.
-    private def collect(db : Doma::Database, tag : String?, query : String?, sort : Doma::Database::SortBy) : Array(Doma::Entry)
+    private def collect(db : Doma::Database, tag : String?, query : String?, sort : Doma::Database::SortBy, include_expired : Bool) : Array(Doma::Entry)
       if tag && query
-        tagged = db.directories(tag, sort: sort).map(&.id).to_set
+        tagged = db.directories(tag, sort: sort, include_expired: include_expired).map(&.id).to_set
         db.search(query).select { |e| tagged.includes?(e.id) }
       elsif tag
-        db.directories(tag, sort: sort)
+        db.directories(tag, sort: sort, include_expired: include_expired)
       elsif query
         db.search(query)
       else
-        db.directories(sort: sort)
+        db.directories(sort: sort, include_expired: include_expired)
       end
     end
 

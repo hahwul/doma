@@ -83,6 +83,11 @@ module Doma
         Doma::Logger.error ex.message || "invalid option"
         exit 1
       rescue ex : Exception
+        # `cmd | head -1` and friends close the pipe after one line —
+        # our subsequent puts then raises EPIPE. That's a clean
+        # consumer-disconnect, not an error worth shouting about.
+        # Convention: 128 + SIGPIPE(13) = 141.
+        exit 141 if ex.message.try(&.includes?("Broken pipe"))
         Doma::Logger.error "internal error: #{ex.message}"
         exit 1
       end

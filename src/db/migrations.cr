@@ -7,7 +7,13 @@ module Doma
   # created (fresh DB case) is negligible — keeping each migration
   # additive lets us reason about every step independently.
   module Migrations
-    CURRENT_VERSION = 2
+    CURRENT_VERSION = 3
+
+    # Width of the random hex `short_id` we generate for each directory.
+    # 7 chars = 16M values; birthday collision near 16k dirs, well above
+    # any realistic doma corpus.
+    SHORT_ID_BYTES = 4
+    SHORT_ID_CHARS = 7
 
     def self.run(db : DB::Database)
       version = db.scalar("PRAGMA user_version").as(Int64).to_i
@@ -15,8 +21,20 @@ module Doma
 
       apply_v1(db) if version < 1
       apply_v2(db) if version < 2
+      apply_v3(db) if version < 3
 
       db.exec("PRAGMA user_version = #{CURRENT_VERSION}")
+    end
+
+    # Generates a unique 7-hex short_id, retrying on the (rare) collision.
+    def self.generate_short_id(db : DB::Database) : String
+      loop do
+        candidate = Random.new.random_bytes(SHORT_ID_BYTES).hexstring[0, SHORT_ID_CHARS]
+        existing = db.scalar(
+          "SELECT COUNT(*) FROM directories WHERE short_id = ?", candidate
+        ).as(Int64)
+        return candidate if existing == 0
+      end
     end
 
     # v1: original three-table schema.
@@ -62,6 +80,35 @@ module Doma
       return if column_exists?(db, "directories", "last_used_at")
       db.exec("ALTER TABLE directories ADD COLUMN last_used_at INTEGER NOT NULL DEFAULT 0")
       db.exec("CREATE INDEX IF NOT EXISTS idx_directories_last_used ON directories(last_used_at)")
+    end
+
+    # v3: short_id (commit-hash-style addressing) on directories, and
+    # expires_at (NULL = forever) on directory_tags so a single tag can
+    # be either long-lived or temporary.
+    #
+    # SQLite ALTER TABLE can't add a NOT NULL UNIQUE column directly, so
+    # we add nullable, backfill, then enforce uniqueness via a separate
+    # index. The Crystal layer never inserts NULL on new rows, which
+    # keeps the column effectively NOT NULL going forward.
+    private def self.apply_v3(db : DB::Database)
+      unless column_exists?(db, "directories", "short_id")
+        db.exec("ALTER TABLE directories ADD COLUMN short_id TEXT")
+        backfill_short_ids(db)
+        db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_directories_short_id ON directories(short_id)")
+      end
+
+      unless column_exists?(db, "directory_tags", "expires_at")
+        db.exec("ALTER TABLE directory_tags ADD COLUMN expires_at INTEGER")
+        # Indexed because every read filters on it.
+        db.exec("CREATE INDEX IF NOT EXISTS idx_directory_tags_expires ON directory_tags(expires_at)")
+      end
+    end
+
+    private def self.backfill_short_ids(db : DB::Database)
+      ids = db.query_all("SELECT id FROM directories WHERE short_id IS NULL", as: Int64)
+      ids.each do |id|
+        db.exec("UPDATE directories SET short_id = ? WHERE id = ?", generate_short_id(db), id)
+      end
     end
 
     private def self.column_exists?(db : DB::Database, table : String, column : String) : Bool

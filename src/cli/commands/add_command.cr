@@ -2,6 +2,7 @@ require "option_parser"
 require "../../db/database"
 require "../../services/git_detector"
 require "../../utils/config"
+require "../../utils/duration"
 require "../../utils/errors"
 require "../../utils/logger"
 require "../../utils/validator"
@@ -13,12 +14,22 @@ module Doma::CLI
       auto_basename : Bool? = nil
       auto_git : Bool? = nil
       dry_run = false
+      expires_at : Int64? = nil
       positional = [] of String
 
       parser = OptionParser.new do |p|
-        p.banner = "Usage: doma add [<path> ...] [-t TAG ...] [--auto-tag] [--git-tag] [--dry-run]"
+        p.banner = "Usage: doma add [<path> ...] [-t TAG ...] [--ttl DUR | --tmp] [--auto-tag] [--git-tag] [--dry-run]"
         p.on("-t TAG", "--tag=TAG", "Add a tag (repeatable, comma-separated allowed)") do |t|
           raw_tags << t
+        end
+        # `--ttl DUR` and `--tmp` are mutually exclusive in spirit; if
+        # both are passed the last one wins, which is the same lenient
+        # behavior we use for other repeated flags.
+        p.on("--ttl DUR", "Tag expires after DUR (e.g. 30m, 1h, 7d, 2w)") do |dur|
+          expires_at = Doma::Duration.expires_at_for(dur)
+        end
+        p.on("--tmp", "Tag expires in 7d (alias for --ttl 7d)") do
+          expires_at = Doma::Duration.default_tmp_expires_at
         end
         p.on("--auto-tag", "Use the directory basename as a tag") { auto_basename = true }
         p.on("--no-auto-tag", "Disable basename auto-tag (override config)") { auto_basename = false }
@@ -49,6 +60,8 @@ module Doma::CLI
       use_basename : Bool = auto_basename.nil? ? cfg.auto_tag.basename : !!auto_basename
       use_git : Bool = auto_git.nil? ? cfg.auto_tag.git : !!auto_git
 
+      ttl_label = expires_at.try { |e| "expires #{Time.unix(e).to_local.to_s("%Y-%m-%d %H:%M")}" }
+
       # Dry-run path: resolve everything but never open a writable db.
       # Done as a separate branch (rather than a flag inside the loop)
       # because there's no point even touching the database for a preview.
@@ -59,6 +72,7 @@ module Doma::CLI
           applied.concat(derive_tags(abs, use_basename, use_git))
           applied.uniq!
           summary = applied.empty? ? "(no tags)" : "tags: #{applied.join(", ")}"
+          summary += "  (#{ttl_label})" if ttl_label
           Doma::Logger.info "[dry-run] would add #{abs} #{summary}"
         end
         exit 2 if failures > 0
@@ -77,9 +91,10 @@ module Doma::CLI
           applied.concat(derive_tags(abs, use_basename, use_git))
           applied.uniq!
 
-          db.add(abs, applied, validate_path: false)
+          db.add(abs, applied, validate_path: false, expires_at: expires_at)
 
           summary = applied.empty? ? "(no tags)" : "tags: #{applied.join(", ")}"
+          summary += "  (#{ttl_label})" if ttl_label
           Doma::Logger.success "added #{abs} #{summary}"
         end
         # Non-zero exit when at least one path failed, so scripts can tell.

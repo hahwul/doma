@@ -9,14 +9,16 @@ module Doma::CLI
     def run(args : Array(String))
       tags = [] of String
       gone = false
+      expired = false
       positional = [] of String
 
       parser = OptionParser.new do |p|
-        p.banner = "Usage: doma rm [<path> ...] [-t TAG ...] [--gone]"
+        p.banner = "Usage: doma rm [<path> ...] [-t TAG ...] [--gone] [--expired]"
         p.on("-t TAG", "--tag=TAG", "Remove this tag (repeatable, comma-separated allowed)") do |t|
           t.split(',').each { |x| tags << x.strip unless x.strip.empty? }
         end
         p.on("--gone", "Remove every entry whose path no longer exists on disk") { gone = true }
+        p.on("--expired", "Remove every tag whose TTL has elapsed") { expired = true }
         p.on("-h", "--help", "Show help") do
           puts p
           exit 0
@@ -27,6 +29,10 @@ module Doma::CLI
         end
       end
       parser.parse(args)
+
+      if gone && expired
+        raise Doma::ValidationError.new("--gone and --expired cannot be combined")
+      end
 
       if gone
         # `--gone` is mutually exclusive with explicit paths/tags: it's a
@@ -39,7 +45,14 @@ module Doma::CLI
         return run_gone
       end
 
-      raise Doma::ValidationError.new("path is required (or use --gone)") if positional.empty?
+      if expired
+        unless positional.empty? && tags.empty?
+          raise Doma::ValidationError.new("--expired cannot be combined with paths or -t")
+        end
+        return run_expired
+      end
+
+      raise Doma::ValidationError.new("path is required (or use --gone / --expired)") if positional.empty?
 
       db = Doma::Database.open
       begin
@@ -78,6 +91,20 @@ module Doma::CLI
         dead.each { |e| Doma::Logger.info "  #{e.path}" }
         removed = db.prune_dead!
         Doma::Logger.success "pruned #{removed} missing path(s)"
+      ensure
+        db.close
+      end
+    end
+
+    private def run_expired
+      db = Doma::Database.open
+      begin
+        removed = db.prune_expired!
+        if removed == 0
+          Doma::Logger.info "no expired tags to prune"
+        else
+          Doma::Logger.success "pruned #{removed} expired tag association(s)"
+        end
       ensure
         db.close
       end

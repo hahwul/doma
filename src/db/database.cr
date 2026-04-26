@@ -58,10 +58,15 @@ module Doma
     # Adds a path with the given tags. The path must already exist on disk
     # unless `validate_path` is false (used by the importer for cross-machine
     # snapshots). Tags are validated and de-duplicated.
-    def add(path : String, tags : Array(String), *, validate_path : Bool = true) : Int64
+    #
+    # `expires_at` (unix epoch seconds) sets a per-tag TTL — passed as nil
+    # the tags are permanent. Re-tagging *refreshes* the TTL: doing
+    # `add . -t bookmark --ttl 7d` again resets the clock.
+    def add(path : String, tags : Array(String), *, validate_path : Bool = true, expires_at : Int64? = nil) : Int64
       directory_id = 0_i64
       @db.transaction do |tx|
-        directory_id = add_tx(tx.connection, path, tags, validate_path: validate_path)
+        directory_id = add_tx(tx.connection, path, tags,
+          validate_path: validate_path, expires_at: expires_at)
       end
       directory_id
     end
@@ -69,25 +74,36 @@ module Doma
     # Same as `add`, but operates on an already-open transaction. Used by
     # the importer so an entire import (clear + many inserts) commits
     # atomically — a torn import never replaces existing rows with garbage.
-    def add_tx(cnn : DB::Connection, path : String, tags : Array(String), *, validate_path : Bool = true) : Int64
+    def add_tx(cnn : DB::Connection, path : String, tags : Array(String),
+               *, validate_path : Bool = true, expires_at : Int64? = nil) : Int64
       abs = validate_path ? Validator.path!(path) : Validator.canonicalize(path)
       clean_tags = Validator.tags!(tags)
       basename = File.basename(abs)
       now = Time.utc.to_unix
 
+      # short_id is generated only on insert (the ON CONFLICT clause
+      # leaves it untouched). That makes the value stable for the
+      # lifetime of the directory — once you cd via `crystal:abc1234`,
+      # that handle keeps working until the row is removed.
+      short_id = Migrations.generate_short_id(@db)
       cnn.exec(
-        "INSERT INTO directories (path, basename, created_at) VALUES (?, ?, ?) " \
+        "INSERT INTO directories (path, basename, short_id, created_at) VALUES (?, ?, ?, ?) " \
         "ON CONFLICT(path) DO UPDATE SET basename = excluded.basename",
-        abs, basename, now
+        abs, basename, short_id, now
       )
       directory_id = cnn.scalar("SELECT id FROM directories WHERE path = ?", abs).as(Int64)
 
       clean_tags.each do |tag|
         cnn.exec("INSERT OR IGNORE INTO tags (name, created_at) VALUES (?, ?)", tag, now)
         tag_id = cnn.scalar("SELECT id FROM tags WHERE name = ?", tag).as(Int64)
+        # ON CONFLICT DO UPDATE so re-tagging refreshes expires_at —
+        # absent --ttl on a re-tag, the row reverts to permanent (NULL).
+        # That mirrors what the user is asking for: "the latest add is
+        # the source of truth for this tag."
         cnn.exec(
-          "INSERT OR IGNORE INTO directory_tags (directory_id, tag_id) VALUES (?, ?)",
-          directory_id, tag_id
+          "INSERT INTO directory_tags (directory_id, tag_id, expires_at) VALUES (?, ?, ?) " \
+          "ON CONFLICT(directory_id, tag_id) DO UPDATE SET expires_at = excluded.expires_at",
+          directory_id, tag_id, expires_at
         )
       end
 
@@ -191,6 +207,24 @@ module Doma
       directories.reject { |e| Dir.exists?(e.path) }
     end
 
+    # Removes every directory_tags row whose TTL has elapsed. Returns
+    # the number of associations dropped (one path may contribute many
+    # if it had several expired tags). Empty tags from `tags` table get
+    # garbage-collected too via the orphan cleanup.
+    def prune_expired! : Int32
+      removed = 0
+      @db.transaction do |tx|
+        cnn = tx.connection
+        result = cnn.exec(
+          "DELETE FROM directory_tags " \
+          "WHERE expires_at IS NOT NULL AND expires_at <= strftime('%s','now')"
+        )
+        removed = result.rows_affected.to_i
+        cleanup_orphans_tx(cnn)
+      end
+      removed
+    end
+
     # Removes every directory whose path no longer exists on disk.
     # Single transaction so a partial failure can't leave half-pruned
     # state. Returns the number of rows actually deleted.
@@ -245,26 +279,32 @@ module Doma
     # hydrated in one round trip. Same pattern as `search()` — keeping
     # them consistent means future tweaks (sort orders, additional
     # columns) only need to land in one place.
-    def directories(tag : String? = nil, *, sort : SortBy = SortBy::Path) : Array(Entry)
+    def directories(tag : String? = nil, *, sort : SortBy = SortBy::Path, include_expired : Bool = false) : Array(Entry)
       order = order_clause(sort, prefix: "d.")
-      tag_select = TAGS_GROUP_CONCAT_SUBQUERY
+      tag_select = include_expired ? TAGS_GROUP_CONCAT_ALL : TAGS_GROUP_CONCAT_ACTIVE
 
       rows = if tag
                op = tag_match_clause(tag)
+               # The expired-row filter on the JOIN is what hides
+               # paths whose `crystal` tag has expired. With
+               # include_expired=true we drop it so an operator can
+               # audit the full set.
+               expired_pred = include_expired ? "1=1" : NOT_EXPIRED
                @db.query_all(
-                 <<-SQL, tag, as: {Int64, String, String, String?}
-                   SELECT DISTINCT d.id, d.path, d.basename, #{tag_select}
+                 <<-SQL, tag, as: {Int64, String, String, String, String?}
+                   SELECT DISTINCT d.id, d.short_id, d.path, d.basename, #{tag_select}
                    FROM directories d
                    INNER JOIN directory_tags dt ON dt.directory_id = d.id
                    INNER JOIN tags t ON t.id = dt.tag_id
                    WHERE t.name #{op} ?
+                     AND #{expired_pred}
                    #{order}
                    SQL
                )
              else
                @db.query_all(
-                 <<-SQL, as: {Int64, String, String, String?}
-                   SELECT d.id, d.path, d.basename, #{tag_select}
+                 <<-SQL, as: {Int64, String, String, String, String?}
+                   SELECT d.id, d.short_id, d.path, d.basename, #{tag_select}
                    FROM directories d
                    #{order}
                    SQL
@@ -278,7 +318,20 @@ module Doma
     # so that a tag containing a comma — which our validator rejects
     # today, but might allow in a future schema bump — wouldn't tear the
     # split apart. See `build_entry` for the matching split.
-    TAGS_GROUP_CONCAT_SUBQUERY = <<-SQL
+    # Two variants:
+    #   ACTIVE — only tags whose row is not expired (the default)
+    #   ALL    — every tag, expired or not (for `--include-expired`)
+    TAGS_GROUP_CONCAT_ACTIVE = <<-SQL
+      (SELECT GROUP_CONCAT(name, X'1f')
+       FROM (SELECT t2.name
+             FROM tags t2
+             INNER JOIN directory_tags dt2 ON dt2.tag_id = t2.id
+             WHERE dt2.directory_id = d.id
+               AND (dt2.expires_at IS NULL OR dt2.expires_at > strftime('%s','now'))
+             ORDER BY t2.name)) AS joined_tags
+      SQL
+
+    TAGS_GROUP_CONCAT_ALL = <<-SQL
       (SELECT GROUP_CONCAT(name, X'1f')
        FROM (SELECT t2.name
              FROM tags t2
@@ -287,10 +340,10 @@ module Doma
              ORDER BY t2.name)) AS joined_tags
       SQL
 
-    private def build_entry(row : {Int64, String, String, String?}) : Entry
-      id, path, basename, joined = row
+    private def build_entry(row : {Int64, String, String, String, String?}) : Entry
+      id, short_id, path, basename, joined = row
       tags = joined ? joined.split('\u001f').reject(&.empty?) : [] of String
-      Entry.new(id, path, basename, tags)
+      Entry.new(id, short_id, path, basename, tags)
     end
 
     private def order_clause(sort : SortBy, *, prefix : String) : String
@@ -332,6 +385,8 @@ module Doma
     # Paths matching a tag (or tag-glob), sorted by recency. A tag
     # containing `*` or `?` triggers GLOB matching so `doma cd 'work*'`
     # resolves to every directory tagged `work-foo`, `work-bar`, etc.
+    # Expired tag rows are filtered out — the user shouldn't navigate
+    # to a path via a tag that's no longer applied.
     def paths_for_tag(tag : String) : Array(String)
       op = tag_match_clause(tag)
       @db.query_all(
@@ -341,10 +396,16 @@ module Doma
           INNER JOIN directory_tags dt ON dt.directory_id = d.id
           INNER JOIN tags t ON t.id = dt.tag_id
           WHERE t.name #{op} ?
+            AND #{NOT_EXPIRED}
           ORDER BY d.last_used_at DESC, d.path ASC
           SQL
       )
     end
+
+    # Predicate fragment shared by every read that should hide expired
+    # tag rows. `dt` here refers to the directory_tags alias used
+    # consistently across the queries below.
+    NOT_EXPIRED = "(dt.expires_at IS NULL OR dt.expires_at > strftime('%s','now'))"
 
     # Stamps a directory as just-used. Idempotent on missing paths
     # (silently no-ops) so callers don't need to gate the bump on
@@ -400,16 +461,26 @@ module Doma
     # shape as `directories()` so both share `build_entry`.
     def search(query : String) : Array(Entry)
       term = "%#{escape_like(query)}%"
+      # Two match strategies join via UNION:
+      #   1. Path / basename hit — works regardless of tag expiry
+      #      (a directory with all its tags expired but a matching path
+      #      should still surface).
+      #   2. Tag-name hit — only counts when the tag row is still
+      #      active. A query like `search bookmark` shouldn't return
+      #      paths whose `bookmark` tag expired three weeks ago.
       rows = @db.query_all(
-        <<-SQL, term, term, term, as: {Int64, String, String, String?}
-          SELECT d.id, d.path, d.basename, #{TAGS_GROUP_CONCAT_SUBQUERY}
+        <<-SQL, term, term, term, as: {Int64, String, String, String, String?}
+          SELECT d.id, d.short_id, d.path, d.basename, #{TAGS_GROUP_CONCAT_ACTIVE}
           FROM directories d
-          LEFT JOIN directory_tags dt ON dt.directory_id = d.id
-          LEFT JOIN tags t ON t.id = dt.tag_id
-          WHERE d.path     LIKE ? ESCAPE '\\'
-             OR d.basename LIKE ? ESCAPE '\\'
-             OR t.name     LIKE ? ESCAPE '\\'
-          GROUP BY d.id
+          WHERE d.id IN (
+            SELECT id FROM directories
+              WHERE path LIKE ? ESCAPE '\\' OR basename LIKE ? ESCAPE '\\'
+            UNION
+            SELECT dt.directory_id FROM directory_tags dt
+              INNER JOIN tags t ON t.id = dt.tag_id
+              WHERE t.name LIKE ? ESCAPE '\\'
+                AND (dt.expires_at IS NULL OR dt.expires_at > strftime('%s','now'))
+          )
           ORDER BY d.path
           SQL
       )
