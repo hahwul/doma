@@ -1,0 +1,11 @@
+Metrics/CyclomaticComplexity:
+  Enabled: false
+
+Naming/BlockParameterName:
+  Enabled: false
+
+# Disable on YAML-mapped properties: the field name has to match the YAML
+# key, which forces a non-? identifier even for booleans.
+Naming/QueryBoolMethods:
+  Excluded:
+    - "src/utils/config.cr"

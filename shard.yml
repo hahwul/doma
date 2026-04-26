@@ -1,0 +1,24 @@
+name: doma
+version: 0.1.0
+description: Directory tag manager — put your directories on the cutting board
+
+authors:
+  - hahwul <hahwul@gmail.com>
+
+repository: https://github.com/hahwul/doma
+license: MIT
+
+crystal: ">= 1.20.0"
+
+targets:
+  doma:
+    main: src/main.cr
+
+dependencies:
+  sqlite3:
+    github: crystal-lang/crystal-sqlite3
+
+development_dependencies:
+  ameba:
+    github: crystal-ameba/ameba
+    branch: master

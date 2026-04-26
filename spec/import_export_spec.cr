@@ -1,0 +1,117 @@
+require "./spec_helper"
+
+describe "Import/Export" do
+  it "round-trips a database through JSON" do
+    with_temp_db do |db|
+      tmp_a = File.tempname("doma-a")
+      tmp_b = File.tempname("doma-b")
+      FileUtils.mkdir_p(tmp_a)
+      FileUtils.mkdir_p(tmp_b)
+      begin
+        db.add(tmp_a, ["crystal", "cli"])
+        db.add(tmp_b, ["python"])
+
+        io = IO::Memory.new
+        Doma::Exporter.write(db, Doma::Exporter::Format::Json, io)
+        snapshot = Doma::Importer.parse(io.to_s)
+        snapshot.entries.size.should eq(2)
+        snapshot.version.should eq(Doma::Snapshot::SCHEMA_VERSION)
+      ensure
+        FileUtils.rm_rf(tmp_a)
+        FileUtils.rm_rf(tmp_b)
+      end
+    end
+  end
+
+  it "round-trips a database through YAML" do
+    with_temp_db do |db|
+      db.add(Dir.current, ["crystal"])
+
+      io = IO::Memory.new
+      Doma::Exporter.write(db, Doma::Exporter::Format::Yaml, io)
+
+      with_temp_db do |db2|
+        path = File.tempname("doma-snap") + ".yml"
+        File.write(path, io.to_s)
+        begin
+          result = Doma::Importer.from_file(db2, path)
+          result.imported.should eq(1)
+          result.skipped.should eq(0)
+          db2.directories.first.tags.should eq(["crystal"])
+        ensure
+          File.delete(path) if File.exists?(path)
+        end
+      end
+    end
+  end
+
+  it "merges by default (preserves existing rows)" do
+    with_temp_db do |db|
+      db.add(Dir.current, ["existing"])
+
+      snapshot = Doma::Snapshot.new([
+        Doma::Snapshot::Entry.new("/imported/path", ["imported"]),
+      ])
+      path = File.tempname("doma-snap") + ".json"
+      File.write(path, snapshot.to_json)
+      begin
+        result = Doma::Importer.from_file(db, path, mode: Doma::Importer::Mode::Merge)
+        result.imported.should eq(1)
+        result.replaced.should be_false
+        db.directories.size.should eq(2)
+      ensure
+        File.delete(path) if File.exists?(path)
+      end
+    end
+  end
+
+  it "wipes existing rows in replace mode" do
+    with_temp_db do |db|
+      db.add(Dir.current, ["existing"])
+
+      snapshot = Doma::Snapshot.new([
+        Doma::Snapshot::Entry.new("/imported/path", ["imported"]),
+      ])
+      path = File.tempname("doma-snap") + ".json"
+      File.write(path, snapshot.to_json)
+      begin
+        result = Doma::Importer.from_file(db, path, mode: Doma::Importer::Mode::Replace)
+        result.imported.should eq(1)
+        result.replaced.should be_true
+        paths = db.directories.map(&.path)
+        paths.should eq(["/imported/path"])
+      ensure
+        File.delete(path) if File.exists?(path)
+      end
+    end
+  end
+
+  it "rejects snapshots from a future schema version" do
+    payload = %({"version":99,"entries":[]})
+    expect_raises(Doma::ImportError, /newer than supported/) do
+      with_temp_db do |db|
+        path = File.tempname("doma-snap") + ".json"
+        File.write(path, payload)
+        begin
+          Doma::Importer.from_file(db, path)
+        ensure
+          File.delete(path) if File.exists?(path)
+        end
+      end
+    end
+  end
+
+  it "rejects malformed payloads" do
+    expect_raises(Doma::ImportError, /malformed/) do
+      Doma::Importer.parse("{not valid json or yaml: [")
+    end
+  end
+
+  it "rejects missing import file" do
+    with_temp_db do |db|
+      expect_raises(Doma::ImportError, /not found/) do
+        Doma::Importer.from_file(db, "/no/such/file.json")
+      end
+    end
+  end
+end

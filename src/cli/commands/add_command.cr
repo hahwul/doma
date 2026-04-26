@@ -1,0 +1,93 @@
+require "option_parser"
+require "../../db/database"
+require "../../services/git_detector"
+require "../../utils/config"
+require "../../utils/errors"
+require "../../utils/logger"
+require "../../utils/validator"
+
+module Doma::CLI
+  class AddCommand
+    def run(args : Array(String))
+      raw_tags = [] of String
+      auto_basename : Bool? = nil
+      auto_git : Bool? = nil
+      dry_run = false
+      positional = [] of String
+
+      parser = OptionParser.new do |p|
+        p.banner = "Usage: doma add <path> [-t TAG ...] [--auto-tag] [--git-tag] [--dry-run]"
+        p.on("-t TAG", "--tag=TAG", "Add a tag (repeatable, comma-separated allowed)") do |t|
+          raw_tags << t
+        end
+        p.on("--auto-tag", "Use the directory basename as a tag") { auto_basename = true }
+        p.on("--no-auto-tag", "Disable basename auto-tag (override config)") { auto_basename = false }
+        p.on("--git-tag", "Detect a git remote and add host/repo tags") { auto_git = true }
+        p.on("--no-git-tag", "Disable git auto-tag (override config)") { auto_git = false }
+        p.on("-n", "--dry-run", "Show what would happen without writing") { dry_run = true }
+        p.on("-h", "--help", "Show help") do
+          puts p
+          exit 0
+        end
+        p.unknown_args do |before, after|
+          positional.concat(before)
+          positional.concat(after)
+        end
+      end
+      parser.parse(args)
+
+      raise Doma::ValidationError.new("path is required") if positional.empty?
+
+      cfg = Doma::Settings.current
+      # `!!` collapses `Bool?` into a real `Bool` after the nil check —
+      # Crystal's type inference doesn't always narrow through ternaries on
+      # ivars/closures, and the nilable type leaks into method signatures
+      # otherwise.
+      use_basename : Bool = auto_basename.nil? ? cfg.auto_tag.basename : !!auto_basename
+      use_git : Bool = auto_git.nil? ? cfg.auto_tag.git : !!auto_git
+
+      # Dry-run path: resolve everything but never open a writable db.
+      # Done as a separate branch (rather than a flag inside the loop)
+      # because there's no point even touching the database for a preview.
+      if dry_run
+        positional.each do |path|
+          abs = Doma::Validator.path!(path)
+          applied = Doma::Validator.tags!(raw_tags).dup
+          applied.concat(derive_tags(abs, use_basename, use_git))
+          applied.uniq!
+          summary = applied.empty? ? "(no tags)" : "tags: #{applied.join(", ")}"
+          Doma::Logger.info "[dry-run] would add #{abs} #{summary}"
+        end
+        return
+      end
+
+      db = Doma::Database.open
+      begin
+        positional.each do |path|
+          abs = Doma::Validator.path!(path)
+
+          # User-supplied tags must validate strictly; auto-derived tags
+          # (basename, git remote) flow through `sanitize_tag` so a repo
+          # named `.dotfiles` doesn't blow up the whole `add`.
+          applied = Doma::Validator.tags!(raw_tags).dup
+          applied.concat(derive_tags(abs, use_basename, use_git))
+          applied.uniq!
+
+          db.add(abs, applied, validate_path: false)
+
+          summary = applied.empty? ? "(no tags)" : "tags: #{applied.join(", ")}"
+          Doma::Logger.success "added #{abs} #{summary}"
+        end
+      ensure
+        db.close
+      end
+    end
+
+    private def derive_tags(abs : String, use_basename : Bool, use_git : Bool) : Array(String)
+      sources = [] of String
+      sources << File.basename(abs) if use_basename
+      sources.concat(Doma::GitDetector.detect(abs).to_tags) if use_git
+      sources.compact_map { |raw| Doma::Validator.sanitize_tag(raw) }
+    end
+  end
+end

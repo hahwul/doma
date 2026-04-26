@@ -1,0 +1,89 @@
+require "./spec_helper"
+
+private def with_temp_config(content : String, &)
+  dir = File.tempname("doma-cfg")
+  FileUtils.mkdir_p(dir)
+  path = File.join(dir, "config.yml")
+  File.write(path, content)
+  begin
+    yield path
+  ensure
+    FileUtils.rm_rf(dir)
+  end
+end
+
+describe Doma::Config do
+  it "expands `~` in the default home path" do
+    prev_home = ENV["DOMA_HOME"]?
+    ENV.delete("DOMA_HOME")
+    begin
+      Doma::Config.home.should start_with(ENV["HOME"])
+      Doma::Config.home.should_not contain("~")
+    ensure
+      ENV["DOMA_HOME"] = prev_home if prev_home
+    end
+  end
+
+  it "expands `~` in DOMA_DB env" do
+    prev = ENV["DOMA_DB"]?
+    ENV["DOMA_DB"] = "~/somewhere/doma.db"
+    begin
+      Doma::Config.db_path.should eq(File.join(ENV["HOME"], "somewhere/doma.db"))
+    ensure
+      prev ? (ENV["DOMA_DB"] = prev) : ENV.delete("DOMA_DB")
+    end
+  end
+end
+
+describe Doma::Settings do
+  it "uses defaults when the file is missing" do
+    settings = Doma::Settings.load("/no/such/config.yml")
+    settings.db_path.should be_nil
+    settings.selector.should eq(Doma::Settings::SelectorMode::Auto)
+    settings.auto_tag.basename.should be_false
+    settings.auto_tag.git.should be_false
+  end
+
+  it "loads partial config with defaults filling gaps" do
+    with_temp_config("auto_tag:\n  git: true\n") do |path|
+      settings = Doma::Settings.load(path)
+      settings.auto_tag.git.should be_true
+      settings.auto_tag.basename.should be_false
+      settings.selector.should eq(Doma::Settings::SelectorMode::Auto)
+    end
+  end
+
+  it "parses every supported field" do
+    with_temp_config(
+      <<-YML
+        db_path: /tmp/doma.db
+        selector: builtin
+        auto_tag:
+          basename: true
+          git: true
+        YML
+    ) do |path|
+      settings = Doma::Settings.load(path)
+      settings.db_path.should eq("/tmp/doma.db")
+      settings.selector.should eq(Doma::Settings::SelectorMode::Builtin)
+      settings.auto_tag.basename.should be_true
+      settings.auto_tag.git.should be_true
+    end
+  end
+
+  it "raises ConfigError on malformed YAML" do
+    with_temp_config("this: is: not: valid: yaml: [\n") do |path|
+      expect_raises(Doma::ConfigError, /invalid config/) do
+        Doma::Settings.load(path)
+      end
+    end
+  end
+
+  it "rejects unknown fields (typo protection via strict)" do
+    with_temp_config("dbpath: /tmp/x.db\n") do |path|
+      expect_raises(Doma::ConfigError) do
+        Doma::Settings.load(path)
+      end
+    end
+  end
+end
