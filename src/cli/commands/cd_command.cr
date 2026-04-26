@@ -77,32 +77,35 @@ module Doma::CLI
 
     private def run_for_tag(tag : String, mode : Doma::Settings::SelectorMode?, index : Int32?)
       db = Doma::Database.open
-      paths, all_tags = begin
-        {db.paths_for_tag(tag), db.tag_names}
+      begin
+        paths = db.paths_for_tag(tag)
+        if paths.empty?
+          # `tag_names` only fires on the not-found branch — saves a query
+          # in the common (path-found) case.
+          raise Doma::NotFoundError.new(
+            "no directories tagged '#{tag}'",
+            hint: Doma::Suggester.hint_for(tag, db.tag_names)
+          )
+        end
+
+        chosen = if idx = index
+                   unless idx >= 1 && idx <= paths.size
+                     raise Doma::ValidationError.new("index out of range (1..#{paths.size})")
+                   end
+                   paths[idx - 1]
+                 else
+                   result = Doma::Selector.pick(paths, prompt: "doma cd #{tag}", mode: mode)
+                   raise Doma::Error.new("selection cancelled", 130) if result.cancelled
+                   result.value
+                 end
+
+        # Reuse the already-open connection rather than open() / close()
+        # / open() / close() — saves one DB.open per cd.
+        bump_used_safe(db, chosen)
+        puts chosen
       ensure
         db.close
       end
-
-      if paths.empty?
-        raise Doma::NotFoundError.new(
-          "no directories tagged '#{tag}'",
-          hint: Doma::Suggester.hint_for(tag, all_tags)
-        )
-      end
-
-      chosen = if idx = index
-                 unless idx >= 1 && idx <= paths.size
-                   raise Doma::ValidationError.new("index out of range (1..#{paths.size})")
-                 end
-                 paths[idx - 1]
-               else
-                 result = Doma::Selector.pick(paths, prompt: "doma cd #{tag}", mode: mode)
-                 raise Doma::Error.new("selection cancelled", 130) if result.cancelled
-                 result.value
-               end
-
-      bump_used(chosen)
-      puts chosen
     end
 
     # Full browse: every registered directory, with tags rendered as a
@@ -111,62 +114,54 @@ module Doma::CLI
     # stdin is not a TTY (scripts/pipes) so callers never hang.
     private def run_browse(mode : Doma::Settings::SelectorMode?, query : String?)
       db = Doma::Database.open
-      entries = begin
-        db.directories
+      begin
+        entries = db.directories
+        raise Doma::NotFoundError.new("no directories registered") if entries.empty?
+
+        effective = mode || Doma::Settings.current.selector
+        effective = STDIN.tty? ? Doma::Settings::SelectorMode::Builtin : Doma::Settings::SelectorMode::First if effective == Doma::Settings::SelectorMode::Auto
+
+        case effective
+        in Doma::Settings::SelectorMode::First
+          chosen = entries.first.path
+          bump_used_safe(db, chosen)
+          puts chosen
+        in Doma::Settings::SelectorMode::Builtin
+          items = entries.map do |e|
+            tags_hint = e.tags.empty? ? nil : e.tags.map { |t| "##{t}" }.join(' ')
+            Doma::Picker::Item.new(value: e.path, label: e.path, hint: tags_hint)
+          end
+          # Pre-filter via the same logic the picker uses, in case the
+          # caller passed --query: a small UX win that lets `doma cd
+          # --query foo` skip directly to the filtered view.
+          initial = query ? Doma::Picker.filter(items, query) : items
+          if initial.empty?
+            raise Doma::NotFoundError.new("no directories match '#{query}'") if query
+            raise Doma::NotFoundError.new("no directories registered")
+          end
+
+          result = Doma::Picker.pick(initial, "doma cd")
+          raise Doma::Error.new("selection cancelled", 130) if result.cancelled
+          if value = result.value
+            bump_used_safe(db, value)
+            puts value
+          end
+        in Doma::Settings::SelectorMode::Auto
+          # Already resolved above; this branch satisfies exhaustiveness.
+          puts entries.first.path
+        end
       ensure
         db.close
-      end
-
-      raise Doma::NotFoundError.new("no directories registered") if entries.empty?
-
-      effective = mode || Doma::Settings.current.selector
-      effective = STDIN.tty? ? Doma::Settings::SelectorMode::Builtin : Doma::Settings::SelectorMode::First if effective == Doma::Settings::SelectorMode::Auto
-
-      case effective
-      in Doma::Settings::SelectorMode::First
-        chosen = entries.first.path
-        bump_used(chosen)
-        puts chosen
-      in Doma::Settings::SelectorMode::Builtin
-        items = entries.map do |e|
-          tags_hint = e.tags.empty? ? nil : e.tags.map { |t| "##{t}" }.join(' ')
-          Doma::Picker::Item.new(value: e.path, label: e.path, hint: tags_hint)
-        end
-        # Pre-filter via the same logic the picker uses, in case the
-        # caller passed --query: a small UX win that lets `doma cd
-        # --query foo` skip directly to the filtered view.
-        initial = query ? Doma::Picker.filter(items, query) : items
-        if initial.empty?
-          raise Doma::NotFoundError.new("no directories match '#{query}'") if query
-          raise Doma::NotFoundError.new("no directories registered")
-        end
-
-        result = Doma::Picker.pick(initial, "doma cd")
-        raise Doma::Error.new("selection cancelled", 130) if result.cancelled
-        if value = result.value
-          bump_used(value)
-          puts value
-        end
-      in Doma::Settings::SelectorMode::Auto
-        # Already resolved above; this branch satisfies exhaustiveness.
-        puts entries.first.path
       end
     end
 
-    # Stamp the resolved path as just-used. Opens its own DB handle
-    # because the upstream open/close pair has already finished — keeps
-    # the bump out of the hot path so the user sees the chosen path
-    # printed immediately, and a write failure here never breaks the
-    # actual `cd`.
-    private def bump_used(path : String)
-      db = Doma::Database.open
-      begin
-        db.bump_used!(path)
-      rescue
-        # Frecency is best-effort; never let it fail the command.
-      ensure
-        db.close
-      end
+    # Best-effort recency stamp on the already-open connection. WAL mode
+    # means this UPDATE doesn't block other readers, and the rescue
+    # guarantees frecency tracking can never fail the actual `cd`.
+    private def bump_used_safe(db : Doma::Database, path : String)
+      db.bump_used!(path)
+    rescue
+      # Frecency is best-effort.
     end
   end
 end

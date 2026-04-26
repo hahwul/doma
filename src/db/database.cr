@@ -228,13 +228,20 @@ module Doma
       tag.includes?('*') || tag.includes?('?') ? "GLOB" : "="
     end
 
+    # Two query shapes (with/without tag filter), both joining tags via a
+    # correlated subquery + GROUP_CONCAT so each Entry comes back fully
+    # hydrated in one round trip. Same pattern as `search()` — keeping
+    # them consistent means future tweaks (sort orders, additional
+    # columns) only need to land in one place.
     def directories(tag : String? = nil, *, sort : SortBy = SortBy::Path) : Array(Entry)
+      order = order_clause(sort, prefix: "d.")
+      tag_select = TAGS_GROUP_CONCAT_SUBQUERY
+
       rows = if tag
                op = tag_match_clause(tag)
-               order = order_clause(sort, prefix: "d.")
                @db.query_all(
-                 <<-SQL, tag, as: {Int64, String, String}
-                   SELECT DISTINCT d.id, d.path, d.basename
+                 <<-SQL, tag, as: {Int64, String, String, String?}
+                   SELECT DISTINCT d.id, d.path, d.basename, #{tag_select}
                    FROM directories d
                    INNER JOIN directory_tags dt ON dt.directory_id = d.id
                    INNER JOIN tags t ON t.id = dt.tag_id
@@ -243,17 +250,35 @@ module Doma
                    SQL
                )
              else
-               order = order_clause(sort, prefix: "")
                @db.query_all(
-                 "SELECT id, path, basename FROM directories #{order}",
-                 as: {Int64, String, String}
+                 <<-SQL, as: {Int64, String, String, String?}
+                   SELECT d.id, d.path, d.basename, #{tag_select}
+                   FROM directories d
+                   #{order}
+                   SQL
                )
              end
 
-      rows.map do |row|
-        id, path, basename = row
-        Entry.new(id, path, basename, tags_for(id))
-      end
+      rows.map { |row| build_entry(row) }
+    end
+
+    # Tags are joined with the unit-separator (0x1f) rather than a comma
+    # so that a tag containing a comma — which our validator rejects
+    # today, but might allow in a future schema bump — wouldn't tear the
+    # split apart. See `build_entry` for the matching split.
+    TAGS_GROUP_CONCAT_SUBQUERY = <<-SQL
+      (SELECT GROUP_CONCAT(name, X'1f')
+       FROM (SELECT t2.name
+             FROM tags t2
+             INNER JOIN directory_tags dt2 ON dt2.tag_id = t2.id
+             WHERE dt2.directory_id = d.id
+             ORDER BY t2.name)) AS joined_tags
+      SQL
+
+    private def build_entry(row : {Int64, String, String, String?}) : Entry
+      id, path, basename, joined = row
+      tags = joined ? joined.split('\u001f').reject(&.empty?) : [] of String
+      Entry.new(id, path, basename, tags)
     end
 
     private def order_clause(sort : SortBy, *, prefix : String) : String
@@ -358,27 +383,14 @@ module Doma
       result
     end
 
-    # Substring search across path, basename, and tag name. Returns deduped
-    # entries sorted by path. A single SQL query joins through tags and
-    # collects them per directory via GROUP_CONCAT — this used to do an
-    # N+1 (one extra SELECT per matched directory for its tag list).
+    # Substring search across path, basename, and tag name. Returns
+    # deduped entries sorted by path. Same single-query GROUP_CONCAT
+    # shape as `directories()` so both share `build_entry`.
     def search(query : String) : Array(Entry)
       term = "%#{escape_like(query)}%"
       rows = @db.query_all(
         <<-SQL, term, term, term, as: {Int64, String, String, String?}
-          SELECT d.id,
-                 d.path,
-                 d.basename,
-                 (
-                   SELECT GROUP_CONCAT(tag_name, X'1f')
-                   FROM (
-                     SELECT t2.name AS tag_name
-                     FROM tags t2
-                     INNER JOIN directory_tags dt2 ON dt2.tag_id = t2.id
-                     WHERE dt2.directory_id = d.id
-                     ORDER BY t2.name
-                   )
-                 ) AS joined_tags
+          SELECT d.id, d.path, d.basename, #{TAGS_GROUP_CONCAT_SUBQUERY}
           FROM directories d
           LEFT JOIN directory_tags dt ON dt.directory_id = d.id
           LEFT JOIN tags t ON t.id = dt.tag_id
@@ -389,14 +401,7 @@ module Doma
           ORDER BY d.path
           SQL
       )
-      rows.map do |row|
-        id, path, basename, joined = row
-        # Use the unit-separator (0x1f) as the GROUP_CONCAT delimiter so
-        # the split is unambiguous even if a tag ever contained a comma —
-        # belt and suspenders against future schema changes.
-        tags = joined ? joined.split('').reject(&.empty?) : [] of String
-        Entry.new(id, path, basename, tags)
-      end
+      rows.map { |row| build_entry(row) }
     end
 
     record Stats,
