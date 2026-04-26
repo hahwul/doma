@@ -121,6 +121,32 @@ describe "doma add" do
   end
 end
 
+describe "doma doctor with corrupted DB" do
+  bin = File.expand_path("../bin/doma", __DIR__)
+
+  it "[bug] reports READ ERROR instead of empty 'internal error:'" do
+    pending! "binary not built" unless File.exists?(bin)
+    home = File.tempname("doma-doctor-bad")
+    FileUtils.mkdir_p(home)
+    # Write something that isn't a SQLite file. The DB layer will refuse
+    # to open it; doctor should surface a useful diagnostic instead of
+    # propagating the bare exception to the runner.
+    File.write(File.join(home, "doma.db"), "this is not sqlite")
+
+    stdout_buf = IO::Memory.new
+    stderr_buf = IO::Memory.new
+    Process.run(
+      bin, ["doctor"],
+      env: {"DOMA_HOME" => home}, output: stdout_buf, error: stderr_buf,
+    )
+    combined = stdout_buf.to_s + stderr_buf.to_s
+    combined.should contain("READ ERROR")
+    combined.should_not contain("internal error:")
+  ensure
+    FileUtils.rm_rf(home) if home
+  end
+end
+
 describe "doma cd --query in non-TTY" do
   # The browse path used to ignore --query in non-TTY (First) mode and
   # silently return the first overall entry. This regression spec drives

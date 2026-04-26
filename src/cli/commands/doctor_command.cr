@@ -60,8 +60,11 @@ module Doma::CLI
 
       kv "size", human_size(File.size(path))
 
-      db = Doma::Database.open(path)
+      # Wrap the open() too — a corrupted/locked file raises *before* we
+      # have a handle to close, so the rescue has to span both phases.
+      db : Doma::Database? = nil
       begin
+        db = Doma::Database.open(path)
         stats = db.stats(top_n: 0, recent_n: 0)
         kv "directories", stats.total_directories.to_s
         kv "tags", stats.total_tags.to_s
@@ -71,9 +74,10 @@ module Doma::CLI
         end
         kv "schema", "v#{Doma::Snapshot::SCHEMA_VERSION}"
       rescue ex
-        kv "status", "READ ERROR — #{ex.message}"
+        message = ex.message.presence || ex.class.name
+        kv "status", "READ ERROR — #{message}"
       ensure
-        db.close
+        db.try(&.close)
       end
     end
 
