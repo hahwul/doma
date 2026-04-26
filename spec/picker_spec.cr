@@ -49,4 +49,47 @@ describe Doma::Picker do
       result.cancelled.should be_true
     end
   end
+
+  describe "filter edge cases" do
+    it "preserves the input order on empty query" do
+      items = [
+        Doma::Picker::Item.new(value: "1", label: "z"),
+        Doma::Picker::Item.new(value: "2", label: "a"),
+        Doma::Picker::Item.new(value: "3", label: "m"),
+      ]
+      Doma::Picker.filter(items, "").map(&.value).should eq(["1", "2", "3"])
+    end
+
+    it "tolerates items where hint is nil" do
+      items = [
+        Doma::Picker::Item.new(value: "x", label: "with-hint", hint: "extra"),
+        Doma::Picker::Item.new(value: "y", label: "without-hint"),
+      ]
+      Doma::Picker.filter(items, "extra").map(&.value).should eq(["x"])
+      Doma::Picker.filter(items, "without").map(&.value).should eq(["y"])
+    end
+
+    it "matches across both label and hint" do
+      items = [
+        Doma::Picker::Item.new(value: "a", label: "alpha", hint: "x"),
+        Doma::Picker::Item.new(value: "b", label: "beta", hint: "alpha-tag"),
+      ]
+      # Both rows mention 'alpha' (label vs hint) — both should match.
+      Doma::Picker.filter(items, "alpha").map(&.value).should eq(["a", "b"])
+    end
+
+    it "returns the same array (no panic) when query has no hits" do
+      items = [Doma::Picker::Item.new(value: "1", label: "abc")]
+      Doma::Picker.filter(items, "zzz").should be_empty
+    end
+
+    it "filter is stable (doesn't reorder matches)" do
+      items = [
+        Doma::Picker::Item.new(value: "1", label: "match-z"),
+        Doma::Picker::Item.new(value: "2", label: "match-a"),
+        Doma::Picker::Item.new(value: "3", label: "match-m"),
+      ]
+      Doma::Picker.filter(items, "match").map(&.value).should eq(["1", "2", "3"])
+    end
+  end
 end

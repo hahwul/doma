@@ -114,4 +114,69 @@ describe "Import/Export" do
       end
     end
   end
+
+  it "rejects empty file" do
+    with_temp_db do |db|
+      path = File.tempname("doma-empty") + ".json"
+      File.write(path, "")
+      begin
+        expect_raises(Doma::ImportError, /empty/) do
+          Doma::Importer.from_file(db, path)
+        end
+      ensure
+        File.delete(path) if File.exists?(path)
+      end
+    end
+  end
+
+  it "imports an empty entries array as a no-op" do
+    with_temp_db do |db|
+      db.add(Dir.current, ["original"])
+      payload = %({"version":1,"entries":[]})
+      path = File.tempname("doma-empty-entries") + ".json"
+      File.write(path, payload)
+      begin
+        result = Doma::Importer.from_file(db, path, mode: Doma::Importer::Mode::Merge)
+        result.imported.should eq(0)
+        result.skipped.should eq(0)
+        # Original data preserved.
+        db.directories.size.should eq(1)
+      ensure
+        File.delete(path) if File.exists?(path)
+      end
+    end
+  end
+
+  it "rejects a JSON object without an entries field" do
+    with_temp_db do |db|
+      path = File.tempname("doma-no-entries") + ".json"
+      File.write(path, %({"version":1}))
+      begin
+        expect_raises(Doma::ImportError, /malformed/) do
+          Doma::Importer.from_file(db, path)
+        end
+      ensure
+        File.delete(path) if File.exists?(path)
+      end
+    end
+  end
+
+  it "round-trips an empty database (export → import → still empty)" do
+    with_temp_db do |db|
+      io = IO::Memory.new
+      Doma::Exporter.write(db, Doma::Exporter::Format::Json, io)
+
+      with_temp_db do |db2|
+        snapshot = Doma::Importer.parse(io.to_s)
+        snapshot.entries.should be_empty
+        db2.directories.should be_empty
+      end
+    end
+  end
+
+  it "snapshot entries default to an empty tags array (Snapshot::Entry default)" do
+    e = Doma::Snapshot::Entry.new("/some/path", [] of String)
+    e.tags.should be_empty
+    e.path.should eq("/some/path")
+  end
 end

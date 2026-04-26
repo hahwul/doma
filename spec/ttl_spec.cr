@@ -22,6 +22,36 @@ describe Doma::Duration do
   it "rejects zero / negative" do
     expect_raises(Doma::ValidationError, /positive/) { Doma::Duration.parse_seconds!("0d") }
   end
+
+  it "tolerates surrounding whitespace" do
+    Doma::Duration.parse_seconds!("  7d  ").should eq(7 * 86_400_i64)
+  end
+
+  it "rejects fractional values" do
+    expect_raises(Doma::ValidationError, /invalid duration/) do
+      Doma::Duration.parse_seconds!("1.5d")
+    end
+  end
+
+  it "rejects negative sign" do
+    expect_raises(Doma::ValidationError, /invalid duration/) do
+      Doma::Duration.parse_seconds!("-5m")
+    end
+  end
+
+  it ".expires_at_for returns now + duration in epoch seconds" do
+    before = Time.utc.to_unix
+    epoch = Doma::Duration.expires_at_for("60s")
+    after = Time.utc.to_unix
+    (epoch - before).should be >= 60
+    (epoch - after).should be <= 60
+  end
+
+  it ".default_tmp_expires_at is roughly 7 days out" do
+    epoch = Doma::Duration.default_tmp_expires_at
+    expected = Time.utc.to_unix + Doma::Duration::DEFAULT_TMP_SECONDS
+    (epoch - expected).abs.should be <= 2 # allow tiny clock drift
+  end
 end
 
 describe "TTL: Database.add with expires_at" do

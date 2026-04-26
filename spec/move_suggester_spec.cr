@@ -13,14 +13,58 @@ describe Doma::Suggester do
     Doma::Suggester.suggest("", ["crystal"]).should be_nil
   end
 
+  it "returns nil for empty candidates" do
+    Doma::Suggester.suggest("foo", [] of String).should be_nil
+  end
+
   it "scales tolerance with input size" do
     # Very short inputs only forgive 1 edit — 'cd' should NOT match 'add'.
     Doma::Suggester.suggest("cd", ["add", "list"]).should be_nil
   end
 
-  it "renders a hint string ready for error.hint" do
-    Doma::Suggester.hint_for("crystl", ["crystal"]).should eq("Did you mean 'crystal'?")
-    Doma::Suggester.hint_for("xx", ["crystal"]).should be_nil
+  it "is case-sensitive (matches Levenshtein semantics)" do
+    # 'Crystal' vs 'crystal' is distance 1 (initial-cap), still in
+    # budget for a 7-char input but worth pinning so anyone changing
+    # to ignore-case has to consciously update the spec.
+    Doma::Suggester.suggest("Crystal", ["crystal"]).should eq("crystal")
+  end
+
+  it "picks the closer candidate when several would qualify" do
+    # 'crystl' (6) vs 'crystal' (1 edit) vs 'crystan' (1 edit) — the
+    # first hit at the lowest distance wins. Both are at distance 1
+    # from 'crystl'; we accept either as long as it's one of them.
+    pick = Doma::Suggester.suggest("crystl", ["crystan", "crystal"])
+    pick.should_not be_nil
+    pick.try(&.in?({"crystal", "crystan"})).should be_true
+  end
+
+  describe "size-based threshold boundaries" do
+    it "0..3 chars: forgives 1 edit" do
+      # 3 chars, 1 edit away
+      Doma::Suggester.suggest("foo", ["fo"]).should eq("fo")
+      # 3 chars, 2 edits away → drops out
+      Doma::Suggester.suggest("foo", ["fff"]).should be_nil
+    end
+
+    it "4..6 chars: forgives 2 edits" do
+      Doma::Suggester.suggest("crystl", ["cryst"]).should eq("cryst")       # dist 1
+      Doma::Suggester.suggest("crystl", ["crystals"]).should eq("crystals") # dist 2
+    end
+
+    it "7+ chars: forgives 3 edits" do
+      Doma::Suggester.suggest("crystaal", ["crystals"]).should eq("crystals")
+    end
+  end
+
+  describe ".hint_for" do
+    it "renders a hint string ready for error.hint" do
+      Doma::Suggester.hint_for("crystl", ["crystal"]).should eq("Did you mean 'crystal'?")
+      Doma::Suggester.hint_for("xx", ["crystal"]).should be_nil
+    end
+
+    it "returns nil with empty candidates" do
+      Doma::Suggester.hint_for("foo", [] of String).should be_nil
+    end
   end
 end
 

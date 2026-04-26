@@ -1,6 +1,44 @@
 require "./spec_helper"
 
 describe Doma::Installer do
+  describe ".detect_shell" do
+    it "returns the basename when $SHELL is supported" do
+      prev = ENV["SHELL"]?
+      begin
+        ENV["SHELL"] = "/bin/zsh"
+        Doma::Installer.detect_shell.should eq("zsh")
+        ENV["SHELL"] = "/usr/local/bin/bash"
+        Doma::Installer.detect_shell.should eq("bash")
+        ENV["SHELL"] = "/opt/homebrew/bin/fish"
+        Doma::Installer.detect_shell.should eq("fish")
+      ensure
+        prev ? (ENV["SHELL"] = prev) : ENV.delete("SHELL")
+      end
+    end
+
+    it "returns nil for unsupported shells" do
+      prev = ENV["SHELL"]?
+      begin
+        ENV["SHELL"] = "/usr/bin/xonsh"
+        Doma::Installer.detect_shell.should be_nil
+        ENV["SHELL"] = "/usr/bin/tcsh"
+        Doma::Installer.detect_shell.should be_nil
+      ensure
+        prev ? (ENV["SHELL"] = prev) : ENV.delete("SHELL")
+      end
+    end
+
+    it "returns nil when $SHELL is unset" do
+      prev = ENV["SHELL"]?
+      begin
+        ENV.delete("SHELL")
+        Doma::Installer.detect_shell.should be_nil
+      ensure
+        ENV["SHELL"] = prev if prev
+      end
+    end
+  end
+
   describe ".rc_path_for" do
     it "maps known shells" do
       Doma::Installer.rc_path_for("zsh").should end_with(".zshrc")
