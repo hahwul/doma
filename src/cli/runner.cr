@@ -12,9 +12,7 @@ require "./commands/export_command"
 require "./commands/import_command"
 require "./commands/rename_command"
 require "./commands/stats_command"
-require "./commands/doctor_command"
-require "./commands/init_command"
-require "./commands/install_command"
+require "./commands/setup_command"
 require "./commands/move_command"
 
 module Doma
@@ -22,7 +20,7 @@ module Doma
     class Runner
       KNOWN_COMMANDS = %w[
         add rm remove list ls tags rename move mv
-        stats cd run export import doctor init install
+        stats cd run export import setup
         version help -V --version -h --help
       ]
 
@@ -30,8 +28,11 @@ module Doma
       # surfaces a migration hint when these are typed, instead of just
       # "unknown command", so muscle memory upgrades cleanly.
       RETIRED_COMMANDS = {
-        "search" => "use `doma list <query>` instead",
-        "tui"    => "use `doma cd` (no tag) instead",
+        "search"  => "use `doma list <query>` instead",
+        "tui"     => "use `doma cd` (no tag) instead",
+        "install" => "use `doma setup install` instead",
+        "init"    => "use `doma setup init` instead",
+        "doctor"  => "use `doma setup doctor` instead",
       }
 
       def run(args : Array(String) = ARGV.dup)
@@ -73,12 +74,8 @@ module Doma
           MoveCommand.new.run(args)
         when "stats"
           StatsCommand.new.run(args)
-        when "doctor"
-          DoctorCommand.new.run(args)
-        when "init"
-          InitCommand.new.run(args)
-        when "install"
-          InstallCommand.new.run(args)
+        when "setup"
+          SetupCommand.new.run(args)
         else
           Doma::Logger.error "unknown command '#{command}'"
           if migration = RETIRED_COMMANDS[command]?
@@ -142,9 +139,7 @@ module Doma
         {"run <tag> -- <cmd>", "Run a command in every tagged directory"},
         {"export", "Dump the database (--json | --yaml)"},
         {"import <file>", "Load a snapshot (--merge | --replace)"},
-        {"install [<shell>]", "Append the shell wrapper to your rc file"},
-        {"init <shell>", "Print the wrapper (for manual install)"},
-        {"doctor", "Check the install (DB, config)"},
+        {"setup <action>", "install / init / doctor — see `doma setup --help`"},
         {"version | help", "Show version / this help"},
       ]
 
@@ -170,8 +165,8 @@ module Doma
         puts "      --no-color, --color Force color off / on"
         puts ""
         puts "Make `doma cd` actually change directory:"
-        puts "  doma install                # auto-append to your shell's rc file"
-        puts "  eval \"$(doma init zsh)\"     # or do it yourself"
+        puts "  doma setup install                # auto-append to your shell's rc file"
+        puts "  eval \"$(doma setup init zsh)\"     # or do it yourself"
         puts ""
         puts "Without the wrapper, `doma cd` only prints the resolved path —"
         puts "use `cd \"$(doma cd <tag>)\"` to apply it manually."

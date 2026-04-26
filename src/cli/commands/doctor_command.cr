@@ -12,7 +12,7 @@ module Doma::CLI
   class DoctorCommand
     def run(args : Array(String))
       parser = OptionParser.new do |p|
-        p.banner = "Usage: doma doctor"
+        p.banner = "Usage: doma setup doctor"
         p.on("-h", "--help", "Show help") do
           puts p
           exit 0

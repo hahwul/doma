@@ -247,7 +247,7 @@ describe "doma doctor with corrupted DB" do
     stdout_buf = IO::Memory.new
     stderr_buf = IO::Memory.new
     Process.run(
-      bin, ["doctor"],
+      bin, ["setup", "doctor"],
       env: {"DOMA_HOME" => home}, output: stdout_buf, error: stderr_buf,
     )
     combined = stdout_buf.to_s + stderr_buf.to_s

@@ -15,7 +15,7 @@ module Doma::CLI
       dry_run = false
 
       parser = OptionParser.new do |p|
-        p.banner = "Usage: doma install [<shell>] [--yes] [--dry-run]"
+        p.banner = "Usage: doma setup install [<shell>] [--yes] [--dry-run]"
         p.on("-y", "--yes", "Skip the confirmation prompt") { assume_yes = true }
         p.on("-n", "--dry-run", "Show what would change without writing") { dry_run = true }
         p.on("-h", "--help", "Show help") do

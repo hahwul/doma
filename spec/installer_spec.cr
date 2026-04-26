@@ -17,12 +17,12 @@ describe Doma::Installer do
 
   describe ".block_for" do
     it "uses eval syntax for bash/zsh" do
-      Doma::Installer.block_for("zsh").should contain(%(eval "$(doma init zsh)"))
-      Doma::Installer.block_for("bash").should contain(%(eval "$(doma init bash)"))
+      Doma::Installer.block_for("zsh").should contain(%(eval "$(doma setup init zsh)"))
+      Doma::Installer.block_for("bash").should contain(%(eval "$(doma setup init bash)"))
     end
 
     it "uses pipe-source syntax for fish" do
-      Doma::Installer.block_for("fish").should contain("doma init fish | source")
+      Doma::Installer.block_for("fish").should contain("doma setup init fish | source")
     end
 
     it "wraps the block in markers for idempotency" do
