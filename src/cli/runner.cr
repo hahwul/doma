@@ -127,6 +127,27 @@ module Doma
         end
       end
 
+      # Order is preserved from the previous grouped layout (paths →
+      # tags → browse → execute → snapshot → setup) so muscle memory and
+      # docs continue to make sense; only the visual grouping is gone.
+      COMMAND_LISTING = [
+        {"add [<path>]", "Register a path (defaults to .) with tags"},
+        {"rm <path>", "Remove tag(s) or the path itself"},
+        {"move <old> <new>", "Move a registered path (tags carry over)"},
+        {"tags", "List all tags with counts"},
+        {"rename <old> <new>", "Rename or merge a tag"},
+        {"list [<query>] [-t TAG]", "List/search directories (--json, --paths)"},
+        {"cd [<tag>]", "Resolve a directory (interactive picker)"},
+        {"stats", "Top tags + recently added paths"},
+        {"run <tag> -- <cmd>", "Run a command in every tagged directory"},
+        {"export", "Dump the database (--json | --yaml)"},
+        {"import <file>", "Load a snapshot (--merge | --replace)"},
+        {"install [<shell>]", "Append the shell wrapper to your rc file"},
+        {"init <shell>", "Print the wrapper (for manual install)"},
+        {"doctor", "Check the install (DB, config)"},
+        {"version | help", "Show version / this help"},
+      ]
+
       private def print_help
         color = Doma::Logger.color_enabled?
         brand = color ? "doma".colorize(:cyan).bold.to_s : "doma"
@@ -137,40 +158,12 @@ module Doma
         puts ""
         puts "  Usage: doma <command> [options]"
         puts ""
-
-        section "Paths", color, [
-          {"add [<path>]", "Register a path (defaults to .) with tags"},
-          {"rm <path>", "Remove tag(s) or the path itself"},
-          {"move <old> <new>", "Move a registered path (tags carry over)"},
-        ]
-
-        section "Tags", color, [
-          {"tags", "List all tags with counts"},
-          {"rename <old> <new>", "Rename or merge a tag"},
-        ]
-
-        section "Browse", color, [
-          {"list [<query>] [-t TAG]", "List/search directories (--json, --paths)"},
-          {"cd [<tag>]", "Resolve a directory (interactive picker)"},
-          {"stats", "Top tags + recently added paths"},
-        ]
-
-        section "Execute", color, [
-          {"run <tag> -- <cmd>", "Run a command in every tagged directory"},
-        ]
-
-        section "Snapshot", color, [
-          {"export", "Dump the database (--json | --yaml)"},
-          {"import <file>", "Load a snapshot (--merge | --replace)"},
-        ]
-
-        section "Setup", color, [
-          {"install [<shell>]", "Append the shell wrapper to your rc file"},
-          {"init <shell>", "Print the wrapper (for manual install)"},
-          {"doctor", "Check the install (DB, config)"},
-          {"version | help", "Show version / this help"},
-        ]
-
+        puts "  Commands:"
+        COMMAND_LISTING.each do |row|
+          name, desc = row
+          puts "    #{name.ljust(24)} #{desc}"
+        end
+        puts ""
         puts "  Global flags:"
         puts "    -q, --quiet             Suppress success/info output"
         puts "    -v, --verbose, --debug  Print debug traces to stderr"
@@ -188,16 +181,6 @@ module Doma
         puts "    doma list -t crystal -0 | xargs -0 ...  # NUL-safe for spaces"
         puts "    doma list -t crystal --json | jq        # structured"
         puts "    doma tags --names                       # just tag names"
-        puts ""
-      end
-
-      private def section(title : String, color : Bool, rows : Array(Tuple(String, String)))
-        label = color ? title.colorize(:cyan).bold.to_s : title
-        puts "  #{label}"
-        rows.each do |row|
-          name, desc = row
-          puts "    #{name.ljust(24)} #{desc}"
-        end
         puts ""
       end
     end
