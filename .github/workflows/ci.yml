@@ -6,6 +6,8 @@ on:
       - .github/workflows/ci.yml
       - shard.yml
       - shard.lock
+      - docker/Dockerfile
+      - .dockerignore
       - "**/*.cr"
   push:
     branches: [main]
@@ -60,3 +62,24 @@ jobs:
       - uses: crystal-lang/install-crystal@v1
       - name: Check formatting
         run: crystal tool format --check
+
+  build-docker:
+    # Build the multi-arch image on every PR/push so a Dockerfile
+    # regression doesn't first surface during a release publish run.
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        arch: [linux/amd64, linux/arm64]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - name: Build (no push)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: docker/Dockerfile
+          platforms: ${{ matrix.arch }}
+          push: false
+          cache-from: type=gha,scope=${{ matrix.arch }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.arch }}
