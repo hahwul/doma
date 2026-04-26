@@ -53,7 +53,7 @@ module Doma::CLI
       # Done as a separate branch (rather than a flag inside the loop)
       # because there's no point even touching the database for a preview.
       if dry_run
-        positional.each do |path|
+        failures = process_each(positional) do |path|
           abs = Doma::Validator.path!(path)
           applied = Doma::Validator.tags!(raw_tags).dup
           applied.concat(derive_tags(abs, use_basename, use_git))
@@ -61,12 +61,13 @@ module Doma::CLI
           summary = applied.empty? ? "(no tags)" : "tags: #{applied.join(", ")}"
           Doma::Logger.info "[dry-run] would add #{abs} #{summary}"
         end
+        exit 2 if failures > 0
         return
       end
 
       db = Doma::Database.open
       begin
-        positional.each do |path|
+        failures = process_each(positional) do |path|
           abs = Doma::Validator.path!(path)
 
           # User-supplied tags must validate strictly; auto-derived tags
@@ -81,9 +82,29 @@ module Doma::CLI
           summary = applied.empty? ? "(no tags)" : "tags: #{applied.join(", ")}"
           Doma::Logger.success "added #{abs} #{summary}"
         end
+        # Non-zero exit when at least one path failed, so scripts can tell.
+        # Successful paths are still committed — partial success is the
+        # right default for batch add.
+        exit 2 if failures > 0
       ensure
         db.close
       end
+    end
+
+    # Run the block once per path, catching ValidationError so a single
+    # bad input doesn't abort the rest of the batch. Returns the failure
+    # count so the caller can pick a non-zero exit code if needed.
+    private def process_each(paths : Array(String), &)
+      failures = 0
+      paths.each do |path|
+        begin
+          yield path
+        rescue ex : Doma::ValidationError
+          failures += 1
+          Doma::Logger.error "#{path}: #{ex.message}"
+        end
+      end
+      failures
     end
 
     private def derive_tags(abs : String, use_basename : Bool, use_git : Bool) : Array(String)

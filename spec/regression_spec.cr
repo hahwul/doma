@@ -121,6 +121,34 @@ describe "doma add" do
   end
 end
 
+describe "doma add multi-path partial success" do
+  bin = File.expand_path("../bin/doma", __DIR__)
+
+  it "[bug] adds the valid paths and reports the invalid ones" do
+    pending! "binary not built" unless File.exists?(bin)
+    home = File.tempname("doma-multipath")
+    FileUtils.mkdir_p(home)
+
+    out_buf = IO::Memory.new
+    err_buf = IO::Memory.new
+    status = Process.run(
+      bin, ["add", "/tmp", "/no/such/dir/anywhere", "/var", "-t", "batch"],
+      env: {"DOMA_HOME" => home}, output: out_buf, error: err_buf,
+    )
+    # Non-zero (2) because at least one path failed validation.
+    status.exit_code.should eq(2)
+
+    # The valid paths must still be persisted — partial success is the
+    # correct default for a batch add.
+    list_buf = IO::Memory.new
+    Process.run(bin, ["list", "-t", "batch", "--paths"], env: {"DOMA_HOME" => home}, output: list_buf, error: STDERR)
+    paths = list_buf.to_s.split('\n', remove_empty: true)
+    paths.size.should eq(2)
+  ensure
+    FileUtils.rm_rf(home) if home
+  end
+end
+
 describe "doma misconfigured env paths" do
   bin = File.expand_path("../bin/doma", __DIR__)
 
