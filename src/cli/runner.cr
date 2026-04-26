@@ -24,17 +24,6 @@ module Doma
         version help -V --version -h --help
       ]
 
-      # Old subcommands that have been folded into newer ones. The runner
-      # surfaces a migration hint when these are typed, instead of just
-      # "unknown command", so muscle memory upgrades cleanly.
-      RETIRED_COMMANDS = {
-        "search"  => "use `doma list <query>` instead",
-        "tui"     => "use `doma cd` (no tag) instead",
-        "install" => "use `doma setup install` instead",
-        "init"    => "use `doma setup init` instead",
-        "doctor"  => "use `doma setup doctor` instead",
-      }
-
       def run(args : Array(String) = ARGV.dup)
         # Pull global flags out of argv before subcommand dispatch — every
         # command honors them without needing per-command wiring, and
@@ -78,9 +67,7 @@ module Doma
           SetupCommand.new.run(args)
         else
           Doma::Logger.error "unknown command '#{command}'"
-          if migration = RETIRED_COMMANDS[command]?
-            STDERR.puts "  '#{command}' was removed — #{migration}"
-          elsif suggestion = Doma::Suggester.suggest(command, KNOWN_COMMANDS)
+          if suggestion = Doma::Suggester.suggest(command, KNOWN_COMMANDS)
             STDERR.puts "  Did you mean '#{suggestion}'?"
           end
           STDERR.puts "Run 'doma --help' to see all commands."
