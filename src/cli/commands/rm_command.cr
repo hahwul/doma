@@ -54,19 +54,28 @@ module Doma::CLI
 
       raise Doma::ValidationError.new("path is required (or use --gone / --expired)") if positional.empty?
 
+      # Validate up front so a misspelled or invalid tag name fails fast
+      # with a clear error, instead of silently no-op'ing inside
+      # `remove_tags` (where a non-existent tag name simply matches no
+      # rows). Mirrors `add_command`'s validation step.
+      cleaned_tags = tags.empty? ? tags : Doma::Validator.tags!(tags)
+
       db = Doma::Database.open
       begin
         positional.each do |path|
-          if tags.empty?
+          if cleaned_tags.empty?
             if db.remove_path(path)
               Doma::Logger.success "removed #{Doma::Validator.canonicalize(path)}"
             else
               Doma::Logger.warn "not registered: #{path}"
             end
           else
-            if db.remove_tags(path, tags)
-              Doma::Logger.success "untagged #{Doma::Validator.canonicalize(path)} (#{tags.join(", ")})"
-            else
+            case db.remove_tags(path, cleaned_tags)
+            in Doma::Database::RemoveTagsResult::Removed
+              Doma::Logger.success "untagged #{Doma::Validator.canonicalize(path)} (#{cleaned_tags.join(", ")})"
+            in Doma::Database::RemoveTagsResult::NoMatch
+              Doma::Logger.warn "no matching tag(s) on #{Doma::Validator.canonicalize(path)} (#{cleaned_tags.join(", ")})"
+            in Doma::Database::RemoveTagsResult::NotRegistered
               Doma::Logger.warn "not registered: #{path}"
             end
           end

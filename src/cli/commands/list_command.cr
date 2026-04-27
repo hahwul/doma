@@ -120,11 +120,11 @@ module Doma::CLI
     private def collect(db : Doma::Database, tag : String?, query : String?, sort : Doma::Database::SortBy, include_expired : Bool) : Array(Doma::Entry)
       if tag && query
         tagged = db.directories(tag, sort: sort, include_expired: include_expired).map(&.id).to_set
-        db.search(query).select { |e| tagged.includes?(e.id) }
+        db.search(query, include_expired: include_expired).select { |e| tagged.includes?(e.id) }
       elsif tag
         db.directories(tag, sort: sort, include_expired: include_expired)
       elsif query
-        db.search(query)
+        db.search(query, include_expired: include_expired)
       else
         db.directories(sort: sort, include_expired: include_expired)
       end

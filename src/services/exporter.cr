@@ -11,7 +11,11 @@ module Doma
     include JSON::Serializable
     include YAML::Serializable
 
-    SCHEMA_VERSION = 1
+    # v2 added the optional `expirations` field on Entry so TTL info
+    # survives export/import round-trips. v1 snapshots are still
+    # accepted: missing `expirations` simply means every tag is
+    # permanent, which matches v1 semantics.
+    SCHEMA_VERSION = 2
 
     property version : Int32
     property generated_at : Int64?
@@ -27,8 +31,14 @@ module Doma
       property path : String
       property basename : String?
       property tags : Array(String) = [] of String
+      # tag_name => expires_at (unix epoch seconds). Only emitted when
+      # at least one tag has a TTL — keeps snapshots from common
+      # permanent-only setups visually identical to v1.
+      @[JSON::Field(emit_null: false)]
+      @[YAML::Field(emit_null: false)]
+      property expirations : Hash(String, Int64)? = nil
 
-      def initialize(@path : String, @tags : Array(String), @basename : String? = nil)
+      def initialize(@path : String, @tags : Array(String), @basename : String? = nil, @expirations : Hash(String, Int64)? = nil)
       end
     end
   end
@@ -43,7 +53,8 @@ module Doma
 
     def build(db : Doma::Database) : Snapshot
       entries = db.directories.map do |e|
-        Snapshot::Entry.new(e.path, e.tags, e.basename)
+        ttl_map = db.tag_expirations(e.id)
+        Snapshot::Entry.new(e.path, e.tags, e.basename, ttl_map.empty? ? nil : ttl_map)
       end
       Snapshot.new(entries)
     end

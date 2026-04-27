@@ -16,6 +16,10 @@ module Doma
 
     record Result, imported : Int32, skipped : Int32, replaced : Bool
 
+    # Reused across all v1 entries so we don't allocate a fresh empty
+    # hash per row.
+    private EMPTY_TTL_MAP = {} of String => Int64
+
     enum Mode
       Merge
       Replace
@@ -64,7 +68,20 @@ module Doma
             # Skip path validation: importing across machines is normal,
             # and the snapshot may legitimately reference paths that don't
             # exist on this host yet.
-            db.add_tx(cnn, entry.path, entry.tags, validate_path: false)
+            #
+            # `add_tx` applies a single `expires_at` to every tag in the
+            # call, so when the snapshot carries per-tag TTLs (v2+) we
+            # group tags by their expiry and dispatch one call per
+            # group. v1 snapshots have no `expirations` map → one call,
+            # all permanent, which matches the old behavior.
+            ttl_map = entry.expirations || EMPTY_TTL_MAP
+            grouped = Hash(Int64?, Array(String)).new { |h, k| h[k] = [] of String }
+            entry.tags.each do |t|
+              grouped[ttl_map[t]?] << t
+            end
+            grouped.each do |ttl, tag_group|
+              db.add_tx(cnn, entry.path, tag_group, validate_path: false, expires_at: ttl)
+            end
             imported += 1
           rescue ex : Doma::ValidationError
             skipped += 1

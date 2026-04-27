@@ -179,4 +179,54 @@ describe "Import/Export" do
     e.tags.should be_empty
     e.path.should eq("/some/path")
   end
+
+  it "preserves per-tag TTLs across an export → import round-trip" do
+    # Pre-fix: Snapshot::Entry had no `expirations` field, so a tag with
+    # `--ttl 7d` came back as permanent on the importing side.
+    with_temp_db do |db|
+      tmp = File.tempname("doma-ttl-roundtrip")
+      FileUtils.mkdir_p(tmp)
+      begin
+        future = Time.utc.to_unix + 7 * 86_400
+        db.add(tmp, ["bookmark"], expires_at: future)
+        db.add(tmp, ["permanent"]) # different call → no TTL
+
+        io = IO::Memory.new
+        Doma::Exporter.write(db, Doma::Exporter::Format::Json, io)
+
+        with_temp_db do |db2|
+          path = File.tempname("doma-ttl-snap") + ".json"
+          File.write(path, io.to_s)
+          begin
+            Doma::Importer.from_file(db2, path)
+            ttls = db2.tag_expirations(db2.directories.first.id)
+            ttls["bookmark"].should be_close(future, 5)
+            ttls.has_key?("permanent").should be_false
+          ensure
+            File.delete(path) if File.exists?(path)
+          end
+        end
+      ensure
+        FileUtils.rm_rf(tmp)
+      end
+    end
+  end
+
+  it "still accepts v1 snapshots without an expirations field" do
+    with_temp_db do |db|
+      payload = %({"version":1,"entries":[{"path":"/legacy/path","tags":["legacy"]}]})
+      path = File.tempname("doma-v1-snap") + ".json"
+      File.write(path, payload)
+      begin
+        result = Doma::Importer.from_file(db, path)
+        result.imported.should eq(1)
+        # Tags survive; nothing is mistakenly TTL'd.
+        first = db.directories.first
+        first.tags.should eq(["legacy"])
+        db.tag_expirations(first.id).should be_empty
+      ensure
+        File.delete(path) if File.exists?(path)
+      end
+    end
+  end
 end

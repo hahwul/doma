@@ -39,6 +39,21 @@ describe Doma::Duration do
     end
   end
 
+  it "rejects values above the ~100y cap with a clean ValidationError" do
+    # Pre-fix this surfaced as a generic 'internal error: Invalid time'
+    # because the multiplied product blew past Crystal's Time range.
+    expect_raises(Doma::ValidationError, /too large/) do
+      Doma::Duration.parse_seconds!("9999999999999w")
+    end
+  end
+
+  it "rejects digit strings that don't fit Int64 with a ValidationError" do
+    # 20+ digits overflows the int parse before we even multiply.
+    expect_raises(Doma::ValidationError, /too large/) do
+      Doma::Duration.parse_seconds!("99999999999999999999s")
+    end
+  end
+
   it ".expires_at_for returns now + duration in epoch seconds" do
     before = Time.utc.to_unix
     epoch = Doma::Duration.expires_at_for("60s")

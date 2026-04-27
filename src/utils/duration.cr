@@ -18,13 +18,28 @@ module Doma
       "w" => 604_800_i64,
     }
 
+    # Sanity cap for user-supplied TTLs. Anything past this is almost
+    # certainly a typo (or shell variable expansion gone wrong) — and
+    # without the cap, large inputs would either overflow Int64
+    # multiplication or push `expires_at_for` past Crystal's Time range
+    # and surface as a generic "internal error".
+    MAX_SECONDS = 100_i64 * 365_i64 * 86_400_i64 # ~100 years
+
     # Returns the input duration converted to seconds.
     def parse_seconds!(raw : String) : Int64
       m = raw.strip.match(PATTERN)
       raise ValidationError.new("invalid duration '#{raw}' (use like 30s, 5m, 1h, 7d, 2w)") unless m
-      n = m[1].to_i64
+      # `to_i64?` returns nil on overflow rather than raising; a 20-digit
+      # number reaches us here just because the regex passed.
+      n = m[1].to_i64?
+      raise ValidationError.new("duration '#{raw}' is too large (max ~100y)") unless n
       raise ValidationError.new("duration must be positive") if n <= 0
       multiplier = SECONDS_PER_UNIT[m[2].downcase]
+      # Guard the multiplication so a value just under Int64::MAX in the
+      # input doesn't blow up when scaled by `multiplier`.
+      if n > MAX_SECONDS // multiplier
+        raise ValidationError.new("duration '#{raw}' is too large (max ~100y)")
+      end
       n * multiplier
     end
 

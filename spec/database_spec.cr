@@ -34,11 +34,30 @@ describe Doma::Database do
   it "removes specific tags without deleting the path" do
     with_temp_db do |db|
       db.add(Dir.current, ["crystal", "web"])
-      db.remove_tags(Dir.current, ["web"])
+      db.remove_tags(Dir.current, ["web"]).should eq(Doma::Database::RemoveTagsResult::Removed)
 
       entries = db.directories
       entries.size.should eq(1)
       entries.first.tags.should eq(["crystal"])
+    end
+  end
+
+  it "remove_tags signals NotRegistered when the path was never added" do
+    with_temp_db do |db|
+      result = db.remove_tags("/this/path/never/existed", ["whatever"])
+      result.should eq(Doma::Database::RemoveTagsResult::NotRegistered)
+    end
+  end
+
+  it "remove_tags signals NoMatch when the path is registered but the tag isn't on it" do
+    # Pre-fix: returned true unconditionally as long as the path existed,
+    # so the CLI cheerfully printed `✓ untagged …` for a no-op.
+    with_temp_db do |db|
+      db.add(Dir.current, ["crystal"])
+      result = db.remove_tags(Dir.current, ["nonexistent"])
+      result.should eq(Doma::Database::RemoveTagsResult::NoMatch)
+      # Original tag must be intact.
+      db.directories.first.tags.should eq(["crystal"])
     end
   end
 
@@ -157,6 +176,41 @@ describe Doma::Database do
             db.add_tx(cnn, tmp, ["committed"], validate_path: false)
           end
           db.paths_for_tag("committed").size.should eq(1)
+        ensure
+          FileUtils.rm_rf(tmp)
+        end
+      end
+    end
+  end
+
+  describe "search include_expired" do
+    it "by default hides rows whose only tag match is expired" do
+      with_temp_db do |db|
+        tmp = File.tempname("doma-search-ttl")
+        FileUtils.mkdir_p(tmp)
+        begin
+          # Tag is already past its TTL by the time search runs.
+          db.add(tmp, ["soon"], expires_at: Time.utc.to_unix - 60)
+          # Path-substring still hits, but the tag-only branch shouldn't.
+          db.search("soon").map(&.path).should be_empty
+        ensure
+          FileUtils.rm_rf(tmp)
+        end
+      end
+    end
+
+    it "include_expired surfaces matches via expired tags AND keeps them in the tag list" do
+      # Pre-fix: list_command passed include_expired only to db.directories,
+      # not to db.search, so combining `-t TAG --include-expired <query>`
+      # silently dropped the flag in the search branch.
+      with_temp_db do |db|
+        tmp = File.tempname("doma-search-ttl2")
+        FileUtils.mkdir_p(tmp)
+        begin
+          db.add(tmp, ["soon"], expires_at: Time.utc.to_unix - 60)
+          hits = db.search("soon", include_expired: true)
+          hits.size.should eq(1)
+          hits.first.tags.should contain("soon")
         ensure
           FileUtils.rm_rf(tmp)
         end
