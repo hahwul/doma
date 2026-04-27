@@ -464,11 +464,14 @@ module Doma
       )
     end
 
-    # Renames a tag. If `new_name` already exists, the two are merged: every
-    # `directory_tags` row pointing at the old tag is re-pointed at the new
-    # one (with INSERT OR IGNORE so duplicates collapse), then the old tag
-    # row is dropped. Runs in one transaction so a failure can't leave a
-    # half-merged tag behind.
+    # Renames a tag. If `new_name` already exists, the two are merged:
+    # every `directory_tags` row pointing at the old tag is re-pointed
+    # at the new one, carrying its `expires_at` along. When a path
+    # already had both tags, the merge keeps whichever lifetime is
+    # *longer* (NULL/permanent beats any TTL; among two TTLs the later
+    # epoch wins) — picking the more permissive duration matches how
+    # `add` treats a tagless re-add as "make permanent." Runs in one
+    # transaction so a failure can't leave a half-merged tag behind.
     def rename_tag(old_name : String, new_name : String) : Symbol
       cleaned = Validator.tag!(new_name)
       return :noop if cleaned == old_name
@@ -486,9 +489,20 @@ module Doma
         cnn = tx.connection
         existing = cnn.query_one?("SELECT id FROM tags WHERE name = ?", cleaned, as: Int64)
         if existing
+          # Re-point every old-tag row at the new tag, carrying the
+          # original `expires_at` so a TTL'd source row doesn't get
+          # silently promoted to permanent. On per-path collision
+          # (path already had both tags), MAX-with-NULL-as-permanent
+          # picks the more permissive lifetime: NULL wins over any
+          # epoch, otherwise the larger epoch wins.
           cnn.exec(
-            "INSERT OR IGNORE INTO directory_tags (directory_id, tag_id) " \
-            "SELECT directory_id, ? FROM directory_tags WHERE tag_id = ?",
+            "INSERT INTO directory_tags (directory_id, tag_id, expires_at) " \
+            "SELECT directory_id, ?, expires_at FROM directory_tags WHERE tag_id = ? " \
+            "ON CONFLICT(directory_id, tag_id) DO UPDATE SET expires_at = " \
+            "  CASE " \
+            "    WHEN excluded.expires_at IS NULL OR directory_tags.expires_at IS NULL THEN NULL " \
+            "    ELSE MAX(excluded.expires_at, directory_tags.expires_at) " \
+            "  END",
             existing, old_id
           )
           cnn.exec("DELETE FROM directory_tags WHERE tag_id = ?", old_id)

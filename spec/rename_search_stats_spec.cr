@@ -53,6 +53,72 @@ describe "Database#rename_tag" do
       end
     end
   end
+
+  it "preserves a TTL on the source row when merging into a permanent destination" do
+    # Pre-fix: the merge `INSERT OR IGNORE` omitted `expires_at`, so a
+    # source row carrying a TTL silently became permanent on the
+    # destination tag. The user lost expiry information they had
+    # explicitly set.
+    with_temp_db do |db|
+      tmp_a = File.tempname("doma-rn-ttl-a")
+      tmp_b = File.tempname("doma-rn-ttl-b")
+      FileUtils.mkdir_p(tmp_a)
+      FileUtils.mkdir_p(tmp_b)
+      begin
+        future = Time.utc.to_unix + 7 * 86_400
+        db.add(tmp_a, ["old"], expires_at: future)
+        db.add(tmp_b, ["new"]) # permanent
+
+        db.rename_tag("old", "new").should eq(:merged)
+
+        a_id = db.directories.find { |d| d.path == Doma::Validator.canonicalize(tmp_a) }.not_nil!.id
+        ttls = db.tag_expirations(a_id)
+        ttls["new"].should be_close(future, 5)
+      ensure
+        FileUtils.rm_rf(tmp_a)
+        FileUtils.rm_rf(tmp_b)
+      end
+    end
+  end
+
+  it "keeps the longer-lived expiry when both tags collide on the same path" do
+    # When a single path carries both tags with different TTLs, the
+    # merged result should pick the more permissive lifetime so the
+    # rename never *shortens* a TTL the user had set.
+    with_temp_db do |db|
+      tmp = File.tempname("doma-rn-ttl-collide")
+      FileUtils.mkdir_p(tmp)
+      begin
+        far = Time.utc.to_unix + 14 * 86_400
+        near = Time.utc.to_unix + 1 * 86_400
+        db.add(tmp, ["a"], expires_at: far)
+        db.add(tmp, ["b"], expires_at: near)
+
+        db.rename_tag("a", "b").should eq(:merged)
+        ttls = db.tag_expirations(db.directories.first.id)
+        ttls["b"].should be_close(far, 5)
+      ensure
+        FileUtils.rm_rf(tmp)
+      end
+    end
+  end
+
+  it "keeps NULL (permanent) when one of the colliding rows has no TTL" do
+    with_temp_db do |db|
+      tmp = File.tempname("doma-rn-ttl-perm")
+      FileUtils.mkdir_p(tmp)
+      begin
+        future = Time.utc.to_unix + 7 * 86_400
+        db.add(tmp, ["a"], expires_at: future) # TTL'd
+        db.add(tmp, ["b"])                     # permanent
+
+        db.rename_tag("a", "b").should eq(:merged)
+        db.tag_expirations(db.directories.first.id).has_key?("b").should be_false
+      ensure
+        FileUtils.rm_rf(tmp)
+      end
+    end
+  end
 end
 
 describe "Database#search" do
