@@ -74,13 +74,23 @@ module Doma
             # group tags by their expiry and dispatch one call per
             # group. v1 snapshots have no `expirations` map → one call,
             # all permanent, which matches the old behavior.
-            ttl_map = entry.expirations || EMPTY_TTL_MAP
-            grouped = Hash(Int64?, Array(String)).new { |h, k| h[k] = [] of String }
-            entry.tags.each do |t|
-              grouped[ttl_map[t]?] << t
-            end
-            grouped.each do |ttl, tag_group|
-              db.add_tx(cnn, entry.path, tag_group, validate_path: false, expires_at: ttl)
+            #
+            # An entry with an empty `tags` array is still a valid row —
+            # the user explicitly registered a path with no tags. Dispatch
+            # one zero-tag `add_tx` so the directory row gets created;
+            # without this the importer would silently increment the
+            # `imported` counter while leaving the database unchanged.
+            if entry.tags.empty?
+              db.add_tx(cnn, entry.path, entry.tags, validate_path: false)
+            else
+              ttl_map = entry.expirations || EMPTY_TTL_MAP
+              grouped = Hash(Int64?, Array(String)).new { |h, k| h[k] = [] of String }
+              entry.tags.each do |t|
+                grouped[ttl_map[t]?] << t
+              end
+              grouped.each do |ttl, tag_group|
+                db.add_tx(cnn, entry.path, tag_group, validate_path: false, expires_at: ttl)
+              end
             end
             imported += 1
           rescue ex : Doma::ValidationError

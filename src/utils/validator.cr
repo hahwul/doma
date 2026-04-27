@@ -68,10 +68,15 @@ module Doma
     # `File.expand_path(path)` which silently leaves `~` literal, which
     # created the `<cwd>/~/...` bug we shipped earlier.
     #
-    # When the path exists we resolve symlinks via `File.real_path` so
+    # When the path exists we resolve symlinks via `File.realpath` so
     # different aliases for the same directory normalize to a single row.
-    # When it doesn't (import from another machine), we fall back to
-    # tilde+`..` expansion only.
+    # When it doesn't (import from another machine, or `move
+    # --allow-missing` to a path not yet on disk), we walk up to the
+    # closest existing ancestor, realpath that, and re-attach the
+    # nonexistent trailing segments. Without that walk, `/tmp/foo`
+    # would store as-is for an absent leaf and then collide with
+    # `/private/tmp/foo` once the directory is created and re-added,
+    # producing two rows for the same physical directory.
     #
     # Trailing slashes are stripped so `/tmp` and `/tmp/` are the same key.
     def canonicalize(raw : String) : String
@@ -83,9 +88,28 @@ module Doma
                      expanded
                    end
                  else
-                   expanded
+                   resolve_nonexistent(expanded)
                  end
       strip_trailing_slash(resolved)
+    end
+
+    private def resolve_nonexistent(path : String) : String
+      trailing = [] of String
+      current = path
+      while !File.exists?(current)
+        parent = File.dirname(current)
+        break if parent == current # reached the root, give up
+        trailing.unshift(File.basename(current))
+        current = parent
+      end
+      return path unless File.exists?(current)
+
+      real = begin
+        File.realpath(current)
+      rescue
+        current
+      end
+      trailing.empty? ? real : File.join([real] + trailing)
     end
 
     private def strip_trailing_slash(path : String) : String

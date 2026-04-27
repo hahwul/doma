@@ -212,6 +212,26 @@ describe "Import/Export" do
     end
   end
 
+  it "registers an entry with an empty tags array (no silent no-op)" do
+    # Regression: when v2 grouping-by-TTL was introduced, an empty tags
+    # array meant the inner loop never invoked add_tx, so the importer
+    # reported `imported: 1` while leaving the database untouched.
+    with_temp_db do |db|
+      payload = %({"version":2,"entries":[{"path":"/imported/empty","tags":[]}]})
+      path = File.tempname("doma-empty-tags") + ".json"
+      File.write(path, payload)
+      begin
+        result = Doma::Importer.from_file(db, path)
+        result.imported.should eq(1)
+        rows = db.directories
+        rows.size.should eq(1)
+        rows.first.tags.should be_empty
+      ensure
+        File.delete(path) if File.exists?(path)
+      end
+    end
+  end
+
   it "still accepts v1 snapshots without an expirations field" do
     with_temp_db do |db|
       payload = %({"version":1,"entries":[{"path":"/legacy/path","tags":["legacy"]}]})

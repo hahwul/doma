@@ -26,6 +26,22 @@ module Doma
         raise Doma::ConfigError.new("DOMA_DB points at a directory, not a file: #{target}")
       end
 
+      # Doma is a read/write tool — every command path can mutate state
+      # (even `cd`, which bumps `last_used_at`). On a non-writable file
+      # SQLite happily opens the connection and then segfaults during
+      # statement finalization once a write is attempted, so we surface
+      # the failure here while we still have a clean stack.
+      if File.exists?(target)
+        unless File::Info.writable?(target)
+          raise Doma::ConfigError.new("database file is not writable: #{target}")
+        end
+      else
+        parent = File.dirname(target)
+        if Dir.exists?(parent) && !File::Info.writable?(parent)
+          raise Doma::ConfigError.new("cannot create database in non-writable directory: #{parent}")
+        end
+      end
+
       # DSN-encoded pragmas apply on every pool connection (setting them
       # once via `db.exec PRAGMA …` only affects whichever connection ran
       # the exec). The trio matters:

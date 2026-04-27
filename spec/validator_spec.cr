@@ -88,6 +88,31 @@ describe Doma::Validator do
       twice = Doma::Validator.canonicalize(once)
       once.should eq(twice)
     end
+
+    it "resolves symlinks on the closest existing ancestor when the leaf is missing" do
+      # Without the ancestor walk, `move --allow-missing` to a not-yet-
+      # created path would store `/tmp/foo` while a later `add` of the
+      # same dir (once it exists) would canonicalize to `/private/tmp/foo`
+      # via realpath, leaving two rows for the same physical directory.
+      base = File.tempname("doma-canon-base")
+      FileUtils.mkdir_p(base)
+      link = "#{base}-link"
+      File.symlink(base, link)
+      begin
+        # Sanity: the symlink itself should resolve through the realpath
+        # branch, since it exists on disk.
+        Doma::Validator.canonicalize(link).should eq(File.realpath(base))
+
+        # The interesting case: a child path that doesn't exist yet must
+        # still get its ancestor symlink-resolved.
+        nonexistent_child = File.join(link, "child", "deeper")
+        expected = File.join(File.realpath(base), "child", "deeper")
+        Doma::Validator.canonicalize(nonexistent_child).should eq(expected)
+      ensure
+        File.delete(link) if File.symlink?(link)
+        FileUtils.rm_rf(base)
+      end
+    end
   end
 
   describe ".tag! boundaries" do
