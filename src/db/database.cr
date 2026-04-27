@@ -52,14 +52,40 @@ module Doma
       #                          shells at once
       #   - busy_timeout      →  on lock contention, sleep-retry for up to
       #                          5s instead of failing immediately
-      raw = begin
-        DB.open("sqlite3://#{target}?foreign_keys=on&journal_mode=wal&busy_timeout=5000")
-      rescue ex
-        message = ex.message.presence || ex.class.name
-        raise Doma::Error.new("cannot open database (#{target}): #{message}")
-      end
+      #
+      # Retry the initial open: when several `doma` processes hit a
+      # brand-new database simultaneously, the per-connection
+      # `PRAGMA journal_mode=wal` runs *before* `busy_timeout` takes
+      # effect, so a contended WAL bootstrap surfaces as
+      # `DB::ConnectionRefused` instead of silently waiting. Once the
+      # first process has set up the WAL files, subsequent opens are
+      # fine — a short backoff loop is enough to ride that out.
+      raw = open_with_retry(target)
       Migrations.run(raw)
       new(raw, target)
+    end
+
+    private OPEN_MAX_ATTEMPTS = 25
+    private OPEN_BACKOFF      = 100.milliseconds
+
+    private def self.open_with_retry(target : String) : DB::Database
+      attempt = 0
+      loop do
+        attempt += 1
+        begin
+          return DB.open("sqlite3://#{target}?foreign_keys=on&journal_mode=wal&busy_timeout=5000")
+        rescue ex : DB::ConnectionRefused
+          raise wrap_open_error(target, ex) if attempt >= OPEN_MAX_ATTEMPTS
+          sleep OPEN_BACKOFF
+        rescue ex
+          raise wrap_open_error(target, ex)
+        end
+      end
+    end
+
+    private def self.wrap_open_error(target : String, ex : Exception) : Doma::Error
+      message = ex.message.presence || ex.class.name
+      Doma::Error.new("cannot open database (#{target}): #{message}")
     end
 
     def initialize(@db : DB::Database, @path : String)

@@ -186,6 +186,51 @@ describe Doma::Migrations do
     end
   end
 
+  describe "concurrent migration safety" do
+    it "serializes parallel Database.open on a fresh path without ALTER races" do
+      # Pre-fix: four shells each running `doma add` on a fresh DB
+      # raced inside Migrations.run, all reading user_version=0 and
+      # then colliding on `ALTER TABLE … ADD COLUMN last_used_at`,
+      # leaving three of four processes erroring with
+      # "duplicate column name". The BEGIN IMMEDIATE wrap serializes
+      # them so each invocation either applies or sees the bumped
+      # user_version.
+      with_temp_path do |path|
+        seed_v0_db(path)
+
+        errors = [] of String
+        errors_mu = Mutex.new
+        done = Channel(Nil).new
+        4.times do
+          spawn do
+            begin
+              Doma::Database.open(path).close
+            rescue ex
+              errors_mu.synchronize { errors << (ex.message || ex.class.name) }
+            ensure
+              done.send(nil)
+            end
+          end
+        end
+        4.times { done.receive }
+
+        errors.should be_empty
+
+        db = Doma::Database.open(path)
+        begin
+          version = db.db.scalar("PRAGMA user_version").as(Int64).to_i
+          version.should eq(Doma::Migrations::CURRENT_VERSION)
+          # Schema came out clean — no doubled columns.
+          column_names(db, "directories").count("short_id").should eq(1)
+          column_names(db, "directories").count("last_used_at").should eq(1)
+          column_names(db, "directory_tags").count("expires_at").should eq(1)
+        ensure
+          db.close
+        end
+      end
+    end
+  end
+
   describe "idempotency" do
     it "running migrations twice is a no-op" do
       with_temp_path do |path|
