@@ -34,7 +34,7 @@ tag, and silent emptiness is worse than asking.
 | One path per line, for `while read` / `xargs` | `doma list -t TAG --paths` | The default newline-separated form |
 | NUL-separated, paths with spaces | `doma list -t TAG -0` | Pipe to `xargs -0`. Safer than `--paths` when paths might contain spaces |
 | Structured (id, short_id, basename, tags) | `doma list -t TAG --json` | When you need more than just the path — e.g. preserving short_id for later reference |
-| Substring across path/basename/tag | `doma list <query>` | Replaces the old `search` command. Combines with `-t` for intersection |
+| Substring across path/basename/tag | `doma list <query>` | Single substring match. Combines with `-t` for intersection. Multiple positional args are joined by a space — they are *not* AND-ed |
 | Sorted by recency | `doma list --by recent` | Most-recently-used first; useful when "the project I was just working on" is in scope |
 | Just the tag names | `doma tags --names` | Cheap probe before committing to a tag |
 
@@ -101,10 +101,12 @@ files or making decisions, Pattern A keeps the work in your hands.
 
 ## Pitfalls
 
-- **`doma cd` is useless inside an agent.** It prints the resolved
-  path to stdout for the user's shell wrapper to consume — it doesn't
-  change any working directory. To operate on a path, capture it from
-  `doma list … --paths` and pass it explicitly to subsequent tools.
+- **`doma cd` does not change cwd.** It prints the resolved path to
+  stdout for the user's shell wrapper to consume. As an agent you can
+  still capture it (`path=$(doma cd <tag-or-id>)`), but with a tag that
+  matches multiple directories the non-TTY fallback silently returns
+  only the *first* match. When you need every path, use
+  `doma list -t TAG --paths` instead.
 
 - **Symlinks are resolved.** doma stores the canonical real path, so a
   registered `/var/foo` will surface as `/private/var/foo` on macOS.
@@ -141,8 +143,8 @@ files or making decisions, Pattern A keeps the work in your hands.
 | User says... | First doma call |
 |---|---|
 | "Update Crystal version in CI for all my Crystal projects" | `doma list -t crystal --paths` |
-| "Check git status across my work repos" | `doma list -t 'work/*' --paths` (glob is supported) |
-| "Find that bookmarked thing about auth" | `doma list bookmark auth` (positional substring) or `doma list -t bookmark` |
+| "Check git status across my work repos" | `doma list -t 'work/*' --paths` (glob applies to `list -t`, `run`, and `cd`) |
+| "Find that bookmarked thing about auth" | `doma list -t bookmark auth` (tag filter ∩ substring `auth`) |
 | "What was I working on last?" | `doma list --by recent` (top entries are most-recent cd targets) |
 | "Run specs across all the Crystal projects in parallel" | `doma run crystal --parallel -- crystal spec` |
 | "I'll be working on this project for a while" | `doma add . -t <category>` |
