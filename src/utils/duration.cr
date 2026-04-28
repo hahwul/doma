@@ -56,5 +56,25 @@ module Doma
     def default_tmp_expires_at : Int64
       Time.utc.to_unix + DEFAULT_TMP_SECONDS
     end
+
+    # Render the time between now and `expires_at` in the same compact
+    # `Nu` form the parser accepts ("3d", "5m", …) so users can tell at
+    # a glance what's about to lapse. Past expirations come back as
+    # "expired" rather than a negative number.
+    def humanize_remaining(expires_at : Int64) : String
+      delta = expires_at - Time.utc.to_unix
+      return "expired" if delta <= 0
+      if delta < 60
+        "#{delta}s"
+      elsif delta < 3600
+        "#{delta // 60}m"
+      elsif delta < 86_400
+        "#{delta // 3600}h"
+      elsif delta < 604_800
+        "#{delta // 86_400}d"
+      else
+        "#{delta // 604_800}w"
+      end
+    end
   end
 end

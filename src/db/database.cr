@@ -581,13 +581,18 @@ module Doma
     # given directory whose TTL is still in the future. Used by the
     # exporter so snapshot round-trips preserve TTL information instead
     # of silently promoting timed tags to permanent ones.
-    def tag_expirations(directory_id : Int64) : Hash(String, Int64)
+    def tag_expirations(directory_id : Int64, *, include_past : Bool = false) : Hash(String, Int64)
+      # `include_past` is for callers (like `list --include-expired`)
+      # that want already-lapsed TTLs included so they can display
+      # them. The default keeps the old export-time behavior of only
+      # surfacing future expirations.
+      future_only = include_past ? "" : " AND dt.expires_at > strftime('%s','now')"
       rows = @db.query_all(
         "SELECT t.name, dt.expires_at FROM directory_tags dt " \
         "INNER JOIN tags t ON t.id = dt.tag_id " \
         "WHERE dt.directory_id = ? " \
-        "  AND dt.expires_at IS NOT NULL " \
-        "  AND dt.expires_at > strftime('%s','now')",
+        "  AND dt.expires_at IS NOT NULL" \
+        "#{future_only}",
         directory_id, as: {String, Int64}
       )
       rows.to_h

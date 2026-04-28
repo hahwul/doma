@@ -2,6 +2,7 @@ require "option_parser"
 require "json"
 require "colorize"
 require "../../db/database"
+require "../../utils/duration"
 require "../../utils/errors"
 require "../../utils/logger"
 require "../../utils/suggester"
@@ -82,6 +83,13 @@ module Doma::CLI
               "basename" => JSON::Any.new(e.basename),
               "tags"     => JSON::Any.new(e.tags.map { |t| JSON::Any.new(t) }),
             }
+            # `expirations` matches the export/import schema (tag_name =>
+            # unix epoch). Only attached when at least one tag has a TTL,
+            # so the common all-permanent case stays diff-friendly.
+            ttl_map = db.tag_expirations(e.id, include_past: include_expired)
+            unless ttl_map.empty?
+              row["expirations"] = JSON::Any.new(ttl_map.transform_values { |v| JSON::Any.new(v) })
+            end
             row["exists"] = JSON::Any.new(Dir.exists?(e.path)) if check_existence
             row
           end
@@ -115,7 +123,8 @@ module Doma::CLI
           # but it's still copy-pasteable for `doma cd <id>`.
           short_str = color ? e.short_id.colorize(:dark_gray).to_s : e.short_id
           path_str = color ? e.path.colorize(:cyan).to_s : e.path
-          tags_str = e.tags.empty? ? "" : e.tags.map { |t| color ? "##{t}".colorize(:yellow).to_s : "##{t}" }.join(' ')
+          ttl_map = db.tag_expirations(e.id, include_past: include_expired)
+          tags_str = e.tags.empty? ? "" : e.tags.map { |t| render_tag(t, ttl_map[t]?, color) }.join(' ')
           marker = ""
           if check_existence && !Dir.exists?(e.path)
             marker = color ? " #{"[gone]".colorize(:red)}" : " [gone]"
@@ -172,6 +181,17 @@ module Doma::CLI
       return if tags.empty?
       return "'#{tags.first}'" if tags.size == 1
       tags.map { |t| "'#{t}'" }.join(" AND ")
+    end
+
+    # Decorate `#tag` with a `~3d` / `~expired` suffix when the tag has
+    # a TTL. The suffix uses the same compact form (`Nu`) the parser
+    # accepts, so a glance at the listing tells you what to renew.
+    private def render_tag(tag : String, expires_at : Int64?, color : Bool) : String
+      base = color ? "##{tag}".colorize(:yellow).to_s : "##{tag}"
+      return base unless expires_at
+      remaining = Doma::Duration.humanize_remaining(expires_at)
+      suffix = "~#{remaining}"
+      color ? "#{base}#{suffix.colorize(:dark_gray)}" : "#{base}#{suffix}"
     end
 
     # Pick the first tag the user typed that doesn't actually exist (and
