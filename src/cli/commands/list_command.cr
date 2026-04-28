@@ -17,7 +17,7 @@ module Doma::CLI
   #   doma list -t crystal foo  → both: tag-tagged AND containing "foo"
   class ListCommand
     def run(args : Array(String))
-      tag : String? = nil
+      tags = [] of String
       json_mode = false
       paths_only = false
       null_sep = false
@@ -27,8 +27,13 @@ module Doma::CLI
       positional = [] of String
 
       parser = OptionParser.new do |p|
-        p.banner = "Usage: doma list [<query>] [-t TAG] [--by path|recent] [--check] [--include-expired] [--json] [--paths] [-0]"
-        p.on("-t TAG", "--tag=TAG", "Filter by exact tag") { |t| tag = t }
+        p.banner = "Usage: doma list [<query>] [-t TAG ...] [--by path|recent] [--check] [--include-expired] [--json] [--paths] [-0]"
+        # Repeatable / comma-separated, mirroring `add` and `rm`. Multiple
+        # tags AND together — i.e. only directories carrying every listed
+        # tag survive the filter. Pre-fix this clobbered to last-wins.
+        p.on("-t TAG", "--tag=TAG", "Filter by tag (repeatable; AND semantics)") do |t|
+          t.split(',').each { |x| tags << x.strip unless x.strip.empty? }
+        end
         p.on("--by SORT", "Sort by 'path' (default) or 'recent'") do |val|
           sort = case val
                  when "path" then Doma::Database::SortBy::Path
@@ -61,10 +66,11 @@ module Doma::CLI
       parser.parse(args)
 
       query = positional.empty? ? nil : positional.join(" ")
+      tags.uniq!
 
       db = Doma::Database.open
       begin
-        entries = collect(db, tag, query, sort, include_expired)
+        entries = collect(db, tags, query, sort, include_expired)
 
         if json_mode
           payload = entries.map do |e|
@@ -83,7 +89,7 @@ module Doma::CLI
         end
 
         if entries.empty?
-          STDERR.puts(empty_message(tag, query))
+          STDERR.puts(empty_message(tags, query))
           return
         end
 
@@ -116,30 +122,49 @@ module Doma::CLI
 
     # Compose the two filters. Doing the intersection client-side keeps
     # the SQL straightforward — both `directories(tag)` and `search(query)`
-    # already exist and are tested in isolation.
-    private def collect(db : Doma::Database, tag : String?, query : String?, sort : Doma::Database::SortBy, include_expired : Bool) : Array(Doma::Entry)
-      if tag && query
-        tagged = db.directories(tag, sort: sort, include_expired: include_expired).map(&.id).to_set
-        db.search(query, include_expired: include_expired).select { |e| tagged.includes?(e.id) }
-      elsif tag
-        db.directories(tag, sort: sort, include_expired: include_expired)
-      elsif query
-        db.search(query, include_expired: include_expired)
-      else
-        db.directories(sort: sort, include_expired: include_expired)
-      end
+    # already exist and are tested in isolation. Multi-tag AND is layered
+    # on top by intersecting per-tag id sets.
+    private def collect(db : Doma::Database, tags : Array(String), query : String?, sort : Doma::Database::SortBy, include_expired : Bool) : Array(Doma::Entry)
+      base = if tags.empty?
+               query ? db.search(query, include_expired: include_expired) : db.directories(sort: sort, include_expired: include_expired)
+             else
+               # Anchor on the first tag (gets the right `sort`/`include_expired`
+               # treatment), then narrow by intersecting against each
+               # additional tag's id set. Empty additional set short-circuits
+               # to no matches without further DB work.
+               first, *rest = tags
+               anchor = db.directories(first, sort: sort, include_expired: include_expired)
+               rest.each do |t|
+                 break if anchor.empty?
+                 ids = db.directories(t, sort: sort, include_expired: include_expired).map(&.id).to_set
+                 anchor = anchor.select { |e| ids.includes?(e.id) }
+               end
+               anchor
+             end
+
+      return base if query.nil? || tags.empty?
+
+      tagged_ids = base.map(&.id).to_set
+      db.search(query, include_expired: include_expired).select { |e| tagged_ids.includes?(e.id) }
     end
 
-    private def empty_message(tag : String?, query : String?) : String
-      if tag && query
-        "no matches for '#{query}' tagged '#{tag}'"
-      elsif tag
-        "no directories tagged '#{tag}'"
+    private def empty_message(tags : Array(String), query : String?) : String
+      tag_phrase = tag_phrase(tags)
+      if tag_phrase && query
+        "no matches for '#{query}' tagged #{tag_phrase}"
+      elsif tag_phrase
+        "no directories tagged #{tag_phrase}"
       elsif query
         "no matches for '#{query}'"
       else
         "no directories registered"
       end
+    end
+
+    private def tag_phrase(tags : Array(String)) : String?
+      return if tags.empty?
+      return "'#{tags.first}'" if tags.size == 1
+      tags.map { |t| "'#{t}'" }.join(" AND ")
     end
   end
 end
