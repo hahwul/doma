@@ -4,6 +4,7 @@ require "../../services/picker"
 require "../../services/selector"
 require "../../utils/errors"
 require "../../utils/logger"
+require "../../utils/short_id_resolver"
 require "../../utils/suggester"
 
 module Doma::CLI
@@ -86,7 +87,7 @@ module Doma::CLI
         #      that happens to start with `abc`.
         paths = db.paths_for_tag(tag)
         if paths.empty?
-          if direct = resolve_short_id(db, tag)
+          if direct = Doma::ShortIdResolver.resolve(db, tag)
             bump_used_safe(db, direct)
             puts direct
             return
@@ -115,31 +116,6 @@ module Doma::CLI
         puts chosen
       ensure
         db.close
-      end
-    end
-
-    # Returns the path for a unique short_id prefix match, or raises
-    # ValidationError on ambiguity. Returns nil for "no match at all"
-    # so the caller can produce the combined "tag/short_id not found"
-    # error in one place.
-    private def resolve_short_id(db : Doma::Database, prefix : String) : String?
-      # Skip the lookup unless the input *could* be a short_id — every
-      # short_id we generate is hex. This avoids quietly resolving a
-      # weird tag-typo to an unrelated directory whose short_id starts
-      # with non-hex characters that happen to match.
-      return unless prefix.matches?(/\A[0-9a-fA-F]+\z/)
-
-      hits = db.directories_by_short_id_prefix(prefix.downcase)
-      case hits.size
-      when 0
-        nil
-      when 1
-        hits.first.path
-      else
-        list = hits.map(&.short_id).join(", ")
-        raise Doma::ValidationError.new(
-          "short_id prefix '#{prefix}' is ambiguous (matches: #{list})"
-        )
       end
     end
 

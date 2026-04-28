@@ -2,6 +2,7 @@ require "option_parser"
 require "../../db/database"
 require "../../utils/errors"
 require "../../utils/logger"
+require "../../utils/short_id_resolver"
 require "../../utils/validator"
 
 module Doma::CLI
@@ -62,12 +63,18 @@ module Doma::CLI
 
       db = Doma::Database.open
       begin
-        positional.each do |path|
+        positional.each do |raw|
+          # Accept the same `list`-printed short_id that `cd` does. Only
+          # falls back when the token isn't shaped like a path (no `/`,
+          # no `.`, no `~`) so a relative dir named `abc123` keeps its
+          # path interpretation.
+          path = resolve_target(db, raw)
+
           if cleaned_tags.empty?
             if db.remove_path(path)
               Doma::Logger.success "removed #{Doma::Validator.canonicalize(path)}"
             else
-              Doma::Logger.warn "not registered: #{path}"
+              Doma::Logger.warn "not registered: #{raw}"
             end
           else
             case db.remove_tags(path, cleaned_tags)
@@ -76,13 +83,19 @@ module Doma::CLI
             in Doma::Database::RemoveTagsResult::NoMatch
               Doma::Logger.warn "no matching tag(s) on #{Doma::Validator.canonicalize(path)} (#{cleaned_tags.join(", ")})"
             in Doma::Database::RemoveTagsResult::NotRegistered
-              Doma::Logger.warn "not registered: #{path}"
+              Doma::Logger.warn "not registered: #{raw}"
             end
           end
         end
       ensure
         db.close
       end
+    end
+
+    private def resolve_target(db : Doma::Database, raw : String) : String
+      return raw if raw.includes?('/') || raw.includes?('.') || raw.includes?('~')
+      return raw unless raw.matches?(/\A[0-9a-fA-F]{4,16}\z/)
+      Doma::ShortIdResolver.resolve(db, raw) || raw
     end
 
     private def run_gone
