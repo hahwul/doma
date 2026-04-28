@@ -29,21 +29,24 @@ module Doma::CLI
       positional = [] of String
 
       parser = OptionParser.new do |p|
-        p.banner = "Usage: doma list [<query>] [-t TAG ...] [--by path|recent] [--check] [--include-expired] [--json] [--paths] [-0]"
+        p.banner = "Usage: doma list [<query>] [-t TAG ...] [--by path|recent] [--check] [--include-expired] [--json] [--paths] [-0]\n" \
+                   "  (aliases for 'recent': 'used', 'recency')"
         # Repeatable / comma-separated, mirroring `add` and `rm`. Multiple
         # tags AND together — i.e. only directories carrying every listed
         # tag survive the filter. Pre-fix this clobbered to last-wins.
         p.on("-t TAG", "--tag=TAG", "Filter by tag (repeatable; AND semantics)") do |t|
           t.split(',').each { |x| tags << x.strip unless x.strip.empty? }
         end
-        p.on("--by SORT", "Sort by 'path' (default) or 'recent'") do |val|
+        p.on("--by SORT", "Sort by 'path' (default) or 'recent' ('used'/'recency')") do |val|
           sort = case val
                  when "path" then Doma::Database::SortBy::Path
                  when "recent",
                       "used",
                       "recency" then Doma::Database::SortBy::Recent
                  else
-                   raise Doma::ValidationError.new("--by must be 'path' or 'recent', got '#{val}'")
+                   raise Doma::ValidationError.new(
+                     "--by must be 'path' or 'recent' (aliases: 'used', 'recency'), got '#{val}'"
+                   )
                  end
         end
         p.on("--check", "Mark entries whose path is gone from disk") { check_existence = true }
