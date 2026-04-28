@@ -4,6 +4,7 @@ require "colorize"
 require "../../db/database"
 require "../../utils/errors"
 require "../../utils/logger"
+require "../../utils/suggester"
 
 module Doma::CLI
   # Lists registered directories. Three filter dimensions, all optional
@@ -90,6 +91,12 @@ module Doma::CLI
 
         if entries.empty?
           STDERR.puts(empty_message(tags, query))
+          # Only suggest for literal (non-glob) tag names that aren't in
+          # the catalog at all. An empty AND intersection between two
+          # known tags is a legitimate result, not a typo.
+          if hint = typo_hint(db, tags)
+            STDERR.puts "  #{hint}"
+          end
           return
         end
 
@@ -165,6 +172,23 @@ module Doma::CLI
       return if tags.empty?
       return "'#{tags.first}'" if tags.size == 1
       tags.map { |t| "'#{t}'" }.join(" AND ")
+    end
+
+    # Pick the first tag the user typed that doesn't actually exist (and
+    # isn't a glob) and propose the closest catalog name. Stops at one
+    # hint to keep the noise floor low when several tags are bogus.
+    private def typo_hint(db : Doma::Database, tags : Array(String)) : String?
+      return if tags.empty?
+      catalog = db.tag_names
+      known = catalog.to_set
+      tags.each do |t|
+        next if t.includes?('*') || t.includes?('?')
+        next if known.includes?(t)
+        if hint = Doma::Suggester.hint_for(t, catalog)
+          return hint
+        end
+      end
+      nil
     end
   end
 end
