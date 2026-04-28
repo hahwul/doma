@@ -34,17 +34,42 @@ module Doma
     end
 
     def parse(content : String, source : String? = nil) : Snapshot
-      stripped = content.lstrip
-      # Pick the parser deterministically rather than try-fallback so the
-      # error the user sees points at the right format.
-      if stripped.starts_with?('{') || stripped.starts_with?('[')
-        Snapshot.from_json(content)
-      else
-        Snapshot.from_yaml(content)
-      end
-    rescue ex : JSON::ParseException | YAML::ParseException | JSON::SerializableError
       label = source ? " (#{source})" : ""
-      raise ImportError.new("malformed snapshot#{label}: #{ex.message}")
+      format = detect_format(content, source)
+
+      case format
+      in Format::Json
+        begin
+          Snapshot.from_json(content)
+        rescue ex : JSON::ParseException | JSON::SerializableError
+          raise ImportError.new("malformed snapshot#{label}: invalid JSON — #{ex.message}")
+        end
+      in Format::Yaml
+        begin
+          Snapshot.from_yaml(content)
+        rescue ex : YAML::ParseException
+          raise ImportError.new("malformed snapshot#{label}: invalid YAML — #{ex.message}")
+        end
+      end
+    end
+
+    private enum Format
+      Json
+      Yaml
+    end
+
+    # Prefer file extension when the source path tells us — that way
+    # `bad.json` reports as JSON failure even when its body happens to
+    # look YAML-shaped (e.g. plain text). Fall back to leading-character
+    # sniffing for content piped in without a filename.
+    private def detect_format(content : String, source : String?) : Format
+      if source
+        ext = File.extname(source).downcase
+        return Format::Json if ext == ".json"
+        return Format::Yaml if ext == ".yaml" || ext == ".yml"
+      end
+      stripped = content.lstrip
+      stripped.starts_with?('{') || stripped.starts_with?('[') ? Format::Json : Format::Yaml
     end
 
     private def apply(db : Doma::Database, snapshot : Snapshot, mode : Mode) : Result
