@@ -38,7 +38,7 @@ doma mark spike                # bookmark cwd for 7 days
 ### Tagging
 - Multiple tags per directory; tags are reusable across paths
 - Auto-tag from basename and Git remote (`--auto-tag`, `--git-tag`)
-- Glob filter on tags (`list -t 'work/*'`, `cd 'work-*'`)
+- Glob filter on tags (`list -t 'work/*'`, `cd 'work/*'`) — `*` and `?` apply to `list -t`, `run`, and `cd`
 - Hierarchical tag display (`tags --tree`)
 - TTL on tags: `--ttl 30m | 1h | 7d | 2w`, `--tmp` for the 7-day default, `mark` for the cwd + 7-day shortcut
 - Stable 7-char `short_id` per directory — survives renames; resolves prefix-style in `cd 0d` like a Git short hash
