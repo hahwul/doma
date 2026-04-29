@@ -95,7 +95,7 @@ module Doma::CLI
 
           raise Doma::NotFoundError.new(
             "no directories tagged '#{tag}' (and no matching short_id)",
-            hint: Doma::Suggester.hint_for(tag, db.tag_names)
+            hint: miss_hint_for(tag, db)
           )
         end
 
@@ -175,6 +175,26 @@ module Doma::CLI
       db.bump_used!(path)
     rescue
       # Frecency is best-effort.
+    end
+
+    # When the lookup misses, default to a "did you mean" tag hint —
+    # but if the input *looks like a filesystem path* (absolute, home-
+    # rooted, or starting with ./../), the user probably meant to add
+    # it rather than navigate to an existing entry. Steer them to
+    # `doma add` instead of suggesting an unrelated tag.
+    private def miss_hint_for(input : String, db : Doma::Database) : String?
+      if path_like?(input)
+        return "to register this path, run: doma add #{input}"
+      end
+      Doma::Suggester.hint_for(input, db.tag_names)
+    end
+
+    private def path_like?(input : String) : Bool
+      input.starts_with?('/') ||
+        input.starts_with?('~') ||
+        input.starts_with?("./") ||
+        input.starts_with?("../") ||
+        input == "."
     end
   end
 end

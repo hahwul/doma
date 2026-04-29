@@ -13,13 +13,15 @@ module Doma::CLI
     def run(args : Array(String))
       stop_on_fail = false
       parallel = false
+      no_header = false
       tag_args = [] of String
       cmd_args = [] of String
 
       parser = OptionParser.new do |p|
-        p.banner = "Usage: doma run <tag> [--fail-fast] [--parallel] -- <cmd> [args...]"
+        p.banner = "Usage: doma run <tag> [--fail-fast] [--parallel] [--no-header] -- <cmd> [args...]"
         p.on("--fail-fast", "Stop on first failure") { stop_on_fail = true }
         p.on("--parallel", "Run commands in parallel (best-effort, output interleaves)") { parallel = true }
+        p.on("--no-header", "Suppress per-directory ▶/✓ markers (failures still surface as ✗)") { no_header = true }
         p.on("-h", "--help", "Show help") do
           puts p
           exit 0
@@ -30,6 +32,8 @@ module Doma::CLI
         end
       end
       parser.parse(args)
+      # Global -q already implies --no-header — both want a quieter run.
+      no_header ||= Doma::Logger.quiet?
 
       raise Doma::ValidationError.new("tag is required") if tag_args.empty?
       raise Doma::ValidationError.new("command is required after '--'") if cmd_args.empty?
@@ -66,15 +70,17 @@ module Doma::CLI
         end
         channels.each do |ch|
           path, code = ch.receive
-          announce(path, code, color)
+          announce(path, code, color, no_header)
           failures += 1 unless code == 0
         end
       else
         paths.each do |path|
-          header = "▶ #{path}"
-          STDERR.puts(color ? header.colorize(:cyan).bold.to_s : header)
+          unless no_header
+            header = "▶ #{path}"
+            STDERR.puts(color ? header.colorize(:cyan).bold.to_s : header)
+          end
           code = run_one(cmd, cmd_rest, path, attach_stdin: true)
-          announce(path, code, color)
+          announce(path, code, color, no_header)
           unless code == 0
             failures += 1
             break if stop_on_fail
@@ -100,8 +106,12 @@ module Doma::CLI
       126
     end
 
-    private def announce(path : String, code : Int32, color : Bool)
+    private def announce(path : String, code : Int32, color : Bool, no_header : Bool)
       if code == 0
+        # In --no-header mode, success is silent so single-line commands
+        # like `pwd` aren't drowned out by 2:1 chrome. Failures still
+        # surface so a partial sweep can't slip past the user.
+        return if no_header
         msg = "✓ #{path} (exit 0)"
         STDERR.puts(color ? msg.colorize(:green).to_s : msg)
       else

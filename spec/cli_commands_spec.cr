@@ -678,3 +678,129 @@ describe "doma mark validation" do
     end
   end
 end
+
+# ---------- cd path-like miss ----------
+
+describe "doma cd path-like miss" do
+  it "[/abs/path] hints at `doma add` rather than tag suggestions" do
+    # User instinct is `doma cd /some/path` to navigate; surface the
+    # right next step instead of "did you mean some-tag?".
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      run(["add", "/tmp", "-t", "demo"], {"DOMA_HOME" => home})
+      r = run(["cd", "/var"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(3)
+      r[:err].should contain("to register this path")
+      r[:err].should contain("doma add /var")
+    end
+  end
+
+  it "[~/foo] also routes to the add hint" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      run(["add", "/tmp", "-t", "demo"], {"DOMA_HOME" => home})
+      r = run(["cd", "~/Downloads"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(3)
+      r[:err].should contain("doma add ~/Downloads")
+    end
+  end
+
+  it "[plain typo] still uses the suggester (no add hint)" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      run(["add", "/tmp", "-t", "demo"], {"DOMA_HOME" => home})
+      r = run(["cd", "dem"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(3)
+      r[:err].should contain("Did you mean")
+      r[:err].should_not contain("to register this path")
+    end
+  end
+end
+
+# ---------- run --no-header ----------
+
+describe "doma run --no-header" do
+  it "suppresses ▶ header and ✓ footer for successful runs" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      r = run(["run", "shared", "--no-header", "--", "true"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(0)
+      r[:err].should_not contain("▶")
+      r[:err].should_not contain("(exit 0)")
+    end
+  end
+
+  it "still surfaces failures so a partial sweep doesn't slip past" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      r = run(["run", "shared", "--no-header", "--", "false"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(1)
+      r[:err].should contain("✗")
+      r[:err].should contain("(exit 1)")
+    end
+  end
+
+  it "global -q implies --no-header" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      r = run(["-q", "run", "shared", "--", "true"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(0)
+      r[:err].should_not contain("▶")
+    end
+  end
+end
+
+# ---------- setup completion ----------
+
+describe "doma setup completion" do
+  it "[bash] emits a function and registers it via complete" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    r = run(["setup", "completion", "bash"])
+    r[:status].exit_code.should eq(0)
+    r[:out].should contain("_doma()")
+    r[:out].should contain("complete -F _doma doma")
+    # Tag completion shells out to the binary so freshly-added tags
+    # show up without a rebuild.
+    r[:out].should contain("doma tags --names")
+  end
+
+  it "[zsh] emits a #compdef header and a tag-completion helper" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    r = run(["setup", "completion", "zsh"])
+    r[:status].exit_code.should eq(0)
+    r[:out].should contain("#compdef doma")
+    r[:out].should contain("doma tags --names")
+    r[:out].should contain("compdef _doma doma")
+  end
+
+  it "[fish] emits subcommand completions and tag value completion" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    r = run(["setup", "completion", "fish"])
+    r[:status].exit_code.should eq(0)
+    r[:out].should contain("__fish_use_subcommand")
+    r[:out].should contain("doma tags --names")
+  end
+
+  it "[unsupported shell] errors with 2" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    r = run(["setup", "completion", "xonsh"])
+    r[:status].exit_code.should eq(2)
+    r[:err].should contain("unsupported shell")
+  end
+
+  it "[no shell] errors with 2" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    r = run(["setup", "completion"])
+    r[:status].exit_code.should eq(2)
+    r[:err].should contain("shell is required")
+  end
+
+  it "is listed as an action in `setup --help`" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    r = run(["setup", "--help"])
+    r[:out].should contain("completion")
+  end
+end

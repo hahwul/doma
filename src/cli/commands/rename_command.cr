@@ -15,6 +15,20 @@ module Doma::CLI
         p.banner = "Usage: doma rename <old-tag> <new-tag>"
         p.on("-h", "--help", "Show help") do
           puts p
+          STDOUT.puts ""
+          STDOUT.puts "Renames or merges a tag. If <new-tag> already exists, every"
+          STDOUT.puts "directory carrying <old-tag> is re-tagged with <new-tag> and"
+          STDOUT.puts "<old-tag> is removed."
+          STDOUT.puts ""
+          STDOUT.puts "TTL handling on merge:"
+          STDOUT.puts "  - A directory carrying only <old-tag> keeps its TTL."
+          STDOUT.puts "  - A directory carrying both tags keeps the *longer* TTL"
+          STDOUT.puts "    (NULL/permanent beats any expiry; among two TTLs the"
+          STDOUT.puts "    later epoch wins). Merging never silently shortens a"
+          STDOUT.puts "    TTL the user had set."
+          STDOUT.puts ""
+          STDOUT.puts "Runs in a single transaction — a failure leaves no"
+          STDOUT.puts "half-merged tag behind."
           exit 0
         end
         p.unknown_args do |before, after|

@@ -1,5 +1,6 @@
 require "../../utils/errors"
 require "../../utils/logger"
+require "./completion_command"
 require "./doctor_command"
 require "./init_command"
 require "./install_command"
@@ -11,9 +12,10 @@ module Doma::CLI
   # the top-level command list focused on day-to-day operations.
   class SetupCommand
     ACTIONS = {
-      "install" => "Append the shell wrapper to your rc file",
-      "init"    => "Print the wrapper (for manual install)",
-      "doctor"  => "Check the install (DB, config)",
+      "install"    => "Append the shell wrapper to your rc file",
+      "init"       => "Print the wrapper (for manual install)",
+      "completion" => "Print a shell completion script (bash|zsh|fish)",
+      "doctor"     => "Check the install (DB, config)",
     }
 
     def run(args : Array(String))
@@ -24,12 +26,13 @@ module Doma::CLI
 
       sub = args.shift
       case sub
-      when "install" then InstallCommand.new.run(args)
-      when "init"    then InitCommand.new.run(args)
-      when "doctor"  then DoctorCommand.new.run(args)
+      when "install"    then InstallCommand.new.run(args)
+      when "init"       then InitCommand.new.run(args)
+      when "completion" then CompletionCommand.new.run(args)
+      when "doctor"     then DoctorCommand.new.run(args)
       else
         raise Doma::ValidationError.new(
-          "unknown setup action '#{sub}' (try install, init, doctor)"
+          "unknown setup action '#{sub}' (try install, init, completion, doctor)"
         )
       end
     end
@@ -40,7 +43,7 @@ module Doma::CLI
       puts ""
       puts "Actions:"
       ACTIONS.each do |name, desc|
-        puts "  #{name.ljust(8)} #{desc}"
+        puts "  #{name.ljust(11)} #{desc}"
       end
       puts ""
       puts "Run `doma setup <action> --help` for action-specific options."

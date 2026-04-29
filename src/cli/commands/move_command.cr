@@ -21,6 +21,18 @@ module Doma::CLI
         p.on("--allow-missing", "Skip the existence check on <new-path>") { allow_missing = true }
         p.on("-h", "--help", "Show help") do
           puts p
+          STDOUT.puts ""
+          STDOUT.puts "Updates a registered directory's path. Tags carry over."
+          STDOUT.puts ""
+          STDOUT.puts "If <new-path> is already registered, the two entries are"
+          STDOUT.puts "merged: tags from <old-path> are added to the destination row"
+          STDOUT.puts "(union — no duplicates) and the source row is dropped."
+          STDOUT.puts ""
+          STDOUT.puts "Use --allow-missing for paths not on this machine yet"
+          STDOUT.puts "(e.g. when a snapshot from another host references a path"
+          STDOUT.puts "that hasn't been synced down yet)."
+          STDOUT.puts ""
+          STDOUT.puts "Runs in a single transaction."
           exit 0
         end
         p.unknown_args do |before, after|
