@@ -991,7 +991,7 @@ describe "doma add error format" do
       # Pre-fix: "✗ /no/such/dir: not a directory: /no/such/dir"
       # Post-fix: only one mention of the path.
       lines = r[:err].lines
-      err_line = lines.find { |l| l.includes?("not a directory") }.not_nil!
+      err_line = lines.find(&.includes?("not a directory"))
       err_line.scan(/\/no\/such\/dir/).size.should eq(1)
     end
   end

@@ -71,7 +71,7 @@ describe "Database#rename_tag" do
 
         db.rename_tag("old", "new").should eq(:merged)
 
-        a_id = db.directories.find { |d| d.path == Doma::Validator.canonicalize(tmp_a) }.not_nil!.id
+        a_id = db.directories.find! { |d| d.path == Doma::Validator.canonicalize(tmp_a) }.id
         ttls = db.tag_expirations(a_id)
         ttls["new"].should be_close(future, 5)
       ensure

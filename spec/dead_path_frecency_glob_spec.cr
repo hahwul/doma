@@ -191,9 +191,9 @@ describe "Tag glob (#4)" do
         db.add(c, ["home"])
 
         entries = db.directories("work-*")
-        entries.map(&.tags.first).sort.should eq(["work-bar", "work-foo"])
+        entries.map(&.tags.first).sort!.should eq(["work-bar", "work-foo"])
         # Tags must be hydrated, not blank — same shape as exact-match.
-        entries.each { |e| e.tags.should_not be_empty }
+        entries.each(&.tags.should_not(be_empty))
       ensure
         [a, b, c].each { |d| FileUtils.rm_rf(d) }
       end
