@@ -26,11 +26,16 @@ private def with_home(&)
 end
 
 # Drop a few directories with known tags into doma. Used by specs that
-# need a populated baseline.
+# need a populated baseline. We pick three distinct, always-present
+# directories — the user's $HOME stands in for the third slot so
+# specs run on whatever machine the suite happens to land on rather
+# than baking in the original author's username.
+SEED_HOME_PATH = ENV["HOME"]
+
 private def seed_home(home : String, *, with_tmp : Bool = false)
   run(["add", "/tmp", "-t", "scratch"], {"DOMA_HOME" => home})
   run(["add", "/var", "-t", "shared", "-t", "fs"], {"DOMA_HOME" => home})
-  run(["add", "/Users/hahwul", "-t", "shared", "-t", "home"], {"DOMA_HOME" => home})
+  run(["add", SEED_HOME_PATH, "-t", "shared", "-t", "home"], {"DOMA_HOME" => home})
   if with_tmp
     run(["add", "/", "-t", "transient", "--ttl", "30s"], {"DOMA_HOME" => home})
   end
@@ -112,7 +117,7 @@ describe "doma run" do
       r[:status].exit_code.should eq(0)
       # `String#count(s)` is set-character count, not substring count.
       # Splitting on the marker is the cheap-and-correct counter.
-      (r[:out].split("hello").size - 1).should eq(2) # /var + /Users/hahwul
+      (r[:out].split("hello").size - 1).should eq(2) # /var + $HOME
     end
   end
 
@@ -175,7 +180,7 @@ describe "doma tags" do
       r = run(["tags"], {"DOMA_HOME" => home})
       r[:status].exit_code.should eq(0)
       r[:out].should contain("scratch")
-      r[:out].should contain("shared\t2") # used by /var + /Users/hahwul
+      r[:out].should contain("shared\t2") # used by /var + $HOME
     end
   end
 
@@ -204,7 +209,7 @@ describe "doma tags" do
     with_home do |home|
       run(["add", "/tmp", "-t", "work/proj-a"], {"DOMA_HOME" => home})
       run(["add", "/var", "-t", "work/proj-b"], {"DOMA_HOME" => home})
-      run(["add", "/Users/hahwul", "-t", "home"], {"DOMA_HOME" => home})
+      run(["add", SEED_HOME_PATH, "-t", "home"], {"DOMA_HOME" => home})
 
       r = run(["tags", "--tree"], {"DOMA_HOME" => home})
       r[:status].exit_code.should eq(0)

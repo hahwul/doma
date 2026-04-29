@@ -149,6 +149,62 @@ describe "Database#search" do
       end
     end
   end
+
+  it "matches data that literally contains '%' when the query has '%'" do
+    # Negative-only coverage existed for the LIKE-escape; this is the
+    # positive case — a basename truly containing the meta-char must
+    # still be findable when the user types it.
+    with_temp_db do |db|
+      tmp_dir = File.tempname("doma-pct-parent")
+      FileUtils.mkdir_p(tmp_dir)
+      pct_dir = File.join(tmp_dir, "50%-done")
+      FileUtils.mkdir_p(pct_dir)
+      begin
+        db.add(pct_dir, [] of String)
+        hits = db.search("50%").map(&.path)
+        hits.should contain(Doma::Validator.canonicalize(pct_dir))
+      ensure
+        FileUtils.rm_rf(tmp_dir)
+      end
+    end
+  end
+
+  it "matches a tag whose name literally contains '_' when the query has '_'" do
+    with_temp_db do |db|
+      tmp = File.tempname("doma-search-underscore")
+      FileUtils.mkdir_p(tmp)
+      begin
+        # `_` is allowed by the tag pattern, so a literal underscore in
+        # the user's tag must be findable via a `_`-bearing query.
+        db.add(tmp, ["snake_case_tag"])
+        hits = db.search("_case_").map(&.path)
+        hits.should contain(Doma::Validator.canonicalize(tmp))
+      ensure
+        FileUtils.rm_rf(tmp)
+      end
+    end
+  end
+
+  it "doesn't let '\\' in a query escape the next query character" do
+    # The escape clause is `LIKE ? ESCAPE '\\'`, so a raw `\` in the
+    # query string must itself be escaped before reaching SQLite —
+    # otherwise `foo\bar` would silently behave as `foobar`.
+    with_temp_db do |db|
+      tmp_dir = File.tempname("doma-bs-parent")
+      FileUtils.mkdir_p(tmp_dir)
+      foo_bar = File.join(tmp_dir, "foobar")
+      FileUtils.mkdir_p(foo_bar)
+      begin
+        db.add(foo_bar, [] of String)
+        # `foo\bar` should NOT match `foobar` — backslash must be literal.
+        db.search("foo\\bar").map(&.path).should be_empty
+        # Sanity: the unescaped query still matches.
+        db.search("foobar").map(&.path).should contain(Doma::Validator.canonicalize(foo_bar))
+      ensure
+        FileUtils.rm_rf(tmp_dir)
+      end
+    end
+  end
 end
 
 describe "Database#stats" do

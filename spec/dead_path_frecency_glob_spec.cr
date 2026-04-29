@@ -175,4 +175,68 @@ describe "Tag glob (#4)" do
       end
     end
   end
+
+  # `paths_for_tag` is the cd-side helper; `directories(tag)` is what
+  # `list -t` calls. Both share `tag_match_clause`, but only the former
+  # had glob coverage — these specs lock the list-side branch in.
+  it "directories(tag) honors `*` glob and returns hydrated entries" do
+    with_temp_db do |db|
+      a = File.tempname("doma-dirs-glob-a")
+      b = File.tempname("doma-dirs-glob-b")
+      c = File.tempname("doma-dirs-glob-c")
+      [a, b, c].each { |d| FileUtils.mkdir_p(d) }
+      begin
+        db.add(a, ["work-foo"])
+        db.add(b, ["work-bar"])
+        db.add(c, ["home"])
+
+        entries = db.directories("work-*")
+        entries.map(&.tags.first).sort.should eq(["work-bar", "work-foo"])
+        # Tags must be hydrated, not blank — same shape as exact-match.
+        entries.each { |e| e.tags.should_not be_empty }
+      ensure
+        [a, b, c].each { |d| FileUtils.rm_rf(d) }
+      end
+    end
+  end
+
+  it "directories(tag) honors `?` glob" do
+    with_temp_db do |db|
+      a = File.tempname("doma-dirs-q-a")
+      b = File.tempname("doma-dirs-q-b")
+      [a, b].each { |d| FileUtils.mkdir_p(d) }
+      begin
+        db.add(a, ["v1"])
+        db.add(b, ["v12"])
+        db.directories("v?").size.should eq(1)
+      ensure
+        [a, b].each { |d| FileUtils.rm_rf(d) }
+      end
+    end
+  end
+
+  it "directories(tag) glob respects expired-row filtering" do
+    # Pre-fix risk: a glob match could surface paths whose only matching
+    # tag is expired, undermining the same-row-hiding contract that
+    # exact-match queries already honor.
+    with_temp_db do |db|
+      a = File.tempname("doma-dirs-glob-exp-a")
+      b = File.tempname("doma-dirs-glob-exp-b")
+      [a, b].each { |d| FileUtils.mkdir_p(d) }
+      begin
+        db.add(a, ["work-foo"], expires_at: Time.utc.to_unix - 60) # already expired
+        db.add(b, ["work-bar"])
+
+        active = db.directories("work-*")
+        active.size.should eq(1)
+        active.first.tags.should eq(["work-bar"])
+
+        # --include-expired surfaces the lapsed row again.
+        all = db.directories("work-*", include_expired: true)
+        all.size.should eq(2)
+      ensure
+        [a, b].each { |d| FileUtils.rm_rf(d) }
+      end
+    end
+  end
 end

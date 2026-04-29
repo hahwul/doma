@@ -249,4 +249,158 @@ describe "Import/Export" do
       end
     end
   end
+
+  it "rejects a directory passed as the import file" do
+    # File.file?() is false for directories, so the importer's existence
+    # guard fires before the parser ever sees the input. Without this
+    # check, `from_file` would walk the path and surface a confusing
+    # IO::Error from `File.read`.
+    with_temp_db do |db|
+      dir = File.tempname("doma-import-dir")
+      FileUtils.mkdir_p(dir)
+      begin
+        expect_raises(Doma::ImportError, /not found/) do
+          Doma::Importer.from_file(db, dir)
+        end
+      ensure
+        FileUtils.rm_rf(dir)
+      end
+    end
+  end
+
+  it "labels parser errors with the source path" do
+    # b7e3f56 / 639a5a0: the file path should appear in malformed-snapshot
+    # errors so the user can tell *which* file blew up when they're
+    # importing several at once.
+    with_temp_db do |db|
+      path = File.tempname("doma-bad-snap") + ".json"
+      File.write(path, "{not valid json")
+      begin
+        ex = expect_raises(Doma::ImportError) do
+          Doma::Importer.from_file(db, path)
+        end
+        msg = ex.message.not_nil!
+        msg.should contain("invalid JSON")
+        msg.should contain(path)
+      ensure
+        File.delete(path) if File.exists?(path)
+      end
+    end
+  end
+
+  it "format-detects by extension over content sniffing — .json with YAML body fails as JSON" do
+    # Without extension preference, a YAML-shaped body with no leading
+    # `{`/`[` would silently route to the YAML parser even though the
+    # filename promised JSON. The user gets a misleading parser label.
+    with_temp_db do |db|
+      path = File.tempname("doma-mismatch") + ".json"
+      # Pure YAML mapping; valid YAML, definitely not valid JSON.
+      File.write(path, "version: 1\nentries: []\n")
+      begin
+        expect_raises(Doma::ImportError, /invalid JSON/) do
+          Doma::Importer.from_file(db, path)
+        end
+      ensure
+        File.delete(path) if File.exists?(path)
+      end
+    end
+  end
+
+  it "format-detects by extension — .yml with JSON-rejecting content fails as YAML" do
+    with_temp_db do |db|
+      path = File.tempname("doma-mismatch") + ".yml"
+      # Tab-indented mapping — illegal under YAML's whitespace rules.
+      File.write(path, "version: 1\nentries:\n\t- bad\n")
+      begin
+        expect_raises(Doma::ImportError, /invalid YAML/) do
+          Doma::Importer.from_file(db, path)
+        end
+      ensure
+        File.delete(path) if File.exists?(path)
+      end
+    end
+  end
+
+  it "skips entries that fail validation and counts them in result.skipped" do
+    # The importer's per-entry rescue branch is what keeps a single bad
+    # row from torpedoing an otherwise-valid snapshot. Pre-fix, no spec
+    # explicitly verified `result.skipped` reflected the count.
+    with_temp_db do |db|
+      payload = %({
+        "version": 2,
+        "entries": [
+          {"path": "/valid/path", "tags": ["ok"]},
+          {"path": "/another/valid", "tags": ["bad name"]},
+          {"path": "/third", "tags": ["fine"]}
+        ]
+      })
+      path = File.tempname("doma-mixed-snap") + ".json"
+      File.write(path, payload)
+      begin
+        result = Doma::Importer.from_file(db, path)
+        # Two valid + one rejected by the tag validator (whitespace).
+        result.imported.should eq(2)
+        result.skipped.should eq(1)
+        # The rejected entry's path must not show up in the DB.
+        db.directories.map(&.path).should_not contain("/another/valid")
+      ensure
+        File.delete(path) if File.exists?(path)
+      end
+    end
+  end
+end
+
+describe Doma::Exporter do
+  it "stamps the snapshot with version + generated_at" do
+    with_temp_db do |db|
+      before = Time.utc.to_unix
+      snapshot = Doma::Exporter.build(db)
+      after = Time.utc.to_unix
+
+      snapshot.version.should eq(Doma::Snapshot::SCHEMA_VERSION)
+      ts = snapshot.generated_at.not_nil!
+      (before..after).covers?(ts).should be_true
+    end
+  end
+
+  it "omits the expirations field on entries with only permanent tags" do
+    # Snapshot::Entry uses `emit_null: false` so a permanent-only entry
+    # serializes the same as a v1 snapshot — keeps round-trip output
+    # visually identical for the common case.
+    with_temp_db do |db|
+      tmp = File.tempname("doma-exp-perm")
+      FileUtils.mkdir_p(tmp)
+      begin
+        db.add(tmp, ["forever"]) # no TTL
+        io = IO::Memory.new
+        Doma::Exporter.write(db, Doma::Exporter::Format::Json, io)
+        json = io.to_s
+        # The field must not appear at all — `"expirations": null` would
+        # also be wrong (importer treats absence as "all permanent").
+        json.should_not contain("expirations")
+      ensure
+        FileUtils.rm_rf(tmp)
+      end
+    end
+  end
+
+  it "emits expirations only for tags with a future TTL" do
+    with_temp_db do |db|
+      tmp = File.tempname("doma-exp-mixed")
+      FileUtils.mkdir_p(tmp)
+      begin
+        future = Time.utc.to_unix + 7 * 86_400
+        db.add(tmp, ["bookmark"], expires_at: future)
+        db.add(tmp, ["permanent"]) # different call → permanent
+
+        snapshot = Doma::Exporter.build(db)
+        entry = snapshot.entries.first
+        ttls = entry.expirations.not_nil!
+        ttls.has_key?("bookmark").should be_true
+        ttls.has_key?("permanent").should be_false
+      ensure
+        FileUtils.rm_rf(tmp)
+      end
+    end
+  end
 end
