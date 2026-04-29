@@ -15,17 +15,22 @@ module Doma::CLI
   class MarkCommand
     def run(args : Array(String))
       tags = [] of String
+      target_path : String? = nil
 
       parser = OptionParser.new do |p|
-        p.banner = "Usage: doma mark <tag> [<tag> ...]"
+        p.banner = "Usage: doma mark [-p PATH] <tag> [<tag> ...]"
+        p.on("-p PATH", "--path=PATH", "Mark this path instead of the current directory") do |v|
+          target_path = v
+        end
         p.on("-h", "--help", "Show help") do
           puts p
           STDOUT.puts ""
-          STDOUT.puts "Marks the current directory with one or more temporary tags."
+          STDOUT.puts "Marks a directory with one or more temporary tags."
           STDOUT.puts "Each tag expires after 7 days. Equivalent to:"
-          STDOUT.puts "    doma add . -t TAG ... --tmp"
+          STDOUT.puts "    doma add <path> -t TAG ... --tmp"
           STDOUT.puts ""
-          STDOUT.puts "For a custom TTL or different path, use `doma add` directly."
+          STDOUT.puts "Defaults to the current directory; pass -p PATH to mark"
+          STDOUT.puts "elsewhere. For a custom TTL, use `doma add --ttl`."
           exit 0
         end
         p.unknown_args do |before, after|
@@ -37,7 +42,11 @@ module Doma::CLI
 
       raise Doma::ValidationError.new("at least one tag is required") if tags.empty?
 
-      forwarded = [".", "--tmp"] of String
+      # Capture into a local so the closure-narrowing on `target_path`
+      # propagates; Crystal won't infer non-nil from `target_path || "."`
+      # when the source ivar is nilable.
+      path = target_path
+      forwarded = [path.nil? ? "." : path, "--tmp"]
       tags.each { |t| forwarded << "-t" << t }
       AddCommand.new.run(forwarded)
     end

@@ -62,6 +62,13 @@ module Doma::CLI
 
       ttl_label = expires_at.try { |e| "expires #{Time.unix(e).to_local.to_s("%Y-%m-%d %H:%M")}" }
 
+      # `auto_git == true` only when the user passed `--git-tag` explicitly;
+      # config-driven on stays nil → !!auto_git just collapses to a Bool.
+      # We track the explicit form separately so we can warn under -v when
+      # the flag had no effect (non-git directory) — staying silent for
+      # config-on auto-tagging, which is meant to be magic.
+      git_explicit = auto_git == true
+
       # Dry-run path: resolve everything but never open a writable db.
       # Done as a separate branch (rather than a flag inside the loop)
       # because there's no point even touching the database for a preview.
@@ -69,7 +76,7 @@ module Doma::CLI
         failures = process_each(positional) do |path|
           abs = Doma::Validator.path!(path)
           applied = Doma::Validator.tags!(raw_tags).dup
-          applied.concat(derive_tags(abs, use_basename, use_git))
+          applied.concat(derive_tags(abs, use_basename, use_git, git_explicit))
           applied.uniq!
           summary = applied.empty? ? "(no tags)" : "tags: #{applied.join(", ")}"
           summary += "  (#{ttl_label})" if ttl_label
@@ -88,7 +95,7 @@ module Doma::CLI
           # (basename, git remote) flow through `sanitize_tag` so a repo
           # named `.dotfiles` doesn't blow up the whole `add`.
           applied = Doma::Validator.tags!(raw_tags).dup
-          applied.concat(derive_tags(abs, use_basename, use_git))
+          applied.concat(derive_tags(abs, use_basename, use_git, git_explicit))
           applied.uniq!
 
           db.add(abs, applied, validate_path: false, expires_at: expires_at)
@@ -116,16 +123,40 @@ module Doma::CLI
           yield path
         rescue ex : Doma::ValidationError
           failures += 1
-          Doma::Logger.error "#{path}: #{ex.message}"
+          Doma::Logger.error format_failure(path, ex, paths.size)
         end
       end
       failures
     end
 
-    private def derive_tags(abs : String, use_basename : Bool, use_git : Bool) : Array(String)
+    # Avoid `<input>: not a directory: <input>` duplication. The
+    # validator already names the path in its "not a directory: …"
+    # / "path exceeds …" messages; prepending the input again is
+    # noise. For multi-path batches we still want the input prefix
+    # on errors that *don't* already mention it (e.g. tag-validation
+    # failures), so the user can tell which path failed.
+    private def format_failure(path : String, ex : Exception, batch_size : Int32) : String
+      message = ex.message.to_s
+      return message if batch_size <= 1
+      return message if message.ends_with?(": #{path}")
+      "#{path}: #{message}"
+    end
+
+    private def derive_tags(abs : String, use_basename : Bool, use_git : Bool, git_explicit : Bool) : Array(String)
       sources = [] of String
       sources << File.basename(abs) if use_basename
-      sources.concat(Doma::GitDetector.detect(abs).to_tags) if use_git
+      if use_git
+        info = Doma::GitDetector.detect(abs)
+        if info.git
+          sources.concat(info.to_tags)
+        elsif git_explicit
+          # The user asked for git tags out loud — surface the no-op in
+          # `-v` so they aren't left wondering why the flag did nothing.
+          # Stay silent for config-driven auto-tag: that path is meant
+          # to be unobtrusive on non-git directories.
+          Doma::Logger.debug "--git-tag had no effect: #{abs} is not a git working tree"
+        end
+      end
       sources.compact_map { |raw| Doma::Validator.sanitize_tag(raw) }
     end
   end

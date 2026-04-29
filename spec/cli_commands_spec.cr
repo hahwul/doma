@@ -929,3 +929,132 @@ describe "doma list expired surfacing" do
     end
   end
 end
+
+# ---------- mark --path ----------
+
+describe "doma mark --path" do
+  it "[-p PATH] marks the given path instead of cwd" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      r = run(["mark", "-p", "/var", "later"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(0)
+      list = run(["list", "-t", "later", "--paths"], {"DOMA_HOME" => home})
+      paths = list[:out].split('\n', remove_empty: true)
+      paths.size.should eq(1)
+      # macOS canonicalizes /var → /private/var via realpath; just match
+      # whatever the canonical form is on this host.
+      paths.first.should eq(Doma::Validator.canonicalize("/var"))
+    end
+  end
+
+  it "[--path] long form works the same way" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      r = run(["mark", "--path", "/var", "alpha", "beta"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(0)
+      tags = run(["tags", "--names"], {"DOMA_HOME" => home})
+      tags[:out].split('\n', remove_empty: true).sort!.should eq(["alpha", "beta"])
+    end
+  end
+
+  it "[no -p] still defaults to the current directory" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      r = run(["mark", "rooted"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(0)
+      # The cwd of the spec process is the doma project dir; we just
+      # verify _something_ was registered, since the absolute path is
+      # host-dependent.
+      list = run(["list", "-t", "rooted", "--paths"], {"DOMA_HOME" => home})
+      list[:out].lines.size.should eq(1)
+    end
+  end
+
+  it "[-p MISSING_PATH] surfaces the validator error" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      r = run(["mark", "-p", "/no/such/place", "tag"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(2)
+      r[:err].should contain("not a directory")
+    end
+  end
+end
+
+# ---------- add error message dedup ----------
+
+describe "doma add error format" do
+  it "[single missing path] no input/canonical duplication" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      r = run(["add", "/no/such/dir", "-t", "x"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(2)
+      # Pre-fix: "✗ /no/such/dir: not a directory: /no/such/dir"
+      # Post-fix: only one mention of the path.
+      lines = r[:err].lines
+      err_line = lines.find { |l| l.includes?("not a directory") }.not_nil!
+      err_line.scan(/\/no\/such\/dir/).size.should eq(1)
+    end
+  end
+
+  it "[batch tag error] keeps input prefix when message lacks the path" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      # Tag-validation messages don't repeat the path, so the input
+      # prefix is essential context in batch mode.
+      r = run(["add", "/tmp", "/var", "-t", "has space"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(2)
+      r[:err].should contain("/tmp: tag")
+      r[:err].should contain("/var: tag")
+    end
+  end
+end
+
+# ---------- --git-tag debug note ----------
+
+describe "doma add --git-tag debug" do
+  it "stays silent in non-git directory at default verbosity" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      target = File.tempname("doma-nogit")
+      FileUtils.mkdir_p(target)
+      begin
+        r = run(["add", target, "-t", "demo", "--git-tag"], {"DOMA_HOME" => home})
+        r[:status].exit_code.should eq(0)
+        r[:err].should_not contain("--git-tag had no effect")
+      ensure
+        FileUtils.rm_rf(target)
+      end
+    end
+  end
+
+  it "[-v] surfaces the no-op note for an explicit --git-tag flag" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      target = File.tempname("doma-nogit-v")
+      FileUtils.mkdir_p(target)
+      begin
+        r = run(["-v", "add", target, "-t", "demo", "--git-tag"], {"DOMA_HOME" => home})
+        r[:status].exit_code.should eq(0)
+        r[:err].should contain("--git-tag had no effect")
+        r[:err].should contain("not a git working tree")
+      ensure
+        FileUtils.rm_rf(target)
+      end
+    end
+  end
+
+  it "[-v, no --git-tag] silent when the flag was never asked for" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      target = File.tempname("doma-nogit-silent")
+      FileUtils.mkdir_p(target)
+      begin
+        r = run(["-v", "add", target, "-t", "demo"], {"DOMA_HOME" => home})
+        r[:status].exit_code.should eq(0)
+        r[:err].should_not contain("--git-tag")
+      ensure
+        FileUtils.rm_rf(target)
+      end
+    end
+  end
+end
