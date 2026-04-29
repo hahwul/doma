@@ -105,6 +105,7 @@ module Doma::CLI
                    end
                    paths[idx - 1]
                  else
+                   warn_ambiguous_auto_pick(tag, paths, mode)
                    result = Doma::Selector.pick(paths, prompt: "doma cd #{tag}", mode: mode)
                    raise Doma::Error.new("selection cancelled", 130) if result.cancelled
                    result.value
@@ -195,6 +196,26 @@ module Doma::CLI
         input.starts_with?("./") ||
         input.starts_with?("../") ||
         input == "."
+    end
+
+    # Heads-up on stderr when a non-interactive `cd` silently picks the
+    # most-recent of several matches. Without it, scripts piping
+    # `doma cd <tag>` get a path that may not be the one the user
+    # expected, with no indication that the choice was a heuristic.
+    # Quiet under -q (the user opted out of advisory output) and
+    # silent for unambiguous matches.
+    private def warn_ambiguous_auto_pick(tag : String, paths : Array(String), mode : Doma::Settings::SelectorMode?)
+      return if paths.size <= 1
+      return if Doma::Logger.quiet?
+
+      effective = mode || Doma::Settings.current.selector
+      effective = STDIN.tty? ? Doma::Settings::SelectorMode::Builtin : Doma::Settings::SelectorMode::First if effective == Doma::Settings::SelectorMode::Auto
+      return unless effective == Doma::Settings::SelectorMode::First
+
+      Doma::Logger.warn(
+        "tag '#{tag}' matches #{paths.size} directories; picked most-recent. " \
+        "Use --index N or --builtin to choose."
+      )
     end
   end
 end

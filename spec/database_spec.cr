@@ -183,6 +183,35 @@ describe Doma::Database do
     end
   end
 
+  describe "#expired_tag_count" do
+    it "counts only directory_tags rows whose TTL has elapsed" do
+      with_temp_db do |db|
+        live = File.tempname("doma-exp-live")
+        soon = File.tempname("doma-exp-soon")
+        FileUtils.mkdir_p(live)
+        FileUtils.mkdir_p(soon)
+        begin
+          db.add(live, ["alive"]) # permanent → not counted
+          db.add(soon, ["a"], expires_at: Time.utc.to_unix - 60)
+          db.add(soon, ["b"], expires_at: Time.utc.to_unix - 30)
+          db.add(soon, ["future"], expires_at: Time.utc.to_unix + 3600)
+          # Two expired, one future, one permanent. The count covers
+          # only the elapsed pair regardless of which directory carries them.
+          db.expired_tag_count.should eq(2)
+        ensure
+          FileUtils.rm_rf(live)
+          FileUtils.rm_rf(soon)
+        end
+      end
+    end
+
+    it "returns zero on a fresh DB" do
+      with_temp_db do |db|
+        db.expired_tag_count.should eq(0)
+      end
+    end
+  end
+
   describe "search include_expired" do
     it "by default hides rows whose only tag match is expired" do
       with_temp_db do |db|

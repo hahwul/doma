@@ -108,6 +108,12 @@ module Doma::CLI
           if hint = typo_hint(db, tags)
             STDERR.puts "  #{hint}"
           end
+          # First-run cue: an unfiltered, empty DB is almost always a
+          # newcomer who just installed and ran `list` to see what doma
+          # does. Point them at the obvious next step.
+          if tags.empty? && query.nil? && db.directories.empty?
+            STDERR.puts "  hint: try `doma add .` to register the current directory"
+          end
           return
         end
 
@@ -133,6 +139,18 @@ module Doma::CLI
             marker = color ? " #{"[gone]".colorize(:red)}" : " [gone]"
           end
           puts "#{short_str}  #{path_str}\t#{tags_str}#{marker}"
+        end
+
+        # Footer: when expired rows were filtered out, surface the count
+        # and the flag that would reveal them. Symmetrical with the
+        # `[gone]` story for missing paths — silent suppression is a UX
+        # trap if the user is wondering why they don't see something.
+        unless include_expired
+          hidden = db.expired_tag_count
+          if hidden > 0
+            noun = hidden == 1 ? "tag" : "tags"
+            STDERR.puts "  #{hidden} #{noun} hidden by TTL — pass --include-expired to show"
+          end
         end
       ensure
         db.close
@@ -188,13 +206,17 @@ module Doma::CLI
 
     # Decorate `#tag` with a `~3d` / `~expired` suffix when the tag has
     # a TTL. The suffix uses the same compact form (`Nu`) the parser
-    # accepts, so a glance at the listing tells you what to renew.
+    # accepts, so a glance at the listing tells you what to renew. An
+    # already-lapsed TTL renders red instead of dim so it pops next to
+    # active rows when --include-expired surfaces them.
     private def render_tag(tag : String, expires_at : Int64?, color : Bool) : String
       base = color ? "##{tag}".colorize(:yellow).to_s : "##{tag}"
       return base unless expires_at
       remaining = Doma::Duration.humanize_remaining(expires_at)
       suffix = "~#{remaining}"
-      color ? "#{base}#{suffix.colorize(:dark_gray)}" : "#{base}#{suffix}"
+      return "#{base}#{suffix}" unless color
+      tinted = remaining == "expired" ? suffix.colorize(:red) : suffix.colorize(:dark_gray)
+      "#{base}#{tinted}"
     end
 
     # Pick the first tag the user typed that doesn't actually exist (and

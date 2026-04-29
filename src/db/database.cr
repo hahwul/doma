@@ -478,6 +478,16 @@ module Doma
     # consistently across the queries below.
     NOT_EXPIRED = "(dt.expires_at IS NULL OR dt.expires_at > strftime('%s','now'))"
 
+    # Number of `directory_tags` rows whose TTL has lapsed. The list
+    # command uses this to surface a "N tag(s) hidden by TTL" banner so
+    # users notice when --include-expired would change the picture.
+    def expired_tag_count : Int64
+      @db.scalar(
+        "SELECT COUNT(*) FROM directory_tags " \
+        "WHERE expires_at IS NOT NULL AND expires_at <= strftime('%s','now')"
+      ).as(Int64)
+    end
+
     # Stamps a directory as just-used. Idempotent on missing paths
     # (silently no-ops) so callers don't need to gate the bump on
     # existence — `cd` still wants to print whatever was selected even

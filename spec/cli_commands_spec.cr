@@ -804,3 +804,128 @@ describe "doma setup completion" do
     r[:out].should contain("completion")
   end
 end
+
+# ---------- cd ambiguous auto-pick ----------
+
+describe "doma cd ambiguous" do
+  it "warns on stderr when multiple matches auto-resolve to the first" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home) # `shared` matches /var + $HOME
+      r = run(["cd", "shared"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(0)
+      r[:err].should contain("matches 2 directories")
+      r[:err].should contain("--index")
+    end
+  end
+
+  it "stays silent when only one path matches" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home) # `scratch` is only on /tmp
+      r = run(["cd", "scratch"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(0)
+      r[:err].should_not contain("matches")
+    end
+  end
+
+  it "respects -q (quiet suppresses the advisory)" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      r = run(["-q", "cd", "shared"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(0)
+      r[:err].should_not contain("matches")
+    end
+  end
+
+  it "explicit --index skips the advisory (user already disambiguated)" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      r = run(["cd", "shared", "--index", "1"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(0)
+      r[:err].should_not contain("matches")
+    end
+  end
+end
+
+# ---------- list first-run hint ----------
+
+describe "doma list first-run hint" do
+  it "[empty DB, no filters] suggests `doma add .`" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      r = run(["list"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(0)
+      r[:err].should contain("no directories registered")
+      r[:err].should contain("doma add .")
+    end
+  end
+
+  it "[empty DB, with filter] does NOT show the first-run hint" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      r = run(["list", "-t", "anything"], {"DOMA_HOME" => home})
+      r[:err].should_not contain("doma add .")
+    end
+  end
+
+  it "[populated DB, miss] does NOT show the first-run hint" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      run(["add", "/tmp", "-t", "live"], {"DOMA_HOME" => home})
+      r = run(["list", "-t", "missing"], {"DOMA_HOME" => home})
+      r[:err].should_not contain("doma add .")
+    end
+  end
+end
+
+# ---------- list expired banner & marker ----------
+
+describe "doma list expired surfacing" do
+  it "shows a banner counting expired tags hidden by default" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      run(["add", "/tmp", "-t", "fast", "--ttl", "1s"], {"DOMA_HOME" => home})
+      sleep 1.5.seconds
+      r = run(["list"], {"DOMA_HOME" => home})
+      r[:err].should contain("hidden by TTL")
+      r[:err].should contain("--include-expired")
+    end
+  end
+
+  it "[--include-expired] omits the banner and renders ~expired" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      run(["add", "/tmp", "-t", "fast", "--ttl", "1s"], {"DOMA_HOME" => home})
+      sleep 1.5.seconds
+      r = run(["list", "--include-expired"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(0)
+      r[:err].should_not contain("hidden by TTL")
+      r[:out].should contain("~expired")
+    end
+  end
+
+  it "no banner when nothing has actually expired" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      run(["add", "/tmp", "-t", "live"], {"DOMA_HOME" => home})
+      r = run(["list"], {"DOMA_HOME" => home})
+      r[:err].should_not contain("hidden by TTL")
+    end
+  end
+
+  it "[--paths] mode is silent for piping (banner not on stdout)" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      run(["add", "/tmp", "-t", "fast", "--ttl", "1s"], {"DOMA_HOME" => home})
+      sleep 1.5.seconds
+      r = run(["list", "--paths"], {"DOMA_HOME" => home})
+      # stdout must stay strictly machine-readable: only paths.
+      r[:out].split('\n', remove_empty: true).each do |line|
+        line.should start_with('/')
+      end
+    end
+  end
+end
