@@ -1,5 +1,6 @@
 require "option_parser"
 require "../../db/database"
+require "../../services/trash"
 require "../../utils/errors"
 require "../../utils/logger"
 require "../../utils/short_id_resolver"
@@ -11,15 +12,17 @@ module Doma::CLI
       tags = [] of String
       gone = false
       expired = false
+      hard = false
       positional = [] of String
 
       parser = OptionParser.new do |p|
-        p.banner = "Usage: doma rm [<path> ...] [-t TAG ...] [--gone] [--expired]"
+        p.banner = "Usage: doma rm [<path> ...] [-t TAG ...] [--gone] [--expired] [--hard]"
         p.on("-t TAG", "--tag=TAG", "Remove this tag (repeatable, comma-separated allowed)") do |t|
           t.split(',').each { |x| tags << x.strip unless x.strip.empty? }
         end
         p.on("--gone", "Remove every entry whose path no longer exists on disk") { gone = true }
         p.on("--expired", "Remove every tag whose TTL has elapsed") { expired = true }
+        p.on("--hard", "Skip the trash; delete permanently") { hard = true }
         p.on("-h", "--help", "Show help") do
           puts p
           exit 0
@@ -71,8 +74,21 @@ module Doma::CLI
           path = resolve_target(db, raw)
 
           if cleaned_tags.empty?
+            abs = Doma::Validator.canonicalize(path)
+            # Snapshot first so a soft-delete can restore the row
+            # exactly. `--hard` skips the snapshot — housekeeping like
+            # `--gone` and `--expired` likewise bypass the trash via
+            # their own code paths above.
+            entry = hard ? nil : Doma::Trash.snapshot(db, abs)
             if db.remove_path(path)
-              Doma::Logger.success "removed #{Doma::Validator.canonicalize(path)}"
+              if hard
+                Doma::Logger.success "removed #{abs} (permanent)"
+              elsif entry
+                Doma::Trash.add!(entry)
+                Doma::Logger.success "trashed #{abs} (recover with `doma trash restore #{entry.short_id[0..6]}`)"
+              else
+                Doma::Logger.success "removed #{abs}"
+              end
             else
               Doma::Logger.warn "not registered: #{raw}"
             end

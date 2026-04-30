@@ -57,7 +57,7 @@ module Doma::CLI
     # Top-level commands shared across all three completion scripts.
     # Keep this in lockstep with the dispatch table in `runner.cr`.
     private COMMANDS = %w[
-      add mark rm move tags rename list cd stats run export import setup version help
+      add mark rm move tags rename list cd stats run export import setup config trash version help
     ]
 
     # Commands whose first positional is a tag — completion shells these
@@ -133,7 +133,21 @@ module Doma::CLI
                 COMPREPLY=( $(compgen -W "install init doctor completion" -- "$cur") )
                 return
                 ;;
+              config)
+                COMPREPLY=( $(compgen -W "get set unset list edit path" -- "$cur") )
+                return
+                ;;
+              trash)
+                COMPREPLY=( $(compgen -W "list restore empty" -- "$cur") )
+                return
+                ;;
             esac
+          fi
+
+          # Second positional after `config <action>` → key name.
+          if [ "$cword" -eq 3 ] && [ "$cmd" = "config" ]; then
+            COMPREPLY=( $(compgen -W "db_path selector auto_tag.basename auto_tag.git" -- "$cur") )
+            return
           fi
 
           # Per-command flag completion. Lists are intentionally narrow —
@@ -141,7 +155,7 @@ module Doma::CLI
           case "$cmd" in
             add)    COMPREPLY=( $(compgen -W "-t --tag --ttl --tmp --auto-tag --no-auto-tag --git-tag --no-git-tag --dry-run -h --help" -- "$cur") ) ;;
             mark)   COMPREPLY=( $(compgen -W "-h --help" -- "$cur") ) ;;
-            rm)     COMPREPLY=( $(compgen -W "-t --tag --gone --expired -h --help" -- "$cur") ) ;;
+            rm)     COMPREPLY=( $(compgen -W "-t --tag --gone --expired --hard -h --help" -- "$cur") ) ;;
             move)   COMPREPLY=( $(compgen -W "--allow-missing -h --help" -- "$cur") ) ;;
             tags)   COMPREPLY=( $(compgen -W "--names --tree --json -0 -h --help" -- "$cur") ) ;;
             list)   COMPREPLY=( $(compgen -W "-t --tag --by --check --include-expired --json --paths -0 -h --help" -- "$cur") ) ;;
@@ -151,6 +165,8 @@ module Doma::CLI
             export) COMPREPLY=( $(compgen -W "--json --yaml -h --help" -- "$cur") ) ;;
             import) COMPREPLY=( $(compgen -W "--merge --replace --yes -h --help" -- "$cur") ) ;;
             setup)  COMPREPLY=( $(compgen -W "install init doctor completion" -- "$cur") ) ;;
+            config) COMPREPLY=( $(compgen -W "get set unset list edit path -h --help" -- "$cur") ) ;;
+            trash)  COMPREPLY=( $(compgen -W "list restore empty --merge --older -h --help" -- "$cur") ) ;;
             *) ;;
           esac
         }
@@ -181,6 +197,8 @@ module Doma::CLI
             'export:Dump the database'
             'import:Load a snapshot'
             'setup:install / init / doctor / completion'
+            'config:get / set / list — settings'
+            'trash:list / restore / empty — recover from rm'
             'version:Print version'
             'help:Show help'
           )
@@ -222,6 +240,26 @@ module Doma::CLI
                 return
               fi
               ;;
+            config)
+              if (( CURRENT == 3 )); then
+                _values 'config action' get set unset list edit path
+                return
+              fi
+              if (( CURRENT == 4 )); then
+                case $words[3] in
+                  get|set|unset)
+                    _values 'config key' db_path selector auto_tag.basename auto_tag.git
+                    return
+                    ;;
+                esac
+              fi
+              ;;
+            trash)
+              if (( CURRENT == 3 )); then
+                _values 'trash action' list restore empty
+                return
+              fi
+              ;;
           esac
 
           # Flag-value completion across commands.
@@ -236,7 +274,7 @@ module Doma::CLI
           case $cmd in
             add)    flags=(-t --tag --ttl --tmp --auto-tag --no-auto-tag --git-tag --no-git-tag --dry-run -h --help) ;;
             mark)   flags=(-h --help) ;;
-            rm)     flags=(-t --tag --gone --expired -h --help) ;;
+            rm)     flags=(-t --tag --gone --expired --hard -h --help) ;;
             move)   flags=(--allow-missing -h --help) ;;
             tags)   flags=(--names --tree --json -0 -h --help) ;;
             list)   flags=(-t --tag --by --check --include-expired --json --paths -0 -h --help) ;;
@@ -276,6 +314,8 @@ module Doma::CLI
         "export"  => "Dump the database",
         "import"  => "Load a snapshot",
         "setup"   => "install / init / doctor / completion",
+        "config"  => "get / set / list — settings",
+        "trash"   => "list / restore / empty — recover from rm",
         "version" => "Print version",
         "help"    => "Show help",
       }
@@ -302,10 +342,22 @@ module Doma::CLI
                "-a 'install init doctor completion' -d 'setup action'"
       lines << ""
 
+      # Config actions and keys.
+      lines << "complete -c doma -n '__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from get set unset list edit path' " \
+               "-a 'get set unset list edit path' -d 'config action'"
+      lines << "complete -c doma -n '__fish_seen_subcommand_from get set unset' " \
+               "-a 'db_path selector auto_tag.basename auto_tag.git' -d 'config key'"
+      lines << ""
+
+      # Trash actions.
+      lines << "complete -c doma -n '__fish_seen_subcommand_from trash; and not __fish_seen_subcommand_from list restore empty' " \
+               "-a 'list restore empty' -d 'trash action'"
+      lines << ""
+
       # Per-command flag pool. Kept terse — fish handles typing the rest.
       flag_table = {
         "add"    => %w[--tag --ttl --tmp --auto-tag --no-auto-tag --git-tag --no-git-tag --dry-run],
-        "rm"     => %w[--tag --gone --expired],
+        "rm"     => %w[--tag --gone --expired --hard],
         "move"   => %w[--allow-missing],
         "tags"   => %w[--names --tree --json],
         "list"   => %w[--tag --by --check --include-expired --json --paths],

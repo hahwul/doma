@@ -3,6 +3,7 @@ require "../../db/database"
 require "../../services/importer"
 require "../../utils/errors"
 require "../../utils/logger"
+require "../../utils/runtime"
 require "../../utils/validator"
 
 module Doma::CLI
@@ -48,7 +49,7 @@ module Doma::CLI
       # convinces the compiler we're handing `from_file` a plain Mode.
       mode = explicit_mode.nil? ? Doma::Importer::Mode::Merge : explicit_mode.as(Doma::Importer::Mode)
 
-      if mode == Doma::Importer::Mode::Replace && !assume_yes
+      if mode == Doma::Importer::Mode::Replace && !assume_yes && !Doma::Runtime.assume_yes?
         unless confirm_replace
           Doma::Logger.warn "aborted"
           exit 1

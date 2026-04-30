@@ -1,6 +1,7 @@
 require "colorize"
 require "../utils/errors"
 require "../utils/logger"
+require "../utils/runtime"
 require "../utils/suggester"
 require "./commands/add_command"
 require "./commands/mark_command"
@@ -15,13 +16,15 @@ require "./commands/rename_command"
 require "./commands/stats_command"
 require "./commands/setup_command"
 require "./commands/move_command"
+require "./commands/config_command"
+require "./commands/trash_command"
 
 module Doma
   module CLI
     class Runner
       KNOWN_COMMANDS = %w[
         add mark rm remove list ls tags rename move mv
-        stats cd run export import setup
+        stats cd run export import setup config trash
         version help -V --version -h --help
       ]
 
@@ -40,8 +43,18 @@ module Doma
         case command
         when "-V", "--version", "version"
           puts Doma::VERSION
-        when "-h", "--help", "help"
+        when "-h", "--help"
           print_help
+        when "help"
+          # `doma help <cmd>` → route to that subcommand's own --help so
+          # users see the usage line without the global banner. Bare
+          # `doma help` falls through to the orientation page.
+          if args.empty?
+            print_help
+          else
+            sub = args.shift
+            run([sub, "--help"])
+          end
         when "add"
           AddCommand.new.run(args)
         when "mark"
@@ -68,6 +81,10 @@ module Doma
           StatsCommand.new.run(args)
         when "setup"
           SetupCommand.new.run(args)
+        when "config"
+          ConfigCommand.new.run(args)
+        when "trash"
+          TrashCommand.new.run(args)
         else
           Doma::Logger.error "unknown command '#{command}'"
           if suggestion = Doma::Suggester.suggest(command, KNOWN_COMMANDS)
@@ -113,6 +130,9 @@ module Doma
           when "--color"
             Doma::Logger.no_color = false
             true
+          when "-y", "--yes"
+            Doma::Runtime.assume_yes = true
+            true
           else
             false
           end
@@ -136,6 +156,8 @@ module Doma
         {"export", "Dump the database (--json | --yaml)"},
         {"import <file>", "Load a snapshot (--merge | --replace)"},
         {"setup <action>", "install / init / doctor — see `doma setup --help`"},
+        {"config <action>", "get / set / list — see `doma config --help`"},
+        {"trash <action>", "list / restore / empty — recover from `rm`"},
         {"version | help", "Show version / this help"},
       ]
 
@@ -159,6 +181,7 @@ module Doma
         puts "  -q, --quiet             Suppress success/info output"
         puts "  -v, --verbose, --debug  Print debug traces to stderr"
         puts "      --no-color, --color Force color off / on"
+        puts "  -y, --yes               Assume \"yes\" for confirmation prompts (env: DOMA_YES=1)"
         puts ""
         puts "Make `doma cd` actually change directory:"
         puts "  doma setup install                # auto-append to your shell's rc file"

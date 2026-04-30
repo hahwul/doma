@@ -373,4 +373,28 @@ describe "Runner.apply_globals!" do
       Doma::Logger.debug = prev_debug
     end
   end
+
+  it "[--yes] strips -y/--yes and flips Runtime.assume_yes?" do
+    prev = Doma::Runtime.assume_yes?
+    begin
+      args = ["-y", "import", "--replace", "snap.json"]
+      Doma::CLI::Runner.apply_globals!(args)
+      args.should eq(["import", "--replace", "snap.json"])
+      Doma::Runtime.assume_yes?.should be_true
+    ensure
+      Doma::Runtime.assume_yes = prev
+    end
+  end
+
+  it "[--yes] long form also flips the flag" do
+    prev = Doma::Runtime.assume_yes?
+    begin
+      args = ["--yes", "import"]
+      Doma::CLI::Runner.apply_globals!(args)
+      args.should eq(["import"])
+      Doma::Runtime.assume_yes?.should be_true
+    ensure
+      Doma::Runtime.assume_yes = prev
+    end
+  end
 end
