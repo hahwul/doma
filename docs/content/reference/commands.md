@@ -8,20 +8,24 @@ weight = 1
 |---|---|
 | `add [<path>]` | Register a path (defaults to `.`) with one or more tags. |
 | `mark <tag> ...` | Tag cwd with temporary (7-day) tags. Alias for `add . -t TAG ... --tmp`. |
-| `rm <path>` | Remove tag(s) from a path, or drop the path entirely. |
+| `rm <path>` | Remove tag(s) from a path, or drop the path entirely (single-target). |
+| `prune --gone\|--expired` | Bulk-delete entries whose path is missing, or tag rows past their TTL. |
 | `move <old> <new>` | Move a registered path; tags carry over. |
 | `tags` | List all tags with usage counts. |
 | `rename <old> <new>` | Rename a tag, or merge into an existing one. |
-| `list [<query>]` | List or search directories. |
-| `cd [<tag>\|<id>]` | Resolve a directory (interactive picker on multiple matches). |
+| `list [<query>]` | List or search directories (`--pick` to resolve to one path). |
+| `info [<path>]` | Show one entry's details (tags, TTLs, last-used). Defaults to cwd. |
 | `stats` | Top tags + recently added/used paths. |
 | `run <tag> -- <cmd>` | Run a command in every tagged directory. |
 | `export` | Dump the database (JSON or YAML). |
 | `import <file>` | Load a snapshot (`--merge` or `--replace`). |
 | `setup install` | Append the shell wrapper to your rc file. |
 | `setup init <shell>` | Print the shell wrapper for manual install. |
-| `setup doctor` | Check the install (paths, config, DB). |
+| `setup completion <shell>` | Print a shell completion script. |
+| `doctor` | Check the install (paths, config, DB). |
 | `version` / `help` | Show version / help. |
+
+`doma cd <tag>` lives in the shell wrapper installed by `setup install`, not in the binary itself.
 
 ## Global flags
 
@@ -61,13 +65,25 @@ Equivalent to `doma add . -t TAG ... --tmp`. cwd only, 7-day default. For other 
 ## `rm`
 
 ```
-doma rm [<path> ...] [-t TAG ...] [--gone] [--expired]
+doma rm <path> [<path> ...] [-t TAG ...] [--hard]
 ```
 
-- `<path>` alone: drop the path and all its tags.
+- `<path>` alone: drop the path and all its tags (snapshotted to trash by default).
 - `<path> -t TAG`: untag the path (path entry remains if other tags are present).
-- `--gone`: remove every entry whose path no longer exists on disk. Mutually exclusive with explicit paths/tags.
-- `--expired`: prune all expired tag rows + GC orphan tags. Mutually exclusive too.
+- `--hard`: skip the trash and delete permanently.
+
+For bulk cleanup (sweep missing paths, prune expired tag rows), use `doma prune` — split out so the per-path `rm` form can't accidentally trip a sweep.
+
+## `prune`
+
+```
+doma prune (--gone | --expired)
+```
+
+- `--gone`: remove every entry whose path no longer exists on disk. Trash-skipping by design (the original directory is already gone, so there's nothing to restore to).
+- `--expired`: drop tag rows whose TTL has elapsed and GC any tags left with no rows. Directories themselves are preserved.
+
+The two flags are mutually exclusive — each sweep has its own intent.
 
 ## `list`
 
@@ -83,20 +99,27 @@ doma list [<query>] [-t TAG] [--by path|recent]
 - `--check`: annotate entries whose path is gone with `[gone]`.
 - `--include-expired`: include tag rows whose TTL has elapsed.
 - `--json` / `--paths` / `-0`: machine-readable forms (see [Pipelines](../../usage/pipelines/)).
+- `--pick`: resolve to a single path on stdout (interactive on TTY,
+  most-recent first off-TTY with a stderr advisory). The shell wrapper
+  installed by `doma setup install` builds `doma cd <tag>` on top of
+  this. Composes with `--query Q`, `--first` (deterministic auto-pick,
+  no prompt), and `--builtin` (force the picker even off-TTY).
 
-## `cd`
+The bare binary does **not** ship a `cd` subcommand. Calling
+`doma cd …` directly errors and points at `doma setup install` (or
+the `cd "$(doma list -t TAG --pick)"` inline form for scripts).
+
+## `info`
 
 ```
-doma cd [<tag>|<short-id>] [--first | --builtin | --index N] [--query Q]
+doma info [<path>] [--json]
 ```
 
-- Bare positional: tag name first, then short_id prefix.
-- `--first`: skip the picker, take the most-recent match.
-- `--builtin`: force the interactive picker even when stdin isn't a TTY.
-- `--index N`: 1-based index into the (recency-ordered) match set.
-- `--query Q`: pre-fill the picker filter (no-tag mode).
+Single-entry detail view. The path defaults to `.` so `doma info` from inside a project answers the most common question — "did I tag this directory? with what?" — in one keystroke.
 
-Without a positional: browses every registered directory.
+Output: short_id, canonical path, basename, every tag (with TTL remaining or `~expired` suffix), `created_at`, `last_used_at`, and an `exists` check against the filesystem. Exits 3 when the path isn't registered, with a hint that points at `doma add`.
+
+`--json` emits the same fields plus an `expirations` map (`tag_name → unix_epoch`) when any tag has a TTL.
 
 ## `run`
 
@@ -120,7 +143,15 @@ doma import <file> [--merge | --replace] [-y | --yes]
 ```
 doma setup install [<shell>] [-y | --yes] [-n | --dry-run]
 doma setup init <bash|zsh|fish>
-doma setup doctor
+doma setup completion <bash|zsh|fish>
 ```
 
-`install` auto-detects from `$SHELL`; pass an explicit name to override.
+`install` auto-detects from `$SHELL`; pass an explicit name to override. Installs the `doma cd` shell function (a child process can't change its parent shell's cwd, so the function lives in your shell rather than the binary).
+
+## `doctor`
+
+```
+doma doctor
+```
+
+Reports paths (home / config / DB), config-file status, and database stats (directories, tags, missing-on-disk count, schema version). Run this first if anything looks off.

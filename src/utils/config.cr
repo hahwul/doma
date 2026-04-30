@@ -29,13 +29,6 @@ module Doma
       File.join(home, "doma.db")
     end
 
-    # Marker file we drop after the first cd-without-wrapper hint, so the
-    # user only sees the install nudge once. Lives next to the db so it
-    # stays bound to the per-machine state.
-    def cd_hint_marker : String
-      File.join(home, ".cd-hint-shown")
-    end
-
     # Make sure the home directory exists, translating the common
     # misconfiguration ("$DOMA_HOME points at a regular file") into a
     # ConfigError with a clear message instead of letting the

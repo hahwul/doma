@@ -4,7 +4,7 @@ description = "Make doma cd actually change your shell's working directory."
 weight = 3
 +++
 
-`doma cd` is a child process. It can't change its parent shell's working directory — that's a POSIX rule, not a doma limitation. To work around it, doma ships a tiny shell wrapper that captures the printed path and runs `cd` for you. The same pattern zoxide, starship, and mise use.
+`doma cd` lives in a small shell function, not in the binary itself — a child process can't change its parent shell's working directory (POSIX, not a doma limitation). The function takes a tag, calls `doma list -t <tag> --pick` to resolve it to a single path, then runs `builtin cd` for you. The same pattern zoxide, starship, and mise use.
 
 ## One-shot install
 
@@ -34,18 +34,18 @@ doma setup init fish | source
 
 ## Without the wrapper
 
-`doma cd` still prints the resolved path, so you can use it inline:
+The binary itself doesn't ship a `cd` subcommand — calling `doma cd` directly errors and points you here. For scripts and one-offs that don't want the wrapper, use `list --pick` inline:
 
 ```bash
-cd "$(doma cd crystal)"
+cd "$(doma list -t crystal --pick)"
 ```
 
-The first time `doma cd` notices its output is going straight to a TTY (instead of being captured by the wrapper), it emits a one-time stderr hint pointing at `doma setup install`. The hint is suppressed on subsequent runs via a marker file in `~/.config/doma/`.
+`--pick` prints exactly one path: the only match if there's one, an interactive picker if you're on a TTY, or the most-recent match (with a stderr advisory) if you're piping.
 
 ## Verifying
 
 ```bash
-doma setup doctor
+doma doctor
 ```
 
 The `doctor` command reports where doma's database lives, whether your config parses, and the schema version. It doesn't directly check whether the wrapper is loaded — the easiest test is to run `doma cd` and see if your shell actually moved.

@@ -28,8 +28,8 @@ Path/basename hits show up regardless of tag state; tag-name hits filter out exp
 ## Glob filtering on tags
 
 ```bash
-doma list -t 'work/*'         # every path whose tag matches the glob
-doma cd 'work*' --first       # navigate to the most-recent matching dir
+doma list -t 'work/*'                         # every path whose tag matches the glob
+doma list -t 'work*' --pick --first --by recent  # most-recent matching dir on stdout
 ```
 
 `*` and `?` in a tag argument switch matching from exact-equal to SQLite GLOB. Unquote at your own risk — your shell may expand the glob first; quoting is the safe form.
@@ -71,7 +71,7 @@ For scripting, `--json` emits the same data structured.
 ## Doctor
 
 ```bash
-doma setup doctor
+doma doctor
 ```
 
 Not really a stats command, but adjacent: reports doma's database location, size, schema version, and how many entries are tracking now-missing paths. A clean baseline for "is doma healthy" checks.
@@ -79,8 +79,8 @@ Not really a stats command, but adjacent: reports doma's database location, size
 ## Cleanup
 
 ```bash
-doma rm --gone        # entries whose path no longer exists on disk
-doma rm --expired     # tag rows whose TTL has elapsed
+doma prune --gone        # entries whose path no longer exists on disk
+doma prune --expired     # tag rows whose TTL has elapsed
 ```
 
-Both are bulk operations and refuse to combine with explicit paths. Run them when the report from `setup doctor` shows drift.
+Both are bulk-only operations — they refuse to combine and have no per-path form by design (use `rm <path>` for targeted deletion). Run them when the report from `doctor` shows drift.

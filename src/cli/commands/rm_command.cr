@@ -10,18 +10,15 @@ module Doma::CLI
   class RmCommand
     def run(args : Array(String))
       tags = [] of String
-      gone = false
-      expired = false
       hard = false
       positional = [] of String
 
       parser = OptionParser.new do |p|
-        p.banner = "Usage: doma rm [<path> ...] [-t TAG ...] [--gone] [--expired] [--hard]"
+        p.banner = "Usage: doma rm <path> [<path> ...] [-t TAG ...] [--hard]\n" \
+                   "  (bulk cleanup: doma prune --gone | --expired)"
         p.on("-t TAG", "--tag=TAG", "Remove this tag (repeatable, comma-separated allowed)") do |t|
           t.split(',').each { |x| tags << x.strip unless x.strip.empty? }
         end
-        p.on("--gone", "Remove every entry whose path no longer exists on disk") { gone = true }
-        p.on("--expired", "Remove every tag whose TTL has elapsed") { expired = true }
         p.on("--hard", "Skip the trash; delete permanently") { hard = true }
         p.on("-h", "--help", "Show help") do
           puts p
@@ -34,29 +31,7 @@ module Doma::CLI
       end
       parser.parse(args)
 
-      if gone && expired
-        raise Doma::ValidationError.new("--gone and --expired cannot be combined")
-      end
-
-      if gone
-        # `--gone` is mutually exclusive with explicit paths/tags: it's a
-        # bulk maintenance operation, not a per-entry action. Refusing
-        # the combination prevents surprises like "I asked to remove a
-        # specific path, why did 12 others also disappear?"
-        unless positional.empty? && tags.empty?
-          raise Doma::ValidationError.new("--gone cannot be combined with paths or -t")
-        end
-        return run_gone
-      end
-
-      if expired
-        unless positional.empty? && tags.empty?
-          raise Doma::ValidationError.new("--expired cannot be combined with paths or -t")
-        end
-        return run_expired
-      end
-
-      raise Doma::ValidationError.new("path is required (or use --gone / --expired)") if positional.empty?
+      raise Doma::ValidationError.new("path is required (use `doma prune --gone | --expired` for bulk cleanup)") if positional.empty?
 
       # Validate up front so a misspelled or invalid tag name fails fast
       # with a clear error, instead of silently no-op'ing inside
@@ -76,9 +51,8 @@ module Doma::CLI
           if cleaned_tags.empty?
             abs = Doma::Validator.canonicalize(path)
             # Snapshot first so a soft-delete can restore the row
-            # exactly. `--hard` skips the snapshot — housekeeping like
-            # `--gone` and `--expired` likewise bypass the trash via
-            # their own code paths above.
+            # exactly. `--hard` skips the snapshot; bulk cleanup paths
+            # (`doma prune --gone | --expired`) skip it on their own.
             entry = hard ? nil : Doma::Trash.snapshot(db, abs)
             if db.remove_path(path)
               if hard
@@ -112,40 +86,6 @@ module Doma::CLI
       return raw if raw.includes?('/') || raw.includes?('.') || raw.includes?('~')
       return raw unless raw.matches?(/\A[0-9a-fA-F]{4,16}\z/)
       Doma::ShortIdResolver.resolve(db, raw) || raw
-    end
-
-    private def run_gone
-      db = Doma::Database.open
-      begin
-        # List first so the user sees what was removed; reporting the
-        # count alone leaves them guessing whether anything important
-        # got swept up.
-        dead = db.dead_paths
-        if dead.empty?
-          Doma::Logger.info "no missing paths to prune"
-          return
-        end
-
-        dead.each { |e| Doma::Logger.info "  #{e.path}" }
-        removed = db.prune_dead!
-        Doma::Logger.success "pruned #{removed} missing path(s)"
-      ensure
-        db.close
-      end
-    end
-
-    private def run_expired
-      db = Doma::Database.open
-      begin
-        removed = db.prune_expired!
-        if removed == 0
-          Doma::Logger.info "no expired tags to prune"
-        else
-          Doma::Logger.success "pruned #{removed} expired tag association(s)"
-        end
-      ensure
-        db.close
-      end
     end
   end
 end

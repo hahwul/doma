@@ -44,35 +44,39 @@ end
 # ---------- rm ----------
 
 describe "doma rm" do
-  it "rejects --gone combined with explicit paths" do
+  it "[no path] errors with 2 and points at prune for bulk cleanup" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     with_home do |home|
-      seed_home(home)
-      r = run(["rm", "/tmp", "--gone"], {"DOMA_HOME" => home})
+      r = run(["rm"], {"DOMA_HOME" => home})
       r[:status].exit_code.should eq(2)
-      r[:err].should contain("--gone cannot be combined")
+      r[:err].should contain("path is required")
+      r[:err].should contain("doma prune")
     end
   end
 
-  it "rejects --gone --expired together" do
+  it "[--gone] is no longer accepted on rm (moved to prune)" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     with_home do |home|
-      seed_home(home)
-      r = run(["rm", "--gone", "--expired"], {"DOMA_HOME" => home})
-      r[:status].exit_code.should eq(2)
-      r[:err].should contain("--gone and --expired cannot be combined")
+      r = run(["rm", "--gone"], {"DOMA_HOME" => home})
+      # OptionParser::InvalidOption surfaces as exit 1.
+      r[:status].exit_code.should eq(1)
+      r[:err].should contain("--gone")
     end
   end
+end
 
+# ---------- prune ----------
+
+describe "doma prune" do
   it "[--gone] prunes paths that no longer exist on disk" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     with_home do |home|
-      vanish = File.tempname("doma-rm-vanish")
+      vanish = File.tempname("doma-prune-vanish")
       FileUtils.mkdir_p(vanish)
       run(["add", vanish, "-t", "doomed"], {"DOMA_HOME" => home})
       FileUtils.rm_rf(vanish)
 
-      r = run(["rm", "--gone"], {"DOMA_HOME" => home})
+      r = run(["prune", "--gone"], {"DOMA_HOME" => home})
       r[:status].exit_code.should eq(0)
       # Logger.success writes to STDOUT, not STDERR — important
       # because pipelines depend on it.
@@ -87,7 +91,7 @@ describe "doma rm" do
       run(["add", "/tmp", "-t", "fast", "--ttl", "1s"], {"DOMA_HOME" => home})
       sleep 1.5.seconds
 
-      r = run(["rm", "--expired"], {"DOMA_HOME" => home})
+      r = run(["prune", "--expired"], {"DOMA_HOME" => home})
       r[:status].exit_code.should eq(0)
 
       # Dir is still listed (it just has no tags now), tag is gone.
@@ -96,12 +100,21 @@ describe "doma rm" do
     end
   end
 
-  it "[no path, no flag] errors with 2" do
+  it "rejects --gone --expired together" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     with_home do |home|
-      r = run(["rm"], {"DOMA_HOME" => home})
+      r = run(["prune", "--gone", "--expired"], {"DOMA_HOME" => home})
       r[:status].exit_code.should eq(2)
-      r[:err].should contain("path is required")
+      r[:err].should contain("cannot be combined")
+    end
+  end
+
+  it "[no flag] errors with 2" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      r = run(["prune"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(2)
+      r[:err].should contain("requires --gone or --expired")
     end
   end
 end
@@ -386,6 +399,9 @@ describe "doma setup init" do
     r[:out].should contain("doma() {")
     r[:out].should contain(%(if [ "$1" = "cd" ]; then))
     r[:out].should contain("builtin cd --")
+    # Wrapper delegates resolution to `doma list --pick` rather than a
+    # dedicated `cd` subcommand — the binary no longer ships one.
+    r[:out].should contain("--pick")
   end
 
   it "[bash] same wrapper as zsh" do
@@ -401,6 +417,7 @@ describe "doma setup init" do
     r[:status].exit_code.should eq(0)
     r[:out].should contain("function doma")
     r[:out].should contain(%($argv[1] = "cd"))
+    r[:out].should contain("--pick")
   end
 
   it "[unsupported] errors with 2" do
@@ -427,7 +444,7 @@ describe "doma setup dispatch" do
     r[:out].should contain("Usage: doma setup")
     r[:out].should contain("install")
     r[:out].should contain("init")
-    r[:out].should contain("doctor")
+    r[:out].should contain("completion")
   end
 
   it "[unknown action] errors with 2" do
@@ -437,15 +454,33 @@ describe "doma setup dispatch" do
     r[:err].should contain("unknown setup action")
   end
 
-  it "[doctor] reports clean status on a fresh home" do
+  it "[setup doctor] redirects to top-level doctor" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    r = run(["setup", "doctor"])
+    r[:status].exit_code.should eq(1)
+    r[:err].should contain("moved to `doma doctor`")
+  end
+end
+
+# ---------- doctor (top-level) ----------
+
+describe "doma doctor" do
+  it "reports clean status on a fresh home" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     with_home do |home|
-      r = run(["setup", "doctor"], {"DOMA_HOME" => home})
+      r = run(["doctor"], {"DOMA_HOME" => home})
       r[:status].exit_code.should eq(0)
       r[:out].should contain("Paths")
       r[:out].should contain("Config")
       r[:out].should contain("Database")
     end
+  end
+
+  it "appears in --help banner under top-level commands" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    r = run(["--help"])
+    # `doctor` should be listed as its own row, not buried under `setup`.
+    r[:out].should match(/^\s+doctor\s/m)
   end
 end
 
@@ -456,8 +491,9 @@ describe "doma list flags" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     with_home do |home|
       seed_home(home)
-      # Bump /var so it floats to the top.
-      run(["cd", "fs", "--first"], {"DOMA_HOME" => home})
+      # Bump /var so it floats to the top. `list --pick --first` is the
+      # scriptable single-pick path that also stamps recency.
+      run(["list", "-t", "fs", "--pick", "--first"], {"DOMA_HOME" => home})
 
       r = run(["list", "--by", "recent", "--paths"], {"DOMA_HOME" => home})
       first_line = r[:out].split('\n', remove_empty: true).first
@@ -556,39 +592,43 @@ describe "doma add flags" do
   end
 end
 
-# ---------- cd advanced ----------
+# ---------- list --pick ----------
 
-describe "doma cd advanced" do
-  it "[short_id exact match] resolves directly without picker" do
+describe "doma list --pick" do
+  it "[single match] prints the path and exits 0" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     with_home do |home|
-      run(["add", "/tmp", "-t", "x"], {"DOMA_HOME" => home})
-      list = run(["list", "--json"], {"DOMA_HOME" => home})
-      id = JSON.parse(list[:out]).as_a.first.as_h["short_id"].as_s
-
-      r = run(["cd", id], {"DOMA_HOME" => home})
+      run(["add", "/tmp", "-t", "single"], {"DOMA_HOME" => home})
+      r = run(["list", "-t", "single", "--pick"], {"DOMA_HOME" => home})
       r[:status].exit_code.should eq(0)
       r[:out].strip.should eq("/private/tmp")
     end
   end
 
-  it "[--index 0] errors as out-of-range" do
+  it "[zero matches] errors with 3 and a NotFound hint" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     with_home do |home|
-      run(["add", "/tmp", "-t", "single"], {"DOMA_HOME" => home})
-      r = run(["cd", "single", "--index", "0"], {"DOMA_HOME" => home})
-      r[:status].exit_code.should eq(2)
-      r[:err].should contain("index out of range")
+      run(["add", "/tmp", "-t", "demo"], {"DOMA_HOME" => home})
+      r = run(["list", "-t", "missing", "--pick"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(3)
     end
   end
 
-  it "[--index non-integer] errors with 2" do
+  it "[--pick + --json] errors as incompatible" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     with_home do |home|
-      run(["add", "/tmp", "-t", "single"], {"DOMA_HOME" => home})
-      r = run(["cd", "single", "--index", "abc"], {"DOMA_HOME" => home})
+      r = run(["list", "--pick", "--json"], {"DOMA_HOME" => home})
       r[:status].exit_code.should eq(2)
-      r[:err].should contain("must be an integer")
+      r[:err].should contain("incompatible")
+    end
+  end
+
+  it "[--query without --pick] is rejected" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      r = run(["list", "--query", "foo"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(2)
+      r[:err].should contain("--query requires --pick")
     end
   end
 end
@@ -679,16 +719,17 @@ describe "doma mark validation" do
   end
 end
 
-# ---------- cd path-like miss ----------
+# ---------- list --pick path-like miss ----------
 
-describe "doma cd path-like miss" do
+describe "doma list --pick path-like miss" do
   it "[/abs/path] hints at `doma add` rather than tag suggestions" do
-    # User instinct is `doma cd /some/path` to navigate; surface the
-    # right next step instead of "did you mean some-tag?".
+    # User instinct is `doma cd /some/path` to navigate; the shell
+    # wrapper translates that to `list -t /some/path --pick`. Surface
+    # the right next step instead of "did you mean some-tag?".
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     with_home do |home|
       run(["add", "/tmp", "-t", "demo"], {"DOMA_HOME" => home})
-      r = run(["cd", "/var"], {"DOMA_HOME" => home})
+      r = run(["list", "-t", "/var", "--pick"], {"DOMA_HOME" => home})
       r[:status].exit_code.should eq(3)
       r[:err].should contain("to register this path")
       r[:err].should contain("doma add /var")
@@ -699,7 +740,7 @@ describe "doma cd path-like miss" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     with_home do |home|
       run(["add", "/tmp", "-t", "demo"], {"DOMA_HOME" => home})
-      r = run(["cd", "~/Downloads"], {"DOMA_HOME" => home})
+      r = run(["list", "-t", "~/Downloads", "--pick"], {"DOMA_HOME" => home})
       r[:status].exit_code.should eq(3)
       r[:err].should contain("doma add ~/Downloads")
     end
@@ -709,7 +750,7 @@ describe "doma cd path-like miss" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     with_home do |home|
       run(["add", "/tmp", "-t", "demo"], {"DOMA_HOME" => home})
-      r = run(["cd", "dem"], {"DOMA_HOME" => home})
+      r = run(["list", "-t", "dem", "--pick"], {"DOMA_HOME" => home})
       r[:status].exit_code.should eq(3)
       r[:err].should contain("Did you mean")
       r[:err].should_not contain("to register this path")
@@ -805,17 +846,17 @@ describe "doma setup completion" do
   end
 end
 
-# ---------- cd ambiguous auto-pick ----------
+# ---------- list --pick ambiguous auto-pick ----------
 
-describe "doma cd ambiguous" do
+describe "doma list --pick ambiguous" do
   it "warns on stderr when multiple matches auto-resolve to the first" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     with_home do |home|
       seed_home(home) # `shared` matches /var + $HOME
-      r = run(["cd", "shared"], {"DOMA_HOME" => home})
+      r = run(["list", "-t", "shared", "--pick"], {"DOMA_HOME" => home})
       r[:status].exit_code.should eq(0)
       r[:err].should contain("matches 2 directories")
-      r[:err].should contain("--index")
+      r[:err].should contain("--by recent")
     end
   end
 
@@ -823,7 +864,7 @@ describe "doma cd ambiguous" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     with_home do |home|
       seed_home(home) # `scratch` is only on /tmp
-      r = run(["cd", "scratch"], {"DOMA_HOME" => home})
+      r = run(["list", "-t", "scratch", "--pick"], {"DOMA_HOME" => home})
       r[:status].exit_code.should eq(0)
       r[:err].should_not contain("matches")
     end
@@ -833,19 +874,19 @@ describe "doma cd ambiguous" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     with_home do |home|
       seed_home(home)
-      r = run(["-q", "cd", "shared"], {"DOMA_HOME" => home})
+      r = run(["-q", "list", "-t", "shared", "--pick"], {"DOMA_HOME" => home})
       r[:status].exit_code.should eq(0)
       r[:err].should_not contain("matches")
     end
   end
 
-  it "explicit --index skips the advisory (user already disambiguated)" do
+  it "--first picks deterministically without launching the picker" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     with_home do |home|
       seed_home(home)
-      r = run(["cd", "shared", "--index", "1"], {"DOMA_HOME" => home})
+      r = run(["list", "-t", "shared", "--pick", "--first"], {"DOMA_HOME" => home})
       r[:status].exit_code.should eq(0)
-      r[:err].should_not contain("matches")
+      r[:out].strip.empty?.should be_false
     end
   end
 end
@@ -991,7 +1032,7 @@ describe "doma add error format" do
       # Pre-fix: "✗ /no/such/dir: not a directory: /no/such/dir"
       # Post-fix: only one mention of the path.
       lines = r[:err].lines
-      err_line = lines.find(&.includes?("not a directory"))
+      err_line = lines.find(&.includes?("not a directory")).not_nil!
       err_line.scan(/\/no\/such\/dir/).size.should eq(1)
     end
   end
@@ -1055,6 +1096,77 @@ describe "doma add --git-tag debug" do
       ensure
         FileUtils.rm_rf(target)
       end
+    end
+  end
+end
+
+# ---------- info ----------
+
+describe "doma info" do
+  it "[registered path] shows short_id, basename, tags, timestamps" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      run(["add", "/tmp", "-t", "demo", "-t", "scratch"], {"DOMA_HOME" => home})
+      r = run(["info", "/tmp"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(0)
+      # Path canonicalized; both tags rendered as #-prefixed.
+      r[:out].should contain("/private/tmp")
+      r[:out].should contain("#demo")
+      r[:out].should contain("#scratch")
+      r[:out].should contain("basename")
+      r[:out].should contain("added")
+    end
+  end
+
+  it "[unregistered path] exits 3 with an `add` hint" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      run(["add", "/tmp", "-t", "demo"], {"DOMA_HOME" => home})
+      r = run(["info", "/var"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(3)
+      r[:err].should contain("not registered")
+      r[:err].should contain("doma add /var")
+    end
+  end
+
+  it "[--json] emits a structured payload with timestamps + exists" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      run(["add", "/tmp", "-t", "demo"], {"DOMA_HOME" => home})
+      r = run(["info", "/tmp", "--json"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(0)
+      h = JSON.parse(r[:out]).as_h
+      h["short_id"].as_s.size.should eq(7)
+      h["path"].as_s.should eq("/private/tmp")
+      h["basename"].as_s.should eq("tmp")
+      h["tags"].as_a.map(&.as_s).should eq(["demo"])
+      h["created_at"].as_i.should be > 0
+      h["last_used_at"].as_i.should eq(0)
+      h["exists"].as_bool.should be_true
+    end
+  end
+
+  it "[TTL tag] surfaces expiration in the JSON map" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      run(["add", "/tmp", "-t", "fast", "--ttl", "1h"], {"DOMA_HOME" => home})
+      r = run(["info", "/tmp", "--json"], {"DOMA_HOME" => home})
+      h = JSON.parse(r[:out]).as_h
+      h["expirations"].as_h["fast"].as_i.should be > 0
+    end
+  end
+
+  it "[missing on disk] reports exists: false but still resolves the entry" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      vanish = File.tempname("doma-info-vanish")
+      FileUtils.mkdir_p(vanish)
+      run(["add", vanish, "-t", "doomed"], {"DOMA_HOME" => home})
+      FileUtils.rm_rf(vanish)
+
+      r = run(["info", vanish], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(0)
+      r[:out].should contain("NO")
     end
   end
 end

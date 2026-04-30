@@ -101,12 +101,12 @@ files or making decisions, Pattern A keeps the work in your hands.
 
 ## Pitfalls
 
-- **`doma cd` does not change cwd.** It prints the resolved path to
-  stdout for the user's shell wrapper to consume. As an agent you can
-  still capture it (`path=$(doma cd <tag-or-id>)`), but with a tag that
-  matches multiple directories the non-TTY fallback silently returns
-  only the *first* match. When you need every path, use
-  `doma list -t TAG --paths` instead.
+- **`doma cd` is a shell function, not a binary subcommand.** Calling
+  the bare binary with `cd` prints an error pointing at
+  `doma setup install`. The agent-friendly equivalent is
+  `path=$(doma list -t <tag> --pick)` — it prints exactly one path
+  (most-recent under non-TTY, with a stderr advisory when the tag is
+  ambiguous). When you need every path, use `doma list -t TAG --paths`.
 
 - **Symlinks are resolved.** doma stores the canonical real path, so a
   registered `/var/foo` will surface as `/private/var/foo` on macOS.
@@ -127,8 +127,8 @@ files or making decisions, Pattern A keeps the work in your hands.
   tag to permanent. Be aware if you're scripting both operations on
   the same path.
 
-- **Bulk destructive ops need explicit user intent.** `rm --gone`,
-  `rm --expired`, and `import --replace` are sweeping operations.
+- **Bulk destructive ops need explicit user intent.** `prune --gone`,
+  `prune --expired`, and `import --replace` are sweeping operations.
   Don't reach for them as housekeeping unless the user asked. The
   per-path forms (`rm <path>`, `rm <path> -t TAG`) are fine when the
   user pointed at something specific.
@@ -143,9 +143,10 @@ files or making decisions, Pattern A keeps the work in your hands.
 | User says... | First doma call |
 |---|---|
 | "Update Crystal version in CI for all my Crystal projects" | `doma list -t crystal --paths` |
-| "Check git status across my work repos" | `doma list -t 'work/*' --paths` (glob applies to `list -t`, `run`, and `cd`) |
+| "Check git status across my work repos" | `doma list -t 'work/*' --paths` (glob applies to `list -t` and `run`) |
 | "Find that bookmarked thing about auth" | `doma list -t bookmark auth` (tag filter ∩ substring `auth`) |
 | "What was I working on last?" | `doma list --by recent` (top entries are most-recent cd targets) |
+| "Is this directory registered? with what tags?" | `doma info` (cwd) or `doma info <path>` — single-entry detail, exits 3 if not registered |
 | "Run specs across all the Crystal projects in parallel" | `doma run crystal --parallel -- crystal spec` |
 | "I'll be working on this project for a while" | `doma add . -t <category>` |
 | "Bookmark this so I come back later" | `doma mark <name>` |
@@ -164,11 +165,13 @@ when the list reorders).
 ```bash
 ID=$(doma list -t crystal --json | jq -r '.[] | select(.basename=="doma") | .short_id')
 # ... later, after the user moved the directory ...
-doma cd "$ID"   # still resolves; printed path reflects the new location
+PATH_NOW=$(doma list --json | jq -r --arg id "$ID" '.[] | select(.short_id==$id) | .path')
 ```
 
-`doma cd` accepts both full short_ids and unique prefixes (`cd 0d` if
-no other id starts with `0d`).
+short_ids are accepted by `rm <id>` and `trash restore <id>`. They are
+*not* accepted by `list --pick` (use the tag), and the bare binary's
+`cd` subcommand has been removed in favor of the shell-wrapper +
+`list --pick` split.
 
 ## When NOT to invoke
 

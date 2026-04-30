@@ -84,14 +84,14 @@ describe "CLI exit codes match error classes" do
     end
   end
 
-  it "not-found → 3 (e.g. cd to an unknown tag)" do
+  it "not-found → 3 (e.g. picking an unknown tag)" do
     pending! "binary not built" unless File.exists?(bin)
     home = File.tempname("doma-exit-3")
     FileUtils.mkdir_p(home)
     begin
       sink = IO::Memory.new
       status = Process.run(
-        bin, ["cd", "this-tag-does-not-exist"],
+        bin, ["list", "-t", "this-tag-does-not-exist", "--pick"],
         env: {"DOMA_HOME" => home}, output: sink, error: sink,
       )
       status.exit_code.should eq(3)

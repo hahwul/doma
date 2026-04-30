@@ -6,15 +6,17 @@ require "../utils/suggester"
 require "./commands/add_command"
 require "./commands/mark_command"
 require "./commands/rm_command"
+require "./commands/prune_command"
 require "./commands/list_command"
+require "./commands/info_command"
 require "./commands/tags_command"
-require "./commands/cd_command"
 require "./commands/run_command"
 require "./commands/export_command"
 require "./commands/import_command"
 require "./commands/rename_command"
 require "./commands/stats_command"
 require "./commands/setup_command"
+require "./commands/doctor_command"
 require "./commands/move_command"
 require "./commands/config_command"
 require "./commands/trash_command"
@@ -23,8 +25,8 @@ module Doma
   module CLI
     class Runner
       KNOWN_COMMANDS = %w[
-        add mark rm remove list ls tags rename move mv
-        stats cd run export import setup config trash
+        add mark rm remove prune list ls info tags rename move mv
+        stats run export import setup doctor config trash
         version help -V --version -h --help
       ]
 
@@ -61,12 +63,24 @@ module Doma
           MarkCommand.new.run(args)
         when "rm", "remove"
           RmCommand.new.run(args)
+        when "prune"
+          PruneCommand.new.run(args)
         when "list", "ls"
           ListCommand.new.run(args)
+        when "info"
+          InfoCommand.new.run(args)
         when "tags"
           TagsCommand.new.run(args)
         when "cd"
-          CdCommand.new.run(args)
+          # The binary doesn't ship a `cd` subcommand — directory change
+          # has to happen in the parent shell, which a child process
+          # can't do. The shell function installed by `doma setup install`
+          # provides `doma cd <tag>` by calling `doma list -t <tag> --pick`
+          # and running `cd` itself.
+          Doma::Logger.error "`doma cd` is provided by the shell wrapper, not the binary"
+          STDERR.puts "  Run `doma setup install` to enable it (or `eval \"$(doma setup init <shell>)\"`)."
+          STDERR.puts "  In a script, use: cd \"$(doma list -t <tag> --pick)\""
+          exit 1
         when "run"
           RunCommand.new.run(args)
         when "export"
@@ -81,6 +95,8 @@ module Doma
           StatsCommand.new.run(args)
         when "setup"
           SetupCommand.new.run(args)
+        when "doctor"
+          DoctorCommand.new.run(args)
         when "config"
           ConfigCommand.new.run(args)
         when "trash"
@@ -146,16 +162,18 @@ module Doma
         {"add [<path>]", "Register a path (defaults to .) with tags"},
         {"mark <tag> ...", "Tag cwd with temporary (7d) tags  (alias of add . -t … --tmp)"},
         {"rm <path>", "Remove tag(s) or the path itself"},
+        {"prune --gone|--expired", "Bulk-delete missing paths or expired tags"},
         {"move <old> <new>", "Move a registered path (tags carry over)"},
         {"tags", "List all tags with counts"},
         {"rename <old> <new>", "Rename or merge a tag"},
-        {"list [<query>] [-t TAG]", "List/search directories (--json, --paths)"},
-        {"cd [<tag>|<id>]", "Resolve a directory (tag or short_id prefix)"},
+        {"list [<query>] [-t TAG]", "List/search directories (--json, --paths, --pick)"},
+        {"info [<path>]", "Show one entry's tags / TTLs / last-used (default: cwd)"},
         {"stats", "Top tags + recently added paths"},
         {"run <tag> -- <cmd>", "Run a command in every tagged directory"},
         {"export", "Dump the database (--json | --yaml)"},
         {"import <file>", "Load a snapshot (--merge | --replace)"},
-        {"setup <action>", "install / init / doctor — see `doma setup --help`"},
+        {"setup <action>", "install / init / completion — see `doma setup --help`"},
+        {"doctor", "Check the install (paths, config, DB)"},
         {"config <action>", "get / set / list — see `doma config --help`"},
         {"trash <action>", "list / restore / empty — recover from `rm`"},
         {"version | help", "Show version / this help"},
@@ -183,17 +201,19 @@ module Doma
         puts "      --no-color, --color Force color off / on"
         puts "  -y, --yes               Assume \"yes\" for confirmation prompts (env: DOMA_YES=1)"
         puts ""
-        puts "Make `doma cd` actually change directory:"
+        puts "Enable `doma cd <tag>` in your shell:"
         puts "  doma setup install                # auto-append to your shell's rc file"
         puts "  eval \"$(doma setup init zsh)\"     # or do it yourself"
         puts ""
-        puts "Without the wrapper, `doma cd` only prints the resolved path —"
-        puts "use `cd \"$(doma cd <tag>)\"` to apply it manually."
+        puts "The cd command lives in a shell function (a child process can't"
+        puts "change its parent shell's cwd). In scripts, use --pick directly:"
+        puts "  cd \"$(doma list -t <tag> --pick)\""
         puts ""
         puts "Pipelines:"
         puts "  doma list -t crystal --paths            # one path per line"
         puts "  doma list -t crystal -0 | xargs -0 ...  # NUL-safe for spaces"
         puts "  doma list -t crystal --json | jq        # structured"
+        puts "  doma list -t crystal --pick             # one path (interactive if TTY)"
         puts "  doma tags --names                       # just tag names"
         puts ""
       end

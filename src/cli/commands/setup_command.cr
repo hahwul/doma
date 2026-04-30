@@ -1,21 +1,19 @@
 require "../../utils/errors"
 require "../../utils/logger"
 require "./completion_command"
-require "./doctor_command"
 require "./init_command"
 require "./install_command"
 
 module Doma::CLI
   # Umbrella for the once-per-machine setup actions: wiring the shell
-  # wrapper into rc, printing the wrapper for manual install, and
-  # diagnosing the install state. Grouping them under `doma setup` keeps
-  # the top-level command list focused on day-to-day operations.
+  # wrapper into rc, printing the wrapper for manual install, and shell
+  # completion. (Install diagnostics live at the top level as
+  # `doma doctor` — they aren't shell-integration-specific.)
   class SetupCommand
     ACTIONS = {
       "install"    => "Append the shell wrapper to your rc file",
       "init"       => "Print the wrapper (for manual install)",
       "completion" => "Print a shell completion script (bash|zsh|fish)",
-      "doctor"     => "Check the install (DB, config)",
     }
 
     def run(args : Array(String))
@@ -29,10 +27,16 @@ module Doma::CLI
       when "install"    then InstallCommand.new.run(args)
       when "init"       then InitCommand.new.run(args)
       when "completion" then CompletionCommand.new.run(args)
-      when "doctor"     then DoctorCommand.new.run(args)
+      when "doctor"
+        # Doctor moved to the top level (`doma doctor`). Keep a clear
+        # redirect for users with the old habit rather than silently
+        # erroring or, worse, double-dispatching.
+        Doma::Logger.error "`doma setup doctor` moved to `doma doctor`"
+        STDERR.puts "  Run `doma doctor` instead."
+        exit 1
       else
         raise Doma::ValidationError.new(
-          "unknown setup action '#{sub}' (try install, init, completion, doctor)"
+          "unknown setup action '#{sub}' (try install, init, completion)"
         )
       end
     end

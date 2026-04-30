@@ -436,6 +436,33 @@ module Doma
       @db.query_all("SELECT name FROM tags ORDER BY name", as: String)
     end
 
+    # Single-row lookup by canonical path. Returns the bookkeeping the
+    # `info` command needs (timestamps + ids) without forcing callers to
+    # scan `directories()` and filter — the caller already has the exact
+    # path, so a direct lookup is both clearer and avoids reading every
+    # row. Tags are not included here; callers compose with `tags_for`
+    # and `tag_expirations` so we don't grow another GROUP_CONCAT join
+    # that's only used in one place.
+    record PathInfo,
+      id : Int64,
+      short_id : String,
+      path : String,
+      basename : String,
+      created_at : Int64,
+      last_used_at : Int64
+
+    def find_path_info(path : String) : PathInfo?
+      row = @db.query_one?(
+        "SELECT id, short_id, path, basename, created_at, last_used_at " \
+        "FROM directories WHERE path = ?",
+        path,
+        as: {Int64, String, String, String, Int64, Int64}
+      )
+      return nil unless row
+      id, short_id, p, basename, created_at, last_used_at = row
+      PathInfo.new(id, short_id, p, basename, created_at, last_used_at)
+    end
+
     # Resolves a short_id prefix to matching directories. The cd
     # command uses this to support both the bare form (`cd 0dc0db9`)
     # and prefix typing (`cd 0d` if unique). Empty result = no match;

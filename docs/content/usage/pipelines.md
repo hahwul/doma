@@ -72,6 +72,6 @@ Without special handling that would surface as `internal error: Broken pipe`. do
 
 ## What doesn't compose
 
-`doma cd` is interactive when there's more than one match. In a pipeline (no TTY on stdin) it falls back to "first match" automatically, but that may not be what you want. For non-interactive resolution, use `--first` explicitly or query via `list` and pick yourself.
+`doma list --pick` is interactive when there's more than one match. In a pipeline (no TTY on stdin) it falls back to "first match" automatically with a stderr advisory, but that may not be what you want. For deterministic resolution, pass `--first` explicitly, narrow the filter (`-t`/`--query`/positional substring), or skip `--pick` and drive selection yourself with `list --paths`.
 
 `doma run` produces decorated stderr output that's hard to parse mechanically. If you need machine-readable per-directory results, drive the loop yourself with `list --paths` and capture exit codes from the inner command.

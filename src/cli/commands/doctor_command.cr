@@ -12,7 +12,7 @@ module Doma::CLI
   class DoctorCommand
     def run(args : Array(String))
       parser = OptionParser.new do |p|
-        p.banner = "Usage: doma setup doctor"
+        p.banner = "Usage: doma doctor"
         p.on("-h", "--help", "Show help") do
           puts p
           exit 0
@@ -70,7 +70,7 @@ module Doma::CLI
         kv "tags", stats.total_tags.to_s
         missing = db.dead_paths.size
         if missing > 0
-          kv "missing on disk", "#{missing} (run `doma rm --gone` to prune)"
+          kv "missing on disk", "#{missing} (run `doma prune --gone` to clean up)"
         end
         kv "schema", "v#{Doma::Snapshot::SCHEMA_VERSION}"
       rescue ex

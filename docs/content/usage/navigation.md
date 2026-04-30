@@ -1,27 +1,34 @@
 +++
 title = "Navigation"
-description = "Use doma cd to jump to a tagged directory, with a short_id fallback for direct addressing."
+description = "Resolve a tagged directory to a single path with list --pick, then cd to it via the shell wrapper."
 weight = 2
 +++
 
-`doma cd` resolves a directory and prints its path to stdout. With the [shell wrapper](../../start/shell-integration/) installed, your shell `cd`s to that path; without it, you can use `cd "$(doma cd <tag>)"` manually.
+The binary itself doesn't ship a `cd` subcommand — a child process can't change its parent shell's working directory. Instead, doma splits the job in two: `doma list --pick` resolves the filtered set down to a single path on stdout, and the shell wrapper installed by `doma setup install` provides `doma cd <tag>` by capturing that path and running `cd` for you.
 
-## Three resolution strategies
+## The primitive
 
 ```bash
-doma cd <tag>      # match a tag name (the typical case)
-doma cd <id>       # match a short_id, exactly or by prefix
-doma cd            # browse every registered directory
+doma list -t crystal --pick     # one path on stdout (interactive if TTY)
+doma list --pick                # browse every registered directory
+doma list -t 'work/*' --pick    # glob-filtered set
 ```
 
-Resolution order: tag name first, then short_id prefix. A literal tag named `abc` always wins over a short_id that happens to start with `abc`. The short_id branch only triggers when the input is hex (`[0-9a-f]+`), so a tag-typo never silently resolves to an unrelated directory.
+Resolution rules:
 
-## Multiple matches: the picker
+- **Single match** → that path is printed.
+- **Multiple matches + TTY** → built-in picker opens.
+- **Multiple matches + non-TTY** → most-recent match wins, with a stderr advisory.
+- **Zero matches** → exit code 3, NotFound error.
 
-When a tag covers more than one path, `doma cd` opens the built-in picker:
+When the input *looks like a path* (`/var`, `~/Downloads`, `./src`), the miss hint steers you to `doma add` instead of suggesting an unrelated tag.
+
+## The picker
+
+When a tag covers more than one path, `--pick` opens the built-in picker:
 
 ```
-doma cd crystal>
+doma pick -t crystal›
 ▌ /Users/me/Projects/doma         #cli #crystal
   /Users/me/Projects/sandbox      #crystal
   /Users/me/Projects/cr-utils     #crystal
@@ -29,35 +36,39 @@ doma cd crystal>
 
 - Type to filter (case-insensitive substring match across path and tags).
 - ↑/↓ to move; Enter to pick; Esc / Ctrl-C to cancel.
-- The order is recency-first — the directory you `cd`'d into most recently floats to the top.
+- The order is recency-first — the directory you used most recently floats to the top.
 
-The picker is Crystal-native; you don't need `fzf` installed. (Earlier doma versions shelled out to `fzf` — that dependency was dropped.)
+The picker is Crystal-native; you don't need `fzf` installed.
 
 ## Skipping the picker
 
 ```bash
-doma cd crystal --first         # most-recent without prompting
-doma cd crystal --index 2       # the N-th match (1-based)
-doma cd 0dc0db9                 # exact short_id, no picker needed
+doma list -t crystal --pick --first       # most-recent without prompting
+doma list -t crystal --pick --builtin     # force picker even off-TTY
+doma list -t crystal --pick --query auth  # pre-filter the picker
 ```
 
-Inside scripts (where stdin isn't a TTY), `doma cd` automatically falls back to `--first` semantics so the command never blocks waiting for input.
+Without `--first`, scripts (no TTY on stdin) auto-resolve to "first match" with a stderr warning so you don't silently get a heuristic pick.
 
-## Browsing without a tag
+## Using it as `cd`
+
+The shell wrapper from `doma setup install` provides the familiar form:
 
 ```bash
-doma cd
+doma cd crystal                  # interactive picker, then cd
 ```
 
-Lists every registered directory. Useful when you remember the project name but not the tag. Add `--query` to pre-filter:
+See [Shell integration](../../start/shell-integration/) for the one-line setup.
+
+For scripts and one-offs without the wrapper, the inline form works everywhere:
 
 ```bash
-doma cd --query auth
+cd "$(doma list -t crystal --pick)"
 ```
 
 ## Frecency
 
-Every successful `cd` updates a `last_used_at` timestamp on the chosen directory. That feeds two places:
+Every successful `--pick` updates a `last_used_at` timestamp on the chosen directory. That feeds two places:
 
 1. The picker default order (most-recently-used first).
 2. `doma list --by recent` — sort by recency rather than path.

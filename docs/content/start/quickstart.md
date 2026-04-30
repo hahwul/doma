@@ -35,13 +35,12 @@ The first column (`0dc0db9`) is a stable short_id. The path is the canonical rea
 doma cd crystal
 ```
 
-If you have one match it prints the path. With multiple matches you get an interactive picker — type to filter, ↑↓ to move, Enter to pick. **Without the shell wrapper, `doma cd` only prints the path; see [Shell integration](../shell-integration/) for the one-line setup.**
+`doma cd` lives in a small shell function shipped by `doma setup install` — a child process can't change its parent shell's working directory, so the function captures the picked path and runs `cd` itself. Under the hood it calls `doma list -t crystal --pick`. With multiple matches you get an interactive picker — type to filter, ↑↓ to move, Enter to pick. See [Shell integration](../shell-integration/) for the one-line setup.
 
-You can also jump by short_id, including a unique prefix:
+If you haven't installed the wrapper, the same primitive works inline in any script:
 
 ```bash
-doma cd 0dc0db9    # full
-doma cd 0d         # prefix, if no other dir starts with 0d
+cd "$(doma list -t crystal --pick)"
 ```
 
 ## 4. Operate on every dir under a tag

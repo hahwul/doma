@@ -43,7 +43,7 @@ For a custom TTL or a non-cwd path, fall back to `doma add` directly.
 When a tag's `expires_at` is in the past, the row is **hidden** from queries by default:
 
 - `doma list -t TAG` doesn't show it.
-- `doma cd TAG` won't navigate via it.
+- `doma list -t TAG --pick` (and the `doma cd TAG` shell wrapper that calls it) won't resolve via it.
 - The directory itself is unaffected — if it has other (non-expired) tags, it still appears under those.
 
 Expired rows aren't deleted on their own. Two reasons:
@@ -60,10 +60,10 @@ doma list --include-expired
 To physically remove every expired tag row:
 
 ```bash
-doma rm --expired
+doma prune --expired
 ```
 
-That's a maintenance op — it deletes the `directory_tags` rows whose TTL has elapsed and garbage-collects any tags left with no rows. Directories themselves are preserved.
+That's a maintenance op — it deletes the `directory_tags` rows whose TTL has elapsed and garbage-collects any tags left with no rows. Directories themselves are preserved. (Sister command: `doma prune --gone` for entries whose path no longer exists on disk.)
 
 ## Re-tag semantics
 

@@ -40,4 +40,4 @@ auto_tag:
 
 doma uses `PRAGMA user_version` to track the schema. Each release that needs new columns ships an additive migration; old databases upgrade transparently on first open. There's no manual migration step.
 
-The current schema version is reported under **Database** in `doma setup doctor`.
+The current schema version is reported under **Database** in `doma doctor`.

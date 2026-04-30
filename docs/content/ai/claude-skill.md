@@ -8,9 +8,9 @@ The repo ships [`skills/doma/SKILL.md`](https://github.com/hahwul/doma/blob/main
 
 1. **Recognize category-style requests** ("my Crystal projects", "all the directories tagged X", "every repo I marked as Y") and reach for `doma list -t TAG --paths` before guessing.
 2. **Pick the right output mode** — `--paths` for newline-separated, `-0` for NUL-safe pipelines, `--json` when it needs id/short_id/tags structurally.
-3. **Compose with its own tools** — the skill is explicit that `doma cd` is useless inside an agent (no parent shell to mutate); the agent should capture paths from `list` and pass them to `Bash` / `Read` / `Edit` directly.
+3. **Compose with its own tools** — the skill is explicit that `doma cd` lives in a shell wrapper and is useless inside an agent (no parent shell to mutate); the agent uses `doma list --pick` (one path) or `doma list --paths` (many) and passes the results to `Bash` / `Read` / `Edit` directly.
 4. **Treat write ops as intent-driven** — `add` and `mark` are encouraged when the user clearly wants to track or bookmark a directory, but the skill warns against running them as a side effect of unrelated work.
-5. **Avoid bulk-destructive housekeeping** — `rm --gone`, `rm --expired`, and `import --replace` are flagged as needing explicit user authorization.
+5. **Avoid bulk-destructive housekeeping** — `prune --gone`, `prune --expired`, and `import --replace` are flagged as needing explicit user authorization.
 
 ## Installing the skill
 

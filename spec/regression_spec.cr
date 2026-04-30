@@ -247,7 +247,7 @@ describe "doma doctor with corrupted DB" do
     stdout_buf = IO::Memory.new
     stderr_buf = IO::Memory.new
     Process.run(
-      bin, ["setup", "doctor"],
+      bin, ["doctor"],
       env: {"DOMA_HOME" => home}, output: stdout_buf, error: stderr_buf,
     )
     combined = stdout_buf.to_s + stderr_buf.to_s
@@ -258,10 +258,11 @@ describe "doma doctor with corrupted DB" do
   end
 end
 
-describe "doma cd --query in non-TTY" do
+describe "doma list --pick --query in non-TTY" do
   # The browse path used to ignore --query in non-TTY (First) mode and
-  # silently return the first overall entry. This regression spec drives
-  # the binary to confirm filtering happens before mode dispatch.
+  # silently return the first overall entry. The regression originally
+  # lived under `doma cd`; with cd lifted into a shell wrapper around
+  # `list --pick`, the same invariant moves here.
   bin = File.expand_path("../bin/doma", __DIR__)
 
   it "[bug] errors on no match instead of returning first entry" do
@@ -276,7 +277,7 @@ describe "doma cd --query in non-TTY" do
     stderr_buf = IO::Memory.new
     status = Process.run(
       bin,
-      ["cd", "--query", "totally-nonexistent"],
+      ["list", "--pick", "--query", "totally-nonexistent"],
       env: {"DOMA_HOME" => home}, output: stdout_buf, error: stderr_buf,
     )
     status.exit_code.should eq(3)
@@ -295,7 +296,7 @@ describe "doma cd --query in non-TTY" do
     Process.run(bin, ["add", "/var", "-t", "b"], env: {"DOMA_HOME" => home}, output: sink, error: sink)
 
     stdout_buf = IO::Memory.new
-    Process.run(bin, ["cd", "--query", "tmp"], env: {"DOMA_HOME" => home}, output: stdout_buf, error: STDERR)
+    Process.run(bin, ["list", "--pick", "--query", "tmp"], env: {"DOMA_HOME" => home}, output: stdout_buf, error: STDERR)
     stdout_buf.to_s.strip.should contain("tmp")
   ensure
     FileUtils.rm_rf(home) if home

@@ -2,6 +2,7 @@ require "option_parser"
 require "../../services/installer"
 require "../../utils/errors"
 require "../../utils/logger"
+require "../../utils/runtime"
 
 module Doma::CLI
   # One-shot setup for the shell wrapper that makes `doma cd` actually
@@ -48,7 +49,10 @@ module Doma::CLI
         return
       end
 
-      unless assume_yes
+      # Global -y/--yes is stripped by Runner before subcommand parsing,
+      # so honor it here too — the local --yes flag and the global flag
+      # should be interchangeable for the user.
+      unless assume_yes || Doma::Runtime.assume_yes?
         unless confirm(plan)
           Doma::Logger.warn "aborted"
           exit 1

@@ -28,7 +28,7 @@ doma is a Crystal CLI for tagging directories so you can recall, browse, or batc
 ```bash
 doma add ~/Projects/my-app -t crystal -t web
 doma list -t crystal --paths | xargs -I{} sh -c 'cd {} && shards build'
-doma cd crystal                # interactive picker, then cd
+doma cd crystal                # interactive picker, then cd  (needs `doma setup install`)
 doma mark spike                # bookmark cwd for 7 days
 ```
 
@@ -38,19 +38,20 @@ doma mark spike                # bookmark cwd for 7 days
 ### Tagging
 - Multiple tags per directory; tags are reusable across paths
 - Auto-tag from basename and Git remote (`--auto-tag`, `--git-tag`)
-- Glob filter on tags (`list -t 'work/*'`, `cd 'work/*'`) — `*` and `?` apply to `list -t`, `run`, and `cd`
+- Glob filter on tags (`list -t 'work/*'`, `run 'work/*' -- cmd`) — `*` and `?` apply to `list -t` and `run`
 - Hierarchical tag display (`tags --tree`)
 - TTL on tags: `--ttl 30m | 1h | 7d | 2w`, `--tmp` for the 7-day default, `mark` for the cwd + 7-day shortcut
-- Stable 7-char `short_id` per directory — survives renames; resolves prefix-style in `cd 0d` like a Git short hash
+- Stable 7-char `short_id` per directory — survives renames; usable via `rm <id>` and `trash restore <id>`
 
 ### Navigation & operations
-- `cd` with tag, short_id, or interactive picker (Crystal-native, no fzf dependency)
+- `list --pick` resolves to a single path (Crystal-native picker, no fzf dependency); the `doma cd <tag>` shell wrapper from `doma setup install` builds on it
 - `run <tag> -- <cmd>` to execute a command in every tagged directory; `--parallel` and `--fail-fast` available
 - `move` to follow a path that moved on disk; tags carry over
 - `rename` to merge or relabel tags
 - Recency tracking — most-used directories surface first in pickers and `list --by recent`
 - Substring search across path / basename / tag (`doma list <query>`)
-- Dead-path detection: `list --check`, `rm --gone`; expiry purge: `rm --expired`
+- Single-entry detail view (`doma info` defaults to cwd) — tags, TTLs, last-used, exists check
+- Dead-path detection: `list --check`, `prune --gone`; expiry purge: `prune --expired`
 
 ### Pipelines & scripting
 - `list -t TAG --paths` — newline-separated paths for `while read` / `xargs`
@@ -108,12 +109,12 @@ docker run --rm -it -v "$HOME/.config/doma:/root/.config/doma" \
 
 ## Shell integration
 
-`doma cd` prints the resolved path to stdout — a child process can't change its parent shell's working directory. The shipped wrapper closes that gap. One-shot install:
+`doma cd` lives in a shell function rather than the binary — a child process can't change its parent shell's working directory. The function calls `doma list -t <tag> --pick` (the binary's single-pick primitive) and runs `cd` on the result. One-shot install:
 
 ```bash
 doma setup install                    # auto-detects $SHELL, appends to your rc
 exec $SHELL                           # or `source ~/.zshrc`
-doma cd crystal                       # actually cd's
+doma cd crystal                       # interactive picker, then cd
 ```
 
 If you'd rather wire it manually:
@@ -121,6 +122,12 @@ If you'd rather wire it manually:
 ```bash
 eval "$(doma setup init zsh)"         # bash / zsh
 doma setup init fish | source         # fish
+```
+
+Without the wrapper, the equivalent inline form works everywhere:
+
+```bash
+cd "$(doma list -t crystal --pick)"
 ```
 
 ## Pipelines

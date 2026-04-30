@@ -57,7 +57,7 @@ The volume mount keeps the doma database persistent across container runs.
 
 ```bash
 doma version
-doma setup doctor   # path / config / DB sanity check
+doma doctor   # path / config / DB sanity check
 ```
 
-`setup doctor` is the first command to reach for if something looks off — it reports where doma writes, whether the config parses, and how big the database has grown.
+`doctor` is the first command to reach for if something looks off — it reports where doma writes, whether the config parses, and how big the database has grown.

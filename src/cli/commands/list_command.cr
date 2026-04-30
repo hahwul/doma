@@ -2,6 +2,8 @@ require "option_parser"
 require "json"
 require "colorize"
 require "../../db/database"
+require "../../services/picker"
+require "../../utils/config"
 require "../../utils/duration"
 require "../../utils/errors"
 require "../../utils/logger"
@@ -23,13 +25,16 @@ module Doma::CLI
       json_mode = false
       paths_only = false
       null_sep = false
+      pick_mode = false
+      pick_query : String? = nil
+      pick_override : Doma::Settings::SelectorMode? = nil
       check_existence = false
       include_expired = false
       sort = Doma::Database::SortBy::Path
       positional = [] of String
 
       parser = OptionParser.new do |p|
-        p.banner = "Usage: doma list [<query>] [-t TAG ...] [--by path|recent] [--check] [--include-expired] [--json] [--paths] [-0]\n" \
+        p.banner = "Usage: doma list [<query>] [-t TAG ...] [--by path|recent] [--check] [--include-expired] [--json] [--paths] [-0] [--pick]\n" \
                    "  (aliases for 'recent': 'used', 'recency')"
         # Repeatable / comma-separated, mirroring `add` and `rm`. Multiple
         # tags AND together — i.e. only directories carrying every listed
@@ -59,6 +64,19 @@ module Doma::CLI
           paths_only = true
           null_sep = true
         end
+        # Single-element resolution: print one path so the shell can `cd`
+        # to it. Replaces the old top-level `cd` command — the shell
+        # wrapper (doma setup install) calls this under the hood.
+        # Multiple matches + TTY → interactive picker; non-TTY → first
+        # (most-recent) with an ambiguity warning on stderr.
+        p.on("--pick", "Resolve to a single path (interactive if TTY)") { pick_mode = true }
+        p.on("--query Q", "Pre-fill the picker filter (used with --pick)") { |q| pick_query = q }
+        p.on("--first", "With --pick: always pick the first match (no prompt)") do
+          pick_override = Doma::Settings::SelectorMode::First
+        end
+        p.on("--builtin", "With --pick: force interactive picker even when stdin is not a TTY") do
+          pick_override = Doma::Settings::SelectorMode::Builtin
+        end
         p.on("-h", "--help", "Show help") do
           puts p
           exit 0
@@ -73,9 +91,24 @@ module Doma::CLI
       query = positional.empty? ? nil : positional.join(" ")
       tags.uniq!
 
+      if pick_mode && (json_mode || paths_only)
+        raise Doma::ValidationError.new("--pick is incompatible with --json / --paths / -0")
+      end
+      if pick_query && !pick_mode
+        raise Doma::ValidationError.new("--query requires --pick")
+      end
+      if pick_override && !pick_mode
+        raise Doma::ValidationError.new("--first/--builtin require --pick")
+      end
+
       db = Doma::Database.open
       begin
         entries = collect(db, tags, query, sort, include_expired)
+
+        if pick_mode
+          run_pick(db, entries, pick_query, pick_override, tags, query)
+          return
+        end
 
         if json_mode
           payload = entries.map do |e|
@@ -155,6 +188,114 @@ module Doma::CLI
       ensure
         db.close
       end
+    end
+
+    # Narrow the filtered entries down to one path and print it to stdout.
+    # Single-element output mode designed to compose with the shell
+    # wrapper installed by `doma setup install` — that wrapper captures
+    # this output and runs `cd` itself, since a child process can't
+    # change its parent's working directory.
+    #
+    # Resolution rules:
+    #   - 0 entries          → NotFoundError (with a hint that points
+    #                          at `doma add` when the input looks like a
+    #                          filesystem path)
+    #   - 1 entry            → print and stamp recency
+    #   - N entries + TTY    → interactive picker; cancellation is exit 130
+    #   - N entries + no TTY → most-recent wins, with a stderr warning so
+    #                          callers piping `--pick` don't silently get
+    #                          a heuristic pick they didn't expect
+    private def run_pick(db : Doma::Database, entries : Array(Doma::Entry), pick_query : String?, pick_override : Doma::Settings::SelectorMode?, tags : Array(String), query : String?)
+      if entries.empty?
+        raise Doma::NotFoundError.new(
+          empty_message(tags, query),
+          hint: pick_miss_hint(db, tags, query)
+        )
+      end
+
+      items = entries.map do |e|
+        tags_hint = e.tags.empty? ? nil : e.tags.map { |t| "##{t}" }.join(' ')
+        Doma::Picker::Item.new(value: e.path, label: e.path, hint: tags_hint)
+      end
+      items = Doma::Picker.filter(items, pick_query) if pick_query
+
+      if items.empty?
+        raise Doma::NotFoundError.new("no directories match '#{pick_query}'") if pick_query
+        raise Doma::NotFoundError.new(empty_message(tags, query))
+      end
+
+      if items.size == 1
+        chosen = items.first.value
+        bump_used_safe(db, chosen)
+        puts chosen
+        return
+      end
+
+      effective = pick_override || Doma::Settings.current.selector
+      if effective == Doma::Settings::SelectorMode::Auto
+        effective = STDIN.tty? ? Doma::Settings::SelectorMode::Builtin : Doma::Settings::SelectorMode::First
+      end
+
+      case effective
+      in Doma::Settings::SelectorMode::Builtin
+        prompt = pick_prompt(tags, query)
+        result = Doma::Picker.pick(items, prompt)
+        raise Doma::Error.new("selection cancelled", 130) if result.cancelled
+        if value = result.value
+          bump_used_safe(db, value)
+          puts value
+        end
+      in Doma::Settings::SelectorMode::First
+        # Deterministic auto-pick. Warn so scripted callers don't silently
+        # get a heuristic choice they didn't expect.
+        unless Doma::Logger.quiet?
+          first_tag = tags.first?
+          context = first_tag ? "tag '#{first_tag}'" : "current filter"
+          Doma::Logger.warn(
+            "#{context} matches #{items.size} directories; picked first. " \
+            "Pass --by recent or refine the filter to disambiguate."
+          )
+        end
+        chosen = items.first.value
+        bump_used_safe(db, chosen)
+        puts chosen
+      in Doma::Settings::SelectorMode::Auto
+        # Already resolved above; this branch satisfies exhaustiveness.
+        puts items.first.value
+      end
+    end
+
+    private def bump_used_safe(db : Doma::Database, path : String)
+      db.bump_used!(path)
+    rescue
+      # Frecency is best-effort — never block the actual output.
+    end
+
+    # Mirror cd's old miss-hint: when the user passes a path-like string
+    # (`/foo`, `~/x`, `./bar`), they probably meant to register it. Steer
+    # them to `doma add` instead of suggesting an unrelated tag.
+    private def pick_miss_hint(db : Doma::Database, tags : Array(String), query : String?) : String?
+      candidate = tags.first? || query
+      return unless candidate
+      if path_like?(candidate)
+        return "to register this path, run: doma add #{candidate}"
+      end
+      Doma::Suggester.hint_for(candidate, db.tag_names)
+    end
+
+    private def path_like?(input : String) : Bool
+      input.starts_with?('/') ||
+        input.starts_with?('~') ||
+        input.starts_with?("./") ||
+        input.starts_with?("../") ||
+        input == "."
+    end
+
+    private def pick_prompt(tags : Array(String), query : String?) : String
+      parts = [] of String
+      tags.each { |t| parts << "-t #{t}" }
+      parts << query if query
+      parts.empty? ? "doma pick" : "doma pick #{parts.join(' ')}"
     end
 
     # Compose the two filters. Doing the intersection client-side keeps

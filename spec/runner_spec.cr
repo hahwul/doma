@@ -76,7 +76,10 @@ describe "Runner dispatch" do
   it "[help banner] enumerates every dispatched command" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     r = run(["--help"])
-    %w[add mark rm move tags rename list cd stats run export import setup].each do |cmd|
+    # `cd` lives in the shell wrapper, not the binary — so it's not
+    # in the dispatched-command listing. The shell-wrapper section of
+    # the banner is asserted separately below.
+    %w[add mark rm move tags rename list stats run export import setup].each do |cmd|
       r[:out].should contain(cmd)
     end
   end
@@ -92,6 +95,17 @@ describe "Runner dispatch" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     r = run(["--help"])
     r[:out].should contain("doma setup install")
+    r[:out].should contain("doma cd")
+  end
+
+  it "[doma cd in binary] points at the shell wrapper" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    # Calling `doma cd` against the bare binary (no shell wrapper) must
+    # not pretend to succeed — emit a clear error pointing at setup.
+    r = run(["cd", "anything"])
+    r[:status].exit_code.should eq(1)
+    r[:err].should contain("shell wrapper")
+    r[:err].should contain("doma setup install")
   end
 end
 

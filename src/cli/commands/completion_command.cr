@@ -57,7 +57,7 @@ module Doma::CLI
     # Top-level commands shared across all three completion scripts.
     # Keep this in lockstep with the dispatch table in `runner.cr`.
     private COMMANDS = %w[
-      add mark rm move tags rename list cd stats run export import setup config trash version help
+      add mark rm prune move tags rename list info cd stats run export import setup doctor config trash version help
     ]
 
     # Commands whose first positional is a tag — completion shells these
@@ -121,7 +121,7 @@ module Doma::CLI
                 COMPREPLY=( $(compgen -W "$tags" -- "$cur") )
                 return
                 ;;
-              add|move|rm)
+              add|move|rm|info)
                 COMPREPLY=( $(compgen -d -- "$cur") )
                 return
                 ;;
@@ -130,7 +130,7 @@ module Doma::CLI
                 return
                 ;;
               setup)
-                COMPREPLY=( $(compgen -W "install init doctor completion" -- "$cur") )
+                COMPREPLY=( $(compgen -W "install init completion" -- "$cur") )
                 return
                 ;;
               config)
@@ -155,16 +155,19 @@ module Doma::CLI
           case "$cmd" in
             add)    COMPREPLY=( $(compgen -W "-t --tag --ttl --tmp --auto-tag --no-auto-tag --git-tag --no-git-tag --dry-run -h --help" -- "$cur") ) ;;
             mark)   COMPREPLY=( $(compgen -W "-h --help" -- "$cur") ) ;;
-            rm)     COMPREPLY=( $(compgen -W "-t --tag --gone --expired --hard -h --help" -- "$cur") ) ;;
+            rm)     COMPREPLY=( $(compgen -W "-t --tag --hard -h --help" -- "$cur") ) ;;
+            prune)  COMPREPLY=( $(compgen -W "--gone --expired -h --help" -- "$cur") ) ;;
             move)   COMPREPLY=( $(compgen -W "--allow-missing -h --help" -- "$cur") ) ;;
             tags)   COMPREPLY=( $(compgen -W "--names --tree --json -0 -h --help" -- "$cur") ) ;;
-            list)   COMPREPLY=( $(compgen -W "-t --tag --by --check --include-expired --json --paths -0 -h --help" -- "$cur") ) ;;
-            cd)     COMPREPLY=( $(compgen -W "--first --builtin --query --index -h --help" -- "$cur") ) ;;
+            list)   COMPREPLY=( $(compgen -W "-t --tag --by --check --include-expired --json --paths -0 --pick --query --first --builtin -h --help" -- "$cur") ) ;;
+            info)   COMPREPLY=( $(compgen -W "--json -h --help" -- "$cur") ) ;;
+            cd)     COMPREPLY=( $(compgen -W "-h --help" -- "$cur") ) ;;
             stats)  COMPREPLY=( $(compgen -W "--top --recent --used --json -h --help" -- "$cur") ) ;;
             run)    COMPREPLY=( $(compgen -W "--fail-fast --parallel --no-header -h --help" -- "$cur") ) ;;
             export) COMPREPLY=( $(compgen -W "--json --yaml -h --help" -- "$cur") ) ;;
             import) COMPREPLY=( $(compgen -W "--merge --replace --yes -h --help" -- "$cur") ) ;;
-            setup)  COMPREPLY=( $(compgen -W "install init doctor completion" -- "$cur") ) ;;
+            setup)  COMPREPLY=( $(compgen -W "install init completion" -- "$cur") ) ;;
+            doctor) COMPREPLY=( $(compgen -W "-h --help" -- "$cur") ) ;;
             config) COMPREPLY=( $(compgen -W "get set unset list edit path -h --help" -- "$cur") ) ;;
             trash)  COMPREPLY=( $(compgen -W "list restore empty --merge --older -h --help" -- "$cur") ) ;;
             *) ;;
@@ -222,7 +225,7 @@ module Doma::CLI
                 return
               fi
               ;;
-            add|move|rm)
+            add|move|rm|info)
               if (( CURRENT == 3 )); then
                 _path_files -/
                 return
@@ -236,7 +239,7 @@ module Doma::CLI
               ;;
             setup)
               if (( CURRENT == 3 )); then
-                _values 'setup action' install init doctor completion
+                _values 'setup action' install init completion
                 return
               fi
               ;;
@@ -274,15 +277,18 @@ module Doma::CLI
           case $cmd in
             add)    flags=(-t --tag --ttl --tmp --auto-tag --no-auto-tag --git-tag --no-git-tag --dry-run -h --help) ;;
             mark)   flags=(-h --help) ;;
-            rm)     flags=(-t --tag --gone --expired --hard -h --help) ;;
+            rm)     flags=(-t --tag --hard -h --help) ;;
+            prune)  flags=(--gone --expired -h --help) ;;
             move)   flags=(--allow-missing -h --help) ;;
             tags)   flags=(--names --tree --json -0 -h --help) ;;
-            list)   flags=(-t --tag --by --check --include-expired --json --paths -0 -h --help) ;;
-            cd)     flags=(--first --builtin --query --index -h --help) ;;
+            list)   flags=(-t --tag --by --check --include-expired --json --paths -0 --pick --query --first --builtin -h --help) ;;
+            info)   flags=(--json -h --help) ;;
+            cd)     flags=(-h --help) ;;
             stats)  flags=(--top --recent --used --json -h --help) ;;
             run)    flags=(--fail-fast --parallel --no-header -h --help) ;;
             export) flags=(--json --yaml -h --help) ;;
             import) flags=(--merge --replace --yes -h --help) ;;
+            doctor) flags=(-h --help) ;;
           esac
           (( ${#flags} )) && compadd -a flags
         }
@@ -304,16 +310,19 @@ module Doma::CLI
         "add"     => "Register a path with tags",
         "mark"    => "Tag cwd with temporary (7d) tags",
         "rm"      => "Remove tag(s) or the path itself",
+        "prune"   => "Bulk-delete missing paths or expired tags",
         "move"    => "Move a registered path",
         "tags"    => "List all tags with counts",
         "rename"  => "Rename or merge a tag",
         "list"    => "List/search directories",
-        "cd"      => "Resolve a directory",
+        "info"    => "Show one entry's details (default: cwd)",
+        "cd"      => "Resolve a directory (via shell wrapper)",
         "stats"   => "Top tags and recent paths",
         "run"     => "Run a command in every tagged directory",
         "export"  => "Dump the database",
         "import"  => "Load a snapshot",
-        "setup"   => "install / init / doctor / completion",
+        "setup"   => "install / init / completion",
+        "doctor"  => "Check the install (paths, config, DB)",
         "config"  => "get / set / list — settings",
         "trash"   => "list / restore / empty — recover from rm",
         "version" => "Print version",
@@ -338,8 +347,8 @@ module Doma::CLI
       lines << ""
 
       # Setup actions.
-      lines << "complete -c doma -n '__fish_seen_subcommand_from setup; and not __fish_seen_subcommand_from install init doctor completion' " \
-               "-a 'install init doctor completion' -d 'setup action'"
+      lines << "complete -c doma -n '__fish_seen_subcommand_from setup; and not __fish_seen_subcommand_from install init completion' " \
+               "-a 'install init completion' -d 'setup action'"
       lines << ""
 
       # Config actions and keys.
@@ -357,11 +366,12 @@ module Doma::CLI
       # Per-command flag pool. Kept terse — fish handles typing the rest.
       flag_table = {
         "add"    => %w[--tag --ttl --tmp --auto-tag --no-auto-tag --git-tag --no-git-tag --dry-run],
-        "rm"     => %w[--tag --gone --expired --hard],
+        "rm"     => %w[--tag --hard],
+        "prune"  => %w[--gone --expired],
         "move"   => %w[--allow-missing],
         "tags"   => %w[--names --tree --json],
-        "list"   => %w[--tag --by --check --include-expired --json --paths],
-        "cd"     => %w[--first --builtin --query --index],
+        "list"   => %w[--tag --by --check --include-expired --json --paths --pick --query --first --builtin],
+        "info"   => %w[--json],
         "stats"  => %w[--top --recent --used --json],
         "run"    => %w[--fail-fast --parallel --no-header],
         "export" => %w[--json --yaml],
