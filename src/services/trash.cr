@@ -90,9 +90,18 @@ module Doma
       kept.sort_by { |e| -e.deleted_at }
     end
 
+    # Most-recent trash entry for a canonical path, or nil if there
+    # isn't one. The same path can land in trash repeatedly (rm → add →
+    # rm), so we return the freshest snapshot — that's what `info`
+    # surfaces to the user as "in trash". `entries` is already
+    # newest-first by `deleted_at`, so a `find` here picks the right one.
+    def find_by_path(path : String) : Entry?
+      entries(prune: false).find { |e| e.path == path }
+    end
+
     # Resolve a short_id (full or unique prefix) to a trash entry. The
-    # CLI mirrors `cd`/`rm`'s prefix resolution so `doma trash restore
-    # abc12` works the same way the original `cd abc12` did.
+    # CLI mirrors `rm`/`trash restore`'s prefix resolution so the same
+    # 7-char id works across the suite.
     def find_by_short_id(prefix : String) : Entry?
       hits = entries(prune: false).select(&.short_id.starts_with?(prefix))
       case hits.size

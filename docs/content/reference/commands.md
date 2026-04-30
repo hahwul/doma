@@ -112,12 +112,16 @@ the `cd "$(doma list -t TAG --pick)"` inline form for scripts).
 ## `info`
 
 ```
-doma info [<path>] [--json]
+doma info [<path-or-short-id>] [--json]
 ```
 
-Single-entry detail view. The path defaults to `.` so `doma info` from inside a project answers the most common question — "did I tag this directory? with what?" — in one keystroke.
+Single-entry detail view. The argument defaults to `.` so `doma info` from inside a project answers the most common question — "did I tag this directory? with what?" — in one keystroke.
 
-Output: short_id, canonical path, basename, every tag (with TTL remaining or `~expired` suffix), `created_at`, `last_used_at`, and an `exists` check against the filesystem. Exits 3 when the path isn't registered, with a hint that points at `doma add`.
+Accepts either a path (canonical or relative) or a short_id (full or unique prefix), mirroring `rm` and `trash restore`. The same 7-char id from `list` output works everywhere.
+
+Output: short_id, canonical path, basename, every tag (with TTL remaining or `~expired` suffix), `created_at` and `last_used_at` (absolute + relative — "3d ago"), and an `exists` check against the filesystem. Exits 3 when the entry isn't registered.
+
+When a path isn't registered but lives in the trash, the not-found message surfaces the trash short_id and a `doma trash restore` hint — so a recent `rm` doesn't leave the user staring at "not registered" with no clue the entry is recoverable.
 
 `--json` emits the same fields plus an `expirations` map (`tag_name → unix_epoch`) when any tag has a TTL.
 

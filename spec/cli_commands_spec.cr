@@ -1170,3 +1170,74 @@ describe "doma info" do
     end
   end
 end
+
+# ---------- info advanced (short_id / trash / relative time) ----------
+
+describe "doma info advanced" do
+  it "[short_id] resolves a full short_id to its entry" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      run(["add", "/tmp", "-t", "demo"], {"DOMA_HOME" => home})
+      sid = JSON.parse(run(["list", "--json"], {"DOMA_HOME" => home})[:out]).as_a.first.as_h["short_id"].as_s
+
+      r = run(["info", sid], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(0)
+      r[:out].should contain("/private/tmp")
+      r[:out].should contain("#demo")
+    end
+  end
+
+  it "[short_id prefix] resolves a unique 4-char prefix" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      run(["add", "/tmp", "-t", "demo"], {"DOMA_HOME" => home})
+      sid = JSON.parse(run(["list", "--json"], {"DOMA_HOME" => home})[:out]).as_a.first.as_h["short_id"].as_s
+
+      r = run(["info", sid[0, 4]], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(0)
+      r[:out].should contain("/private/tmp")
+    end
+  end
+
+  it "[unresolved short_id] errors with 3 and dedicated message" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      run(["add", "/tmp", "-t", "demo"], {"DOMA_HOME" => home})
+      r = run(["info", "deadbee"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(3)
+      r[:err].should contain("no entry with short_id")
+      # Must not nudge toward `doma add` — the user typed an id, not a path.
+      r[:err].should_not contain("doma add")
+    end
+  end
+
+  it "[trashed path] surfaces the trash entry with a restore hint" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      vanish = File.tempname("doma-info-trash")
+      FileUtils.mkdir_p(vanish)
+      run(["add", vanish, "-t", "soon-gone"], {"DOMA_HOME" => home})
+      run(["rm", vanish], {"DOMA_HOME" => home}) # trash it (soft-delete)
+
+      r = run(["info", vanish], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(3)
+      r[:err].should contain("not registered")
+      r[:err].should contain("in trash")
+      r[:err].should contain("doma trash restore")
+    ensure
+      FileUtils.rm_rf(vanish) if vanish
+    end
+  end
+
+  it "[relative time] shows '<N>s ago' alongside the absolute timestamp" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      run(["add", "/tmp", "-t", "demo"], {"DOMA_HOME" => home})
+      r = run(["info", "/tmp"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(0)
+      # `added` line should carry a "(... ago)" suffix.
+      added_line = r[:out].lines.find(&.includes?("added")).not_nil!
+      added_line.should match(/\(\d+\w ago\)/)
+    end
+  end
+end

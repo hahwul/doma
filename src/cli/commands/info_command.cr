@@ -2,9 +2,11 @@ require "option_parser"
 require "json"
 require "colorize"
 require "../../db/database"
+require "../../services/trash"
 require "../../utils/duration"
 require "../../utils/errors"
 require "../../utils/logger"
+require "../../utils/short_id_resolver"
 require "../../utils/validator"
 
 module Doma::CLI
@@ -34,20 +36,36 @@ module Doma::CLI
       parser.parse(args)
 
       raw = positional.first? || "."
-      canonical = Doma::Validator.canonicalize(raw)
 
       db = Doma::Database.open
       begin
-        info = db.find_path_info(canonical)
+        # Three input shapes, resolution order:
+        #   1. short_id-shaped (hex, no path separators) → resolve via
+        #      ShortIdResolver. Mirrors `rm <id>` / `trash restore <id>`
+        #      so the same 7-char id from `list` output works everywhere.
+        #   2. path-shaped → canonicalize and look up directly.
+        #   3. not registered + path-shaped → check trash so a recent
+        #      `rm` doesn't leave the user staring at "not registered"
+        #      with no clue the entry is recoverable.
+        canonical, info = resolve_target(db, raw)
+
         unless info
-          # Treat "not registered" as a NotFound (exit 3), matching
-          # `list --pick` on a missing tag. Surface a hint that points
-          # at `add` so the user can convert the question into the next
-          # action without re-typing the path.
-          raise Doma::NotFoundError.new(
-            "not registered: #{canonical}",
-            hint: "to register it, run: doma add #{raw}"
-          )
+          if !short_id_shaped?(raw)
+            if trashed = Doma::Trash.find_by_path(canonical)
+              raise Doma::NotFoundError.new(
+                "not registered: #{canonical}",
+                hint: "in trash (id #{trashed.short_id[0..6]}). " \
+                      "Restore: doma trash restore #{trashed.short_id[0..6]}"
+              )
+            end
+            raise Doma::NotFoundError.new(
+              "not registered: #{canonical}",
+              hint: "to register it, run: doma add #{raw}"
+            )
+          end
+          # short_id input that didn't resolve: caller-friendly message
+          # without an `add` hint (the user typed an id, not a path).
+          raise Doma::NotFoundError.new("no entry with short_id '#{raw}'")
         end
 
         tags = db.tags_for(info.id)
@@ -65,6 +83,32 @@ module Doma::CLI
       ensure
         db.close
       end
+    end
+
+    # Returns {canonical_path, PathInfo?}. PathInfo is nil if not
+    # registered; canonical_path is set in both cases (used by the
+    # trash fallback and the not-found message).
+    private def resolve_target(db : Doma::Database, raw : String) : {String, Doma::Database::PathInfo?}
+      if short_id_shaped?(raw)
+        if path = Doma::ShortIdResolver.resolve(db, raw)
+          return {path, db.find_path_info(path)}
+        end
+        # Non-resolving short_id-shaped input falls through with an
+        # empty path so the caller can raise a clean "no entry with
+        # short_id" error — there's nothing to canonicalize.
+        return {raw, nil}
+      end
+
+      canonical = Doma::Validator.canonicalize(raw)
+      {canonical, db.find_path_info(canonical)}
+    end
+
+    # Hex-only, 4-16 chars, no slashes/dots/tildes. Same shape gate as
+    # `rm_command#resolve_target` — keeps a directory literally named
+    # `abc1234` from being misread as a short_id.
+    private def short_id_shaped?(raw : String) : Bool
+      return false if raw.includes?('/') || raw.includes?('.') || raw.includes?('~')
+      raw.matches?(/\A[0-9a-fA-F]{4,16}\z/)
     end
 
     private def render_json(info : Doma::Database::PathInfo, tags : Array(String), ttl_map : Hash(String, Int64), exists : Bool)
@@ -103,8 +147,17 @@ module Doma::CLI
         kv "tags", rendered
       end
 
-      kv "added", format_time(info.created_at)
-      kv "last used", info.last_used_at == 0 ? "never" : format_time(info.last_used_at)
+      # Show absolute + relative side-by-side. Absolute is the source
+      # of truth; relative ("3d ago") is what the eye actually wants
+      # for "how stale is this entry?" — the question users actually
+      # ask. Same compact `Nu` form `Duration.humanize_remaining` uses,
+      # for symmetry across the suite.
+      kv "added", "#{format_time(info.created_at)}  (#{relative_past(info.created_at, color)})"
+      if info.last_used_at == 0
+        kv "last used", "never"
+      else
+        kv "last used", "#{format_time(info.last_used_at)}  (#{relative_past(info.last_used_at, color)})"
+      end
 
       # If the user typed a non-canonical form (relative path, symlink,
       # trailing slash), show what we resolved it to so they know which
@@ -134,6 +187,29 @@ module Doma::CLI
     # which `Time#to_s` default isn't (locale-dependent on some libcs).
     private def format_time(epoch : Int64) : String
       Time.unix(epoch).to_local.to_s("%Y-%m-%d %H:%M")
+    end
+
+    # Compact "how long ago" using the same `Nu` units the duration
+    # parser accepts (`5m`, `3h`, `7d`, `2w`). Past anything ≥ 1 year
+    # falls back to `Ny` for readability — the parser doesn't accept
+    # `y` but this is display-only. Rendered dim so the absolute
+    # timestamp stays the visual anchor.
+    private def relative_past(epoch : Int64, color : Bool) : String
+      delta = Time.utc.to_unix - epoch
+      text = if delta < 60
+               "#{delta}s ago"
+             elsif delta < 3600
+               "#{delta // 60}m ago"
+             elsif delta < 86_400
+               "#{delta // 3600}h ago"
+             elsif delta < 604_800
+               "#{delta // 86_400}d ago"
+             elsif delta < 31_557_600 # ~365.25d
+               "#{delta // 604_800}w ago"
+             else
+               "#{delta // 31_557_600}y ago"
+             end
+      color ? text.colorize(:dark_gray).to_s : text
     end
   end
 end
