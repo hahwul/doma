@@ -107,7 +107,7 @@ describe Doma::ShortIdResolver do
         end
         # Both candidates must appear in the error so the user can pick
         # a longer prefix without re-running `list`.
-        msg = ex.message.not_nil!
+        msg = ex.message || ""
         msg.should contain("0dc0db9")
         msg.should contain("0dc1ee5")
       ensure

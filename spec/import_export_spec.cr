@@ -279,7 +279,7 @@ describe "Import/Export" do
         ex = expect_raises(Doma::ImportError) do
           Doma::Importer.from_file(db, path)
         end
-        msg = ex.message.not_nil!
+        msg = ex.message || ""
         msg.should contain("invalid JSON")
         msg.should contain(path)
       ensure
@@ -326,14 +326,16 @@ describe "Import/Export" do
     # row from torpedoing an otherwise-valid snapshot. Pre-fix, no spec
     # explicitly verified `result.skipped` reflected the count.
     with_temp_db do |db|
-      payload = %({
-        "version": 2,
-        "entries": [
-          {"path": "/valid/path", "tags": ["ok"]},
-          {"path": "/another/valid", "tags": ["bad name"]},
-          {"path": "/third", "tags": ["fine"]}
-        ]
-      })
+      payload = <<-JSON
+        {
+          "version": 2,
+          "entries": [
+            {"path": "/valid/path", "tags": ["ok"]},
+            {"path": "/another/valid", "tags": ["bad name"]},
+            {"path": "/third", "tags": ["fine"]}
+          ]
+        }
+        JSON
       path = File.tempname("doma-mixed-snap") + ".json"
       File.write(path, payload)
       begin
@@ -358,7 +360,8 @@ describe Doma::Exporter do
       after = Time.utc.to_unix
 
       snapshot.version.should eq(Doma::Snapshot::SCHEMA_VERSION)
-      ts = snapshot.generated_at.not_nil!
+      snapshot.generated_at.should_not be_nil
+      ts = snapshot.generated_at.as(Int64)
       (before..after).covers?(ts).should be_true
     end
   end
@@ -395,7 +398,8 @@ describe Doma::Exporter do
 
         snapshot = Doma::Exporter.build(db)
         entry = snapshot.entries.first
-        ttls = entry.expirations.not_nil!
+        entry.expirations.should_not be_nil
+        ttls = entry.expirations.as(Hash(String, Int64))
         ttls.has_key?("bookmark").should be_true
         ttls.has_key?("permanent").should be_false
       ensure

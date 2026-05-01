@@ -178,7 +178,6 @@ module Doma::CLI
     end
 
     private def zsh_script : String
-      tag_first = TAG_FIRST_ARG.join(' ')
       <<-ZSH
         #compdef doma
         # doma completion (zsh)

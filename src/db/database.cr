@@ -458,7 +458,7 @@ module Doma
         path,
         as: {Int64, String, String, String, Int64, Int64}
       )
-      return nil unless row
+      return unless row
       id, short_id, p, basename, created_at, last_used_at = row
       PathInfo.new(id, short_id, p, basename, created_at, last_used_at)
     end

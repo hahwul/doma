@@ -1032,7 +1032,7 @@ describe "doma add error format" do
       # Pre-fix: "✗ /no/such/dir: not a directory: /no/such/dir"
       # Post-fix: only one mention of the path.
       lines = r[:err].lines
-      err_line = lines.find(&.includes?("not a directory")).not_nil!
+      err_line = lines.find!(&.includes?("not a directory"))
       err_line.scan(/\/no\/such\/dir/).size.should eq(1)
     end
   end
@@ -1236,7 +1236,7 @@ describe "doma info advanced" do
       r = run(["info", "/tmp"], {"DOMA_HOME" => home})
       r[:status].exit_code.should eq(0)
       # `added` line should carry a "(... ago)" suffix.
-      added_line = r[:out].lines.find(&.includes?("added")).not_nil!
+      added_line = r[:out].lines.find!(&.includes?("added"))
       added_line.should match(/\(\d+\w ago\)/)
     end
   end
