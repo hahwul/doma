@@ -141,19 +141,71 @@ module Doma
           cnn.scalar("SELECT id FROM directories WHERE path = ?", entry.path).as(Int64)
         end
 
-        entry.tags.each do |tag|
-          cnn.exec("INSERT OR IGNORE INTO tags (name, created_at) VALUES (?, ?)", tag, now)
-          tag_id = cnn.scalar("SELECT id FROM tags WHERE name = ?", tag).as(Int64)
-          # `expirations` only carries already-future TTLs from snapshot
-          # time, but a long stay in the trash may have lapsed them. We
-          # still write the original value — the user opted in to that
-          # deadline once, and `prune_expired` will lift any that are
-          # now past as soon as it runs.
-          expires_at = entry.expirations[tag]?
+        # Two-pass tag write to cut the per-tag round-trip cost from 3
+        # statements (INSERT OR IGNORE INTO tags + SELECT id + INSERT
+        # INTO directory_tags) down to ~2 amortized:
+        #   pass 1) prefetch every existing tag id with one IN-list
+        #           lookup; INSERT OR IGNORE only the names that
+        #           actually need a new row, then re-resolve those ids
+        #           in a second IN-list query
+        #   pass 2) INSERT INTO directory_tags as one multi-row VALUES
+        #           statement so we hit SQLite once for the whole tag
+        #           set instead of N times
+        unless entry.tags.empty?
+          existing_ids = if entry.tags.size > 0
+                           name_args = entry.tags.map { |t| t.as(DB::Any) }
+                           ph = Array.new(entry.tags.size, "?").join(",")
+                           cnn.query_all(
+                             "SELECT name, id FROM tags WHERE name IN (#{ph})",
+                             args: name_args, as: {String, Int64}
+                           ).to_h
+                         else
+                           {} of String => Int64
+                         end
+
+          missing = entry.tags.reject { |t| existing_ids.has_key?(t) }
+          unless missing.empty?
+            # Single multi-row INSERT OR IGNORE so a brand-new restore
+            # with N tags pays one SQL call rather than N. ON CONFLICT
+            # on `tags.name` (UNIQUE) means concurrent restores remain
+            # safe.
+            values = Array.new(missing.size, "(?, ?)").join(",")
+            args = [] of DB::Any
+            missing.each do |t|
+              args << t.as(DB::Any)
+              args << now.as(DB::Any)
+            end
+            cnn.exec(
+              "INSERT OR IGNORE INTO tags (name, created_at) VALUES #{values}",
+              args: args
+            )
+            ph = Array.new(missing.size, "?").join(",")
+            name_args = missing.map { |t| t.as(DB::Any) }
+            cnn.query_all(
+              "SELECT name, id FROM tags WHERE name IN (#{ph})",
+              args: name_args, as: {String, Int64}
+            ).each { |row| existing_ids[row[0]] = row[1] }
+          end
+
+          # Multi-row INSERT for the join table. `expirations` only
+          # carries already-future TTLs from snapshot time, but a long
+          # stay in the trash may have lapsed them. We still write the
+          # original value — the user opted in to that deadline once,
+          # and `prune_expired` will lift any that are now past as soon
+          # as it runs.
+          dt_values = Array.new(entry.tags.size, "(?, ?, ?)").join(",")
+          dt_args = [] of DB::Any
+          entry.tags.each do |tag|
+            tag_id = existing_ids[tag]
+            dt_args << directory_id.as(DB::Any)
+            dt_args << tag_id.as(DB::Any)
+            exp = entry.expirations[tag]?
+            dt_args << (exp.nil? ? nil.as(DB::Any) : exp.as(DB::Any))
+          end
           cnn.exec(
-            "INSERT INTO directory_tags (directory_id, tag_id, expires_at) VALUES (?, ?, ?) " \
+            "INSERT INTO directory_tags (directory_id, tag_id, expires_at) VALUES #{dt_values} " \
             "ON CONFLICT(directory_id, tag_id) DO UPDATE SET expires_at = excluded.expires_at",
-            directory_id, tag_id, expires_at
+            args: dt_args
           )
         end
       end

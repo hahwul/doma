@@ -38,14 +38,14 @@ doma mark spike                # bookmark cwd for 7 days
 ### Tagging
 - Multiple tags per directory; tags are reusable across paths
 - Auto-tag from basename and Git remote (`--auto-tag`, `--git-tag`)
-- Glob filter on tags (`list -t 'work/*'`, `run 'work/*' -- cmd`) — `*` and `?` apply to `list -t` and `run`
+- Glob filter on tags (`list -t 'work/*'`, `run 'work/*' -- cmd`) — shell-style: `*` matches within one segment, `**` crosses `/`, `?` is a single non-`/` character
 - Hierarchical tag display (`tags --tree`)
 - TTL on tags: `--ttl 30m | 1h | 7d | 2w`, `--tmp` for the 7-day default, `mark` for the cwd + 7-day shortcut
 - Stable 7-char `short_id` per directory — survives renames; usable via `rm <id>` and `trash restore <id>`
 
 ### Navigation & operations
 - `list --pick` resolves to a single path (Crystal-native picker, no fzf dependency); the `doma cd <tag>` shell wrapper from `doma setup install` builds on it
-- `run <tag> -- <cmd>` to execute a command in every tagged directory; `--parallel` and `--fail-fast` available
+- `run <tag> -- <cmd>` to execute a command in every tagged directory; `--parallel` (with `--jobs N`, default CPU count) and `--fail-fast` available
 - `move` to follow a path that moved on disk; tags carry over
 - `rename` to merge or relabel tags
 - Recency tracking — most-used directories surface first in pickers and `list --by recent`

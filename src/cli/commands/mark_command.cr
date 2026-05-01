@@ -40,7 +40,12 @@ module Doma::CLI
       end
       parser.parse(args)
 
-      raise Doma::ValidationError.new("at least one tag is required") if tags.empty?
+      if tags.empty?
+        raise Doma::ValidationError.new(
+          "mark requires at least one tag",
+          hint: "usage: doma mark <tag> [<tag> ...]   (alias of add . -t … --tmp)"
+        )
+      end
 
       # Capture into a local so the closure-narrowing on `target_path`
       # propagates; Crystal won't infer non-nil from `target_path || "."`

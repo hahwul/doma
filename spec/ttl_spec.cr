@@ -173,7 +173,7 @@ describe "Database#prune_expired!" do
         db.add(tmp_a, ["drop"], expires_at: past)
         db.add(tmp_b, ["drop2"], expires_at: past)
 
-        db.prune_expired!.should eq(2)
+        db.prune_expired!.size.should eq(2)
 
         # Permanent tag still present.
         db.directories(include_expired: true).find!(&.path.==(Doma::Validator.canonicalize(tmp_a))).tags

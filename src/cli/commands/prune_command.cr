@@ -63,10 +63,14 @@ module Doma::CLI
       db = Doma::Database.open
       begin
         removed = db.prune_expired!
-        if removed == 0
+        if removed.empty?
           Doma::Logger.info "no expired tags to prune"
         else
-          Doma::Logger.success "pruned #{removed} expired tag association(s)"
+          # Mirror `prune --gone` — list what got removed before the
+          # summary so the user can audit. One line per (path, tag)
+          # pair; tags shown with the `#` sigil for parity with `list`.
+          removed.each { |r| Doma::Logger.info "  #{r.path}\t##{r.tag}" }
+          Doma::Logger.success "pruned #{removed.size} expired tag association(s)"
         end
       ensure
         db.close

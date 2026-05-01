@@ -20,6 +20,13 @@ module Doma::CLI
       parser = OptionParser.new do |p|
         p.banner = "Usage: doma add [<path> ...] [-t TAG ...] [--ttl DUR | --tmp] [--auto-tag] [--git-tag] [--dry-run]"
         p.on("-t TAG", "--tag=TAG", "Add a tag (repeatable, comma-separated allowed)") do |t|
+          # Reject `-t ''` outright instead of letting it slide through
+          # the empty-string filter in `Validator.tags!`. Silent acceptance
+          # produces an "added (no tags)" line that looks like a successful
+          # tag write, which is misleading.
+          if t.strip.empty?
+            raise Doma::ValidationError.new("tag is empty (-t got an empty value)")
+          end
           raw_tags << t
         end
         # `--ttl DUR` and `--tmp` are mutually exclusive in spirit; if
@@ -98,11 +105,36 @@ module Doma::CLI
           applied.concat(derive_tags(abs, use_basename, use_git, git_explicit))
           applied.uniq!
 
+          # Snapshot the pre-state so we can tell apart a real write from
+          # a re-add of an already-tagged path. The latter currently
+          # prints "✓ added …" identical to the new-write case, which
+          # masks a no-op (e.g. accidentally re-running `doma add` in a
+          # script). Comparing the existing tag set + per-tag TTLs to
+          # what we're about to apply is enough to flag both
+          # "all tags already present, same TTL" and
+          # "no tags passed and path is already registered."
+          prev_info = db.find_path_info(abs)
+          prev_tags = Set(String).new
+          prev_exp = {} of String => Int64
+          if pi = prev_info
+            prev_tags = db.tags_for(pi.id).to_set
+            prev_exp = db.tag_expirations(pi.id, include_past: true)
+          end
+
           db.add(abs, applied, validate_path: false, expires_at: expires_at)
+
+          unchanged = !prev_info.nil? && applied.all? do |t|
+            prev_tags.includes?(t) && prev_exp[t]? == expires_at
+          end
 
           summary = applied.empty? ? "(no tags)" : "tags: #{applied.join(", ")}"
           summary += "  (#{ttl_label})" if ttl_label
-          Doma::Logger.success "added #{abs} #{summary}"
+
+          if unchanged
+            Doma::Logger.info "· no change: #{abs} #{summary}"
+          else
+            Doma::Logger.success "added #{abs} #{summary}"
+          end
         end
         # Non-zero exit when at least one path failed, so scripts can tell.
         # Successful paths are still committed — partial success is the

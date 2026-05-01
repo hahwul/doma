@@ -17,6 +17,9 @@ module Doma::CLI
         p.banner = "Usage: doma rm <path> [<path> ...] [-t TAG ...] [--hard]\n" \
                    "  (bulk cleanup: doma prune --gone | --expired)"
         p.on("-t TAG", "--tag=TAG", "Remove this tag (repeatable, comma-separated allowed)") do |t|
+          if t.strip.empty?
+            raise Doma::ValidationError.new("tag is empty (-t got an empty value)")
+          end
           t.split(',').each { |x| tags << x.strip unless x.strip.empty? }
         end
         p.on("--hard", "Skip the trash; delete permanently") { hard = true }
@@ -40,6 +43,7 @@ module Doma::CLI
       cleaned_tags = tags.empty? ? tags : Doma::Validator.tags!(tags)
 
       db = Doma::Database.open
+      missing = 0
       begin
         positional.each do |raw|
           # Accept the same `list`-printed short_id that `cd` does. Only
@@ -64,7 +68,14 @@ module Doma::CLI
                 Doma::Logger.success "removed #{abs}"
               end
             else
-              Doma::Logger.warn "not registered: #{raw}"
+              # Same shape as `info <path>` for an unregistered path:
+              # ✗ marker + "to register it" hint + NotFoundError exit
+              # code (3). Previously this warned with `!` and exited 0,
+              # so a script doing `doma rm "$x" && something` couldn't
+              # tell whether anything was actually removed.
+              missing += 1
+              Doma::Logger.error "not registered: #{raw}"
+              STDERR.puts "  to register it, run: doma add #{raw}"
             end
           else
             case db.remove_tags(path, cleaned_tags)
@@ -73,13 +84,20 @@ module Doma::CLI
             in Doma::Database::RemoveTagsResult::NoMatch
               Doma::Logger.warn "no matching tag(s) on #{Doma::Validator.canonicalize(path)} (#{cleaned_tags.join(", ")})"
             in Doma::Database::RemoveTagsResult::NotRegistered
-              Doma::Logger.warn "not registered: #{raw}"
+              missing += 1
+              Doma::Logger.error "not registered: #{raw}"
+              STDERR.puts "  to register it, run: doma add #{raw}"
             end
           end
         end
       ensure
         db.close
       end
+      # NotFoundError exit code (3) — matches `doma info <unknown>` and
+      # makes `doma rm <unknown> && next` fail loudly. Successful removes
+      # in the same batch are still committed (partial-success batch
+      # semantics, same as `add`).
+      exit 3 if missing > 0
     end
 
     private def resolve_target(db : Doma::Database, raw : String) : String

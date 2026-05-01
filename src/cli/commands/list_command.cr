@@ -8,6 +8,7 @@ require "../../utils/duration"
 require "../../utils/errors"
 require "../../utils/logger"
 require "../../utils/suggester"
+require "../../utils/tag_glob"
 
 module Doma::CLI
   # Lists registered directories. Three filter dimensions, all optional
@@ -20,6 +21,12 @@ module Doma::CLI
   #                                tag (replaces the old `search` command)
   #   doma list -t crystal foo  → both: tag-tagged AND containing "foo"
   class ListCommand
+    # Sentinel returned to the renderer when an entry has no TTL'd tags
+    # at all, so the inner `t -> render_tag(t, ttl_map[t]?, color)` loop
+    # never has to special-case "no entry in the bulk map." Frozen at
+    # module load time and never mutated.
+    private EMPTY_TTL = {} of String => Int64
+
     def run(args : Array(String))
       tags = [] of String
       json_mode = false
@@ -110,10 +117,15 @@ module Doma::CLI
           return
         end
 
+        # Hydrate every entry's TTL map once so the per-row loops below
+        # (both JSON and text rendering) can do a hash lookup instead of
+        # a fresh SQL round trip per entry. Empty hash for an entry with
+        # all-permanent tags falls out naturally.
+        ttl_by_id = db.tag_expirations_bulk(entries.map(&.id), include_past: include_expired)
+
         if json_mode
           payload = entries.map do |e|
             row = {
-              "id"       => JSON::Any.new(e.id),
               "short_id" => JSON::Any.new(e.short_id),
               "path"     => JSON::Any.new(e.path),
               "basename" => JSON::Any.new(e.basename),
@@ -122,8 +134,7 @@ module Doma::CLI
             # `expirations` matches the export/import schema (tag_name =>
             # unix epoch). Only attached when at least one tag has a TTL,
             # so the common all-permanent case stays diff-friendly.
-            ttl_map = db.tag_expirations(e.id, include_past: include_expired)
-            unless ttl_map.empty?
+            if ttl_map = ttl_by_id[e.id]?
               row["expirations"] = JSON::Any.new(ttl_map.transform_values { |v| JSON::Any.new(v) })
             end
             row["exists"] = JSON::Any.new(Dir.exists?(e.path)) if check_existence
@@ -165,7 +176,7 @@ module Doma::CLI
           # but it's still copy-pasteable for `doma cd <id>`.
           short_str = color ? e.short_id.colorize(:dark_gray).to_s : e.short_id
           path_str = color ? e.path.colorize(:cyan).to_s : e.path
-          ttl_map = db.tag_expirations(e.id, include_past: include_expired)
+          ttl_map = ttl_by_id[e.id]? || EMPTY_TTL
           tags_str = e.tags.empty? ? "" : e.tags.map { |t| render_tag(t, ttl_map[t]?, color) }.join(' ')
           marker = ""
           if check_existence && !Dir.exists?(e.path)
@@ -183,6 +194,20 @@ module Doma::CLI
           if hidden > 0
             noun = hidden == 1 ? "tag" : "tags"
             STDERR.puts "  #{hidden} #{noun} hidden by TTL — pass --include-expired to show"
+          end
+        end
+
+        # Mirror the TTL footer for missing paths: when --check wasn't
+        # passed, count entries whose path is gone and surface the flag
+        # that would mark them. Without this, dead paths look identical
+        # to live ones in the default listing — the user only finds out
+        # after `cd` fails. Counting walks `entries` we already have, so
+        # no extra DB round trip.
+        unless check_existence
+          gone = entries.count { |e| !Dir.exists?(e.path) }
+          if gone > 0
+            noun = gone == 1 ? "path is" : "paths are"
+            STDERR.puts "  #{gone} #{noun} missing — pass --check to mark, or `doma prune --gone` to drop"
           end
         end
       ensure
@@ -233,7 +258,25 @@ module Doma::CLI
 
       effective = pick_override || Doma::Settings.current.selector
       if effective == Doma::Settings::SelectorMode::Auto
-        effective = STDIN.tty? ? Doma::Settings::SelectorMode::Builtin : Doma::Settings::SelectorMode::First
+        # Without an explicit override, refuse to silently auto-pick from
+        # a non-interactive context: the README itself recommends
+        # `cd "$(doma list -t crystal --pick)"`, and silently choosing
+        # one of N matches there is a footgun (the script `cd`s into
+        # a directory the user didn't intend). The user can opt back
+        # into the previous behavior with `--first` or
+        # `doma config set selector first`.
+        if STDIN.tty?
+          effective = Doma::Settings::SelectorMode::Builtin
+        else
+          first_tag = tags.first?
+          context = first_tag ? "tag '#{first_tag}'" : "current filter"
+          raise Doma::Error.new(
+            "ambiguous --pick (#{context} matches #{items.size} directories) " \
+            "and stdin is not a TTY",
+            exit_code: 4,
+            hint: "narrow the filter, or pass --first to take the most-recent match",
+          )
+        end
       end
 
       case effective
@@ -302,6 +345,13 @@ module Doma::CLI
     # the SQL straightforward — both `directories(tag)` and `search(query)`
     # already exist and are tested in isolation. Multi-tag AND is layered
     # on top by intersecting per-tag id sets.
+    #
+    # SQLite's GLOB is a permissive `*`-anywhere matcher, including across
+    # `/`. We re-tighten that to shell-glob semantics in Crystal — `*`
+    # doesn't cross `/`, `**` does — by post-filtering with `TagGlob`.
+    # The SQL still does the heavy lifting (tag join, sort, expiry
+    # filter); the post-filter just trims false positives the strict
+    # rules wouldn't accept.
     private def collect(db : Doma::Database, tags : Array(String), query : String?, sort : Doma::Database::SortBy, include_expired : Bool) : Array(Doma::Entry)
       base = if tags.empty?
                query ? db.search(query, include_expired: include_expired) : db.directories(sort: sort, include_expired: include_expired)
@@ -311,10 +361,10 @@ module Doma::CLI
                # additional tag's id set. Empty additional set short-circuits
                # to no matches without further DB work.
                first, *rest = tags
-               anchor = db.directories(first, sort: sort, include_expired: include_expired)
+               anchor = strict_filter(db.directories(first, sort: sort, include_expired: include_expired), first)
                rest.each do |t|
                  break if anchor.empty?
-                 ids = db.directories(t, sort: sort, include_expired: include_expired).map(&.id).to_set
+                 ids = rest_tag_ids(db, t, include_expired)
                  anchor = anchor.select { |e| ids.includes?(e.id) }
                end
                anchor
@@ -324,6 +374,32 @@ module Doma::CLI
 
       tagged_ids = base.map(&.id).to_set
       db.search(query, include_expired: include_expired).select { |e| tagged_ids.includes?(e.id) }
+    end
+
+    # Trim entries the SQL GLOB matched but our stricter rules would
+    # reject (single `*` shouldn't cross `/`, etc.). No-op for plain tag
+    # names — `TagGlob.match?` short-circuits to `==` there, but we skip
+    # the per-entry loop entirely as a small optimization for the
+    # common case.
+    private def strict_filter(entries : Array(Doma::Entry), pattern : String) : Array(Doma::Entry)
+      return entries unless pattern.includes?('*') || pattern.includes?('?')
+      entries.select { |e| e.tags.any? { |t| Doma::TagGlob.match?(pattern, t) } }
+    end
+
+    # Id set for a tag used purely as an intersection filter (the second,
+    # third, … `-t` in a multi-tag AND). For plain tag names we can ask
+    # the database to hand us just the ids — no tag GROUP_CONCAT, no
+    # entry hydration. For glob patterns the SQL GLOB is permissive
+    # (crosses `/`), so we still pay the price of a full `directories()`
+    # call to get each row's tag list back, then apply our stricter
+    # match in Crystal. Worth re-investigating only if globbing in rest
+    # position becomes a hot path.
+    private def rest_tag_ids(db : Doma::Database, pattern : String, include_expired : Bool) : Set(Int64)
+      if pattern.includes?('*') || pattern.includes?('?')
+        strict_filter(db.directories(pattern, include_expired: include_expired), pattern).map(&.id).to_set
+      else
+        db.directory_ids_for_tag(pattern, include_expired: include_expired).to_set
+      end
     end
 
     private def empty_message(tags : Array(String), query : String?) : String

@@ -4,6 +4,7 @@ require "../../services/trash"
 require "../../utils/duration"
 require "../../utils/errors"
 require "../../utils/logger"
+require "../../utils/runtime"
 require "../../utils/suggester"
 
 module Doma::CLI
@@ -132,6 +133,32 @@ module Doma::CLI
         end
       end
 
+      # Pre-count so we can both (a) skip the prompt entirely on an empty
+      # trash and (b) phrase the prompt with a real number ("Purge 4
+      # entries?" reads less abstract than "Purge everything?").
+      pending = if cutoff_age = older
+                  cutoff = Time.utc.to_unix - cutoff_age
+                  Doma::Trash.entries(prune: false).count { |e| e.deleted_at < cutoff }
+                else
+                  Doma::Trash.entries(prune: false).size
+                end
+
+      if pending == 0
+        Doma::Logger.info "nothing to purge"
+        return
+      end
+
+      # Confirmation gate. `rm <path>` writes to the trash by default
+      # (soft delete), so `trash empty` is the moment those snapshots
+      # actually become unrecoverable — a quiet purge here is a UX
+      # footgun. Honors -y/--yes and DOMA_YES=1 for the scripted case.
+      noun = pending == 1 ? "entry" : "entries"
+      scope_phrase = older.nil? ? "" : " (older than threshold)"
+      unless confirm?("Purge #{pending} trash #{noun}#{scope_phrase}? This cannot be undone.")
+        Doma::Logger.info "aborted"
+        return
+      end
+
       removed = Doma::Trash.empty!(older_seconds: older)
       if removed == 0
         Doma::Logger.info "nothing to purge"
@@ -139,6 +166,20 @@ module Doma::CLI
         scope = older.nil? ? "" : " (older than threshold)"
         Doma::Logger.success "purged #{removed} trash entr#{removed == 1 ? "y" : "ies"}#{scope}"
       end
+    end
+
+    # Yes/no prompt with the standard escape hatches. `-y` / `--yes` /
+    # `DOMA_YES=1` short-circuits to true; a non-TTY without those flags
+    # also short-circuits to true so existing scripts that piped to
+    # `trash empty` keep working — the new gate only fires for genuinely
+    # interactive sessions where the user could be surprised.
+    private def confirm?(question : String) : Bool
+      return true if Doma::Runtime.assume_yes?
+      return true unless STDIN.tty? && STDOUT.tty?
+      STDOUT.print "#{question} [y/N] "
+      STDOUT.flush
+      reply = STDIN.gets || ""
+      reply.strip.downcase.in?({"y", "yes"})
     end
 
     # ------------------------------------------------------------------

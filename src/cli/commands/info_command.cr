@@ -113,7 +113,6 @@ module Doma::CLI
 
     private def render_json(info : Doma::Database::PathInfo, tags : Array(String), ttl_map : Hash(String, Int64), exists : Bool)
       payload = {
-        "id"           => JSON::Any.new(info.id),
         "short_id"     => JSON::Any.new(info.short_id),
         "path"         => JSON::Any.new(info.path),
         "basename"     => JSON::Any.new(info.basename),

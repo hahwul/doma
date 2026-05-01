@@ -849,14 +849,17 @@ end
 # ---------- list --pick ambiguous auto-pick ----------
 
 describe "doma list --pick ambiguous" do
-  it "warns on stderr when multiple matches auto-resolve to the first" do
+  it "errors out when stdin is not a TTY and multiple matches need disambiguation" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     with_home do |home|
       seed_home(home) # `shared` matches /var + $HOME
       r = run(["list", "-t", "shared", "--pick"], {"DOMA_HOME" => home})
-      r[:status].exit_code.should eq(0)
-      r[:err].should contain("matches 2 directories")
-      r[:err].should contain("--by recent")
+      # Refuses to silently auto-pick from a non-interactive context
+      # (the README itself recommends `cd "$(doma list -t … --pick)"`,
+      # so a quiet pick of one of N matches is a footgun there).
+      r[:status].exit_code.should eq(4)
+      r[:err].should contain("ambiguous --pick")
+      r[:err].should contain("--first")
     end
   end
 
@@ -870,16 +873,6 @@ describe "doma list --pick ambiguous" do
     end
   end
 
-  it "respects -q (quiet suppresses the advisory)" do
-    pending! "binary not built" unless File.exists?(DOMA_BIN)
-    with_home do |home|
-      seed_home(home)
-      r = run(["-q", "list", "-t", "shared", "--pick"], {"DOMA_HOME" => home})
-      r[:status].exit_code.should eq(0)
-      r[:err].should_not contain("matches")
-    end
-  end
-
   it "--first picks deterministically without launching the picker" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     with_home do |home|
@@ -887,6 +880,16 @@ describe "doma list --pick ambiguous" do
       r = run(["list", "-t", "shared", "--pick", "--first"], {"DOMA_HOME" => home})
       r[:status].exit_code.should eq(0)
       r[:out].strip.empty?.should be_false
+    end
+  end
+
+  it "--first under -q stays silent" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      r = run(["-q", "list", "-t", "shared", "--pick", "--first"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(0)
+      r[:err].should_not contain("matches")
     end
   end
 end
