@@ -68,7 +68,7 @@ end
 # ---------- prune ----------
 
 describe "doma prune" do
-  it "[--gone] prunes paths that no longer exist on disk" do
+  it "[--gone] trashes paths that no longer exist on disk (default)" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     with_home do |home|
       vanish = File.tempname("doma-prune-vanish")
@@ -78,9 +78,34 @@ describe "doma prune" do
 
       r = run(["prune", "--gone"], {"DOMA_HOME" => home})
       r[:status].exit_code.should eq(0)
-      # Logger.success writes to STDOUT, not STDERR — important
-      # because pipelines depend on it.
+      # Default sweep is reversible — entries land in the trash so
+      # a briefly-unmounted disk doesn't permanently destroy tags.
+      # Logger.success writes to STDOUT, not STDERR.
+      r[:out].should contain("trashed 1 missing path")
+      r[:out].should contain("doma trash restore")
+
+      tr = run(["trash", "list"], {"DOMA_HOME" => home})
+      # `trash list` truncates very long paths in the table — match on
+      # the basename which always survives the truncation.
+      tr[:out].should contain(File.basename(vanish))
+    end
+  end
+
+  it "[--gone --hard] permanently deletes (skips trash)" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      vanish = File.tempname("doma-prune-hard-vanish")
+      FileUtils.mkdir_p(vanish)
+      run(["add", vanish, "-t", "doomed"], {"DOMA_HOME" => home})
+      FileUtils.rm_rf(vanish)
+
+      r = run(["prune", "--gone", "--hard"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(0)
       r[:out].should contain("pruned 1 missing path")
+      r[:out].should contain("permanent")
+
+      tr = run(["trash", "list"], {"DOMA_HOME" => home})
+      tr[:out].should contain("trash is empty")
     end
   end
 
@@ -115,6 +140,174 @@ describe "doma prune" do
       r = run(["prune"], {"DOMA_HOME" => home})
       r[:status].exit_code.should eq(2)
       r[:err].should contain("requires --gone or --expired")
+    end
+  end
+end
+
+# ---------- rm tag-name redirect ----------
+
+describe "doma rm tag-name input" do
+  it "steers the user when <raw> matches a known tag name" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      target = File.tempname("doma-rm-tag")
+      FileUtils.mkdir_p(target)
+      run(["add", target, "-t", "alpha"], {"DOMA_HOME" => home})
+
+      r = run(["rm", "alpha"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(3)
+      r[:err].should contain("looks like a tag name")
+      r[:err].should contain("-t alpha")
+    ensure
+      FileUtils.rm_rf(target) if target
+    end
+  end
+end
+
+# ---------- move pre-checks ----------
+
+describe "doma move" do
+  it "checks source registration before validating destination" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      r = run(["move", "/tmp/never-was-here", "/tmp/also-not-here"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(3)
+      # Pre-fix this surfaced "not a directory: /tmp/also-not-here",
+      # pointing the user at the wrong arg. Source check first now.
+      r[:err].should contain("path not registered")
+      r[:err].should contain("/tmp/never-was-here")
+    end
+  end
+
+  it "hints at --allow-missing when destination doesn't exist" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      target = File.tempname("doma-move-from")
+      FileUtils.mkdir_p(target)
+      run(["add", target, "-t", "x"], {"DOMA_HOME" => home})
+
+      r = run(["move", target, "#{target}-renamed"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(2)
+      r[:err].should contain("not a directory")
+      r[:err].should contain("--allow-missing")
+    ensure
+      FileUtils.rm_rf(target) if target
+    end
+  end
+end
+
+# ---------- short_id redirects ----------
+
+describe "doma rm/add short_id redirects" do
+  it "rm <short_id> for an entry already in trash points at trash restore" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      target = File.tempname("doma-redirect-rm")
+      FileUtils.mkdir_p(target)
+      run(["add", target, "-t", "x"], {"DOMA_HOME" => home})
+      r = run(["rm", target], {"DOMA_HOME" => home})
+      sid = r[:out].match(/doma trash restore (\w+)/).try(&.[1]).to_s
+      sid.empty?.should be_false
+
+      again = run(["rm", sid], {"DOMA_HOME" => home})
+      again[:status].exit_code.should eq(3)
+      again[:err].should contain("not registered")
+      # The pre-fix hint pointed at `doma add` which created a `./<id>`
+      # canonicalize attempt — wrong direction. Verify the redirect.
+      again[:err].should contain("trash restore")
+    ensure
+      FileUtils.rm_rf(target) if target
+    end
+  end
+
+  it "add <short_id> for a trashed entry suggests trash restore" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      target = File.tempname("doma-redirect-add")
+      FileUtils.mkdir_p(target)
+      run(["add", target, "-t", "x"], {"DOMA_HOME" => home})
+      r = run(["rm", target], {"DOMA_HOME" => home})
+      sid = r[:out].match(/doma trash restore (\w+)/).try(&.[1]).to_s
+
+      readd = run(["add", sid], {"DOMA_HOME" => home})
+      readd[:status].exit_code.should eq(2)
+      readd[:err].should contain("looks like a short_id")
+      readd[:err].should contain("trash restore")
+    ensure
+      FileUtils.rm_rf(target) if target
+    end
+  end
+
+  it "add <short_id> for an active entry suggests re-tag form" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      target = File.tempname("doma-redirect-active")
+      FileUtils.mkdir_p(target)
+      run(["add", target, "-t", "x"], {"DOMA_HOME" => home})
+      info = run(["info", target, "--json"], {"DOMA_HOME" => home})
+      sid = JSON.parse(info[:out])["short_id"].as_s
+
+      r = run(["add", sid], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(2)
+      r[:err].should contain("looks like a short_id")
+      r[:err].should contain("already registered")
+    ensure
+      FileUtils.rm_rf(target) if target
+    end
+  end
+end
+
+# ---------- info bare-name fallback ----------
+
+describe "doma info" do
+  it "falls back to substring search for bare-name input" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      target = File.tempname("doma-info-name")
+      FileUtils.mkdir_p(target)
+      run(["add", target, "-t", "demo"], {"DOMA_HOME" => home})
+
+      r = run(["info", File.basename(target)], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(0)
+      r[:out].should contain(target)
+    ensure
+      FileUtils.rm_rf(target) if target
+    end
+  end
+
+  it "errors with candidate list on multiple bare-name matches" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      a = File.tempname("doma-info-multi-aaa")
+      b = File.tempname("doma-info-multi-bbb")
+      FileUtils.mkdir_p(a)
+      FileUtils.mkdir_p(b)
+      run(["add", a, "-t", "shared"], {"DOMA_HOME" => home})
+      run(["add", b, "-t", "shared"], {"DOMA_HOME" => home})
+
+      # Both paths share the prefix "doma-info-multi" → 2 hits.
+      r = run(["info", "doma-info-multi"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(2)
+      r[:err].should contain("multiple matches")
+    ensure
+      FileUtils.rm_rf(a) if a
+      FileUtils.rm_rf(b) if b
+    end
+  end
+end
+
+# ---------- hierarchical glob hint ----------
+
+describe "doma list / run hierarchical glob hint" do
+  it "list -t <parent> hints at <parent>/* when only children exist" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      run(["add", "/tmp", "-t", "work/proj-a"], {"DOMA_HOME" => home})
+      run(["add", "/var", "-t", "work/proj-b"], {"DOMA_HOME" => home})
+
+      r = run(["list", "-t", "work"], {"DOMA_HOME" => home})
+      r[:err].should contain("'work/*'")
+      r[:err].should contain("work/proj-a")
     end
   end
 end

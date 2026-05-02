@@ -75,7 +75,7 @@ module Doma::CLI
               # tell whether anything was actually removed.
               missing += 1
               Doma::Logger.error "not registered: #{raw}"
-              STDERR.puts "  to register it, run: doma add #{raw}"
+              STDERR.puts "  #{not_registered_hint(db, raw)}"
             end
           else
             case db.remove_tags(path, cleaned_tags)
@@ -86,7 +86,7 @@ module Doma::CLI
             in Doma::Database::RemoveTagsResult::NotRegistered
               missing += 1
               Doma::Logger.error "not registered: #{raw}"
-              STDERR.puts "  to register it, run: doma add #{raw}"
+              STDERR.puts "  #{not_registered_hint(db, raw)}"
             end
           end
         end
@@ -104,6 +104,31 @@ module Doma::CLI
       return raw if raw.includes?('/') || raw.includes?('.') || raw.includes?('~')
       return raw unless raw.matches?(/\A[0-9a-fA-F]{4,16}\z/)
       Doma::ShortIdResolver.resolve(db, raw) || raw
+    end
+
+    # `not registered` follow-up. The default hint points the user at
+    # `doma add <raw>`, but two common shapes need a different steer:
+    #   - short_id already in the trash → `doma trash restore`
+    #   - the raw matches a known *tag name* → the user almost
+    #     certainly meant "untag this from a path" (rm takes -t TAG)
+    #     or "rename/merge the tag", not "register a new path called
+    #     `alpha`". Without this branch, `doma rm alpha` left the user
+    #     staring at "to register it, run: doma add alpha", which is
+    #     the opposite of what they wanted.
+    private def not_registered_hint(db : Doma::Database, raw : String) : String
+      if raw.matches?(/\A[0-9a-fA-F]{4,16}\z/) && !raw.includes?('/')
+        if entry = Doma::Trash.find_by_short_id(raw.downcase)
+          return "in trash (#{entry.path}). " \
+                 "Restore: doma trash restore #{entry.short_id[0..6]}"
+        end
+      end
+
+      if !raw.includes?('/') && !raw.includes?('.') && db.tag_names.includes?(raw)
+        return "looks like a tag name. To untag a path: " \
+               "doma rm <path> -t #{raw} (or `doma rename #{raw} <new>` to relabel)"
+      end
+
+      "to register it, run: doma add #{raw}"
     end
   end
 end

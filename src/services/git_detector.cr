@@ -11,13 +11,15 @@ module Doma
       host : String?,
       owner : String?,
       repo : String? do
-      # Tags worth attaching when --git-tag is on. We deliberately keep this
-      # small (host + repo). Owner is intentionally excluded because in
-      # practice it tends to be either the user themselves (noisy) or one of
-      # several orgs (causing tag explosion).
+      # Tags worth attaching when --git-tag is on. Host + repo: enough
+      # selectivity to be useful as a filter. Owner is intentionally
+      # excluded because in practice it tends to be either the user
+      # themselves (noisy) or one of several orgs (causing tag explosion).
+      # A bare `git` tag would land on every git repo and add zero
+      # filtering signal — `auto_tag.git=true` users would just see
+      # `#git` everywhere — so it's left off.
       def to_tags : Array(String)
         out = [] of String
-        out << "git" if git
         if host = self.host
           out << host
         end

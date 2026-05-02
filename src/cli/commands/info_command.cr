@@ -51,6 +51,26 @@ module Doma::CLI
 
         unless info
           if !short_id_shaped?(raw)
+            # Bare-name fallback: when the user types `doma info doma`,
+            # they almost certainly mean "show me the entry whose path
+            # or tag contains `doma`", not "look up `<cwd>/doma` as a
+            # filesystem path". Mirror `list <query>` here when the
+            # input has no path-like markers (no `/`, `.`, or `~`),
+            # didn't resolve as a short_id, and isn't `.` (which always
+            # means cwd). Exactly one hit → show it. Multiple →
+            # disambiguate with short_ids so the user can re-issue.
+            if name_like?(raw) && (info = resolve_by_search(db, raw))
+              tags = db.tags_for(info.id)
+              ttl_map = db.tag_expirations(info.id, include_past: true)
+              exists = Dir.exists?(info.path)
+              if json_mode
+                render_json(info, tags, ttl_map, exists)
+              else
+                render_text(info, tags, ttl_map, exists, raw)
+              end
+              return
+            end
+
             if trashed = Doma::Trash.find_by_path(canonical)
               raise Doma::NotFoundError.new(
                 "not registered: #{canonical}",
@@ -109,6 +129,40 @@ module Doma::CLI
     private def short_id_shaped?(raw : String) : Bool
       return false if raw.includes?('/') || raw.includes?('.') || raw.includes?('~')
       raw.matches?(/\A[0-9a-fA-F]{4,16}\z/)
+    end
+
+    # True for inputs the user clearly didn't mean as a filesystem
+    # path: no path separators, no parent/relative markers. Anchors
+    # the substring-search fallback so `info <abs_path>` for a
+    # missing path still produces "not registered" instead of being
+    # silently broadened.
+    private def name_like?(raw : String) : Bool
+      return false if raw.empty? || raw == "."
+      !raw.includes?('/') && !raw.includes?('.') && !raw.includes?('~')
+    end
+
+    # Substring fallback for bare-name `info` inputs. One match → show
+    # it. Multiple matches raise a ValidationError with a candidate
+    # list; the user picks one and re-issues with the short_id (which
+    # is unambiguous). No matches → return nil so the caller falls
+    # through to the existing not-registered + trash hint flow.
+    private def resolve_by_search(db : Doma::Database, query : String) : Doma::Database::PathInfo?
+      hits = db.search(query)
+      return if hits.empty?
+
+      if hits.size == 1
+        return db.find_path_info(hits.first.path)
+      end
+
+      lines = hits.first(8).map do |e|
+        tag_str = e.tags.empty? ? "" : "\t##{e.tags.join(" #")}"
+        "  #{e.short_id}  #{e.path}#{tag_str}"
+      end
+      more = hits.size > 8 ? "\n  ... and #{hits.size - 8} more" : ""
+      raise Doma::ValidationError.new(
+        "multiple matches for '#{query}':\n#{lines.join("\n")}#{more}",
+        "pick one with `doma info <short_id>` or narrow with `doma list #{query}`"
+      )
     end
 
     private def render_json(info : Doma::Database::PathInfo, tags : Array(String), ttl_map : Hash(String, Int64), exists : Bool)

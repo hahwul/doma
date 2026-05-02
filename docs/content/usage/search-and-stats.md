@@ -80,7 +80,10 @@ Not really a stats command, but adjacent: reports doma's database location, size
 
 ```bash
 doma prune --gone        # entries whose path no longer exists on disk
+doma prune --gone --hard # same, but skip the trash (permanent)
 doma prune --expired     # tag rows whose TTL has elapsed
 ```
 
 Both are bulk-only operations — they refuse to combine and have no per-path form by design (use `rm <path>` for targeted deletion). Run them when the report from `doctor` shows drift.
+
+By default, `prune --gone` writes the dropped entries to the trash so a briefly-unmounted external disk doesn't permanently destroy tags — recover with `doma trash list` / `doma trash restore <id>` for 7 days. Pass `--hard` to skip that snapshot when you really do want the rows gone.

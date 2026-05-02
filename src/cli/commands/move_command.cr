@@ -2,6 +2,8 @@ require "option_parser"
 require "../../db/database"
 require "../../utils/errors"
 require "../../utils/logger"
+require "../../utils/suggester"
+require "../../utils/validator"
 
 module Doma::CLI
   # Updates a registered directory's path. Tags carry over. If the new
@@ -49,6 +51,42 @@ module Doma::CLI
       old_path, new_path = positional[0], positional[1]
       db = Doma::Database.open
       begin
+        # Pre-checks ordered to give actionable errors:
+        #   (1) Is the source registered? — without this, an unregistered
+        #       <old> with a non-existent <new> would surface "not a
+        #       directory: <new>", pointing the user at the wrong arg.
+        #   (2) Does <new> validate (or is --allow-missing set)? —
+        #       canonicalize without disk-existence so we can attach an
+        #       --allow-missing hint when the path is simply not on this
+        #       machine yet (the common cross-host case).
+        # `db.move_path` re-runs the source lookup inside its transaction,
+        # so the (1) check is duplicate work but trivially cheap and worth
+        # it for the better error path.
+        old_abs = Doma::Validator.canonicalize(old_path)
+        unless db.find_path_info(old_abs)
+          raise Doma::NotFoundError.new(
+            "path not registered: #{old_abs}",
+            hint: Doma::Suggester.hint_for(old_abs, db.directories.map(&.path))
+          )
+        end
+
+        unless allow_missing
+          # Bypass `Validator.path!`'s built-in "not a directory" message
+          # so we can attach the --allow-missing hint. Non-existence on
+          # the destination is the *normal* shape for "I haven't moved
+          # the directory on disk yet" and "I'm syncing from another
+          # host" — the previous bare error pushed users to make a
+          # placeholder dir or hand-edit the database.
+          new_abs = Doma::Validator.canonicalize(new_path)
+          unless Dir.exists?(new_abs)
+            raise Doma::ValidationError.new(
+              "not a directory: #{new_abs}",
+              hint: "pass --allow-missing if the destination isn't on this machine yet " \
+                    "(e.g. cross-host snapshot, or you haven't done the disk move yet)"
+            )
+          end
+        end
+
         case db.move_path(old_path, new_path, validate_path: !allow_missing)
         when :noop
           Doma::Logger.info "no change (#{old_path} == #{new_path})"

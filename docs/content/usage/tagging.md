@@ -47,7 +47,6 @@ doma add . --auto-tag --git-tag
 
 `--auto-tag` adds the basename. `--git-tag` reads `.git/config`'s `[remote "origin"]` and derives:
 
-- a `git` tag (always, when there's any remote)
 - a host tag (`github`, `gitlab`, `bitbucket`, `codeberg`, or the raw hostname for self-hosted)
 - the repo name
 

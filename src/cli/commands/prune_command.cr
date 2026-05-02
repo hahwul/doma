@@ -1,5 +1,6 @@
 require "option_parser"
 require "../../db/database"
+require "../../services/trash"
 require "../../utils/errors"
 require "../../utils/logger"
 
@@ -13,9 +14,10 @@ module Doma::CLI
   class PruneCommand
     def run(args : Array(String))
       mode : Symbol? = nil
+      hard = false
 
       parser = OptionParser.new do |p|
-        p.banner = "Usage: doma prune (--gone | --expired)"
+        p.banner = "Usage: doma prune (--gone | --expired) [--hard]"
         p.on("--gone", "Remove every entry whose path no longer exists on disk") do
           raise Doma::ValidationError.new("--gone and --expired cannot be combined") if mode
           mode = :gone
@@ -24,6 +26,13 @@ module Doma::CLI
           raise Doma::ValidationError.new("--gone and --expired cannot be combined") if mode
           mode = :expired
         end
+        # Mirrors `rm --hard`. With it, --gone skips the trash snapshot
+        # and deletes entries permanently; without it, dead entries are
+        # recoverable via `doma trash restore <id>` for 7 days.
+        # `--expired` only removes (path, tag) bindings (the path
+        # itself stays), so it has nothing meaningful to snapshot —
+        # `--hard` is silently a no-op there.
+        p.on("--hard", "Skip the trash; delete permanently") { hard = true }
         p.on("-h", "--help", "Show help") do
           puts p
           exit 0
@@ -34,12 +43,12 @@ module Doma::CLI
       raise Doma::ValidationError.new("prune requires --gone or --expired") unless mode
 
       case mode
-      when :gone    then run_gone
+      when :gone    then run_gone(hard)
       when :expired then run_expired
       end
     end
 
-    private def run_gone
+    private def run_gone(hard : Bool)
       db = Doma::Database.open
       begin
         # List first so the user sees what was removed; reporting the
@@ -52,8 +61,29 @@ module Doma::CLI
         end
 
         dead.each { |e| Doma::Logger.info "  #{e.path}" }
+
+        if hard
+          removed = db.prune_dead!
+          Doma::Logger.success "pruned #{removed} missing path(s) (permanent)"
+          return
+        end
+
+        # Default path: route the dead entries through the same trash
+        # store `rm` writes to. A briefly-unmounted external disk or
+        # NAS made `prune --gone` data-destructive in the previous
+        # implementation — one mistaken sweep and every tag was gone
+        # for good. With trash on by default the same sweep is fully
+        # reversible for 7 days; --hard preserves the old behavior
+        # for users who actually want it.
+        snapshots = dead.compact_map { |e| Doma::Trash.snapshot(db, e.path) }
         removed = db.prune_dead!
-        Doma::Logger.success "pruned #{removed} missing path(s)"
+        snapshots.each { |snap| Doma::Trash.add!(snap) }
+        sample_ids = snapshots.first(3).map { |s| s.short_id[0..6] }.join(", ")
+        more = snapshots.size > 3 ? ", ..." : ""
+        Doma::Logger.success(
+          "trashed #{removed} missing path(s) " \
+          "(restore with `doma trash restore #{sample_ids}#{more}`)"
+        )
       ensure
         db.close
       end

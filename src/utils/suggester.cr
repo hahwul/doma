@@ -34,5 +34,29 @@ module Doma
         "Did you mean '#{pick}'?"
       end
     end
+
+    # Tag-aware variant of `hint_for`. Adds a hierarchical-glob hint
+    # for the case where the user types `-t work` and misses tags
+    # like `work/proj-a` and `work/proj-b`. Doma's globs follow
+    # shell-glob rules — `*` doesn't cross `/` — so `-t work` and
+    # `-t work*` both miss those; the right incantation is `-t 'work/*'`.
+    # When the literal input doesn't exist but `<input>/...` tags do,
+    # we surface that glob form before falling back to a typo hint.
+    def tag_hint_for(input : String, candidates : Enumerable(String)) : String?
+      return if input.empty?
+      return if input.includes?('*') || input.includes?('?')
+
+      unless input.includes?('/')
+        prefix = "#{input}/"
+        children = candidates.select(&.starts_with?(prefix))
+        unless children.empty?
+          sample = children.first(2).join(", ")
+          more = children.size > 2 ? ", ..." : ""
+          return "did you mean '#{input}/*'? (matches #{sample}#{more})"
+        end
+      end
+
+      hint_for(input, candidates)
+    end
   end
 end

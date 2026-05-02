@@ -49,7 +49,7 @@ doma add [<path> ...] [-t TAG ...] [--ttl DUR | --tmp]
 - `--ttl DUR`: tag expires after `DUR` (e.g. `30s`, `5m`, `1h`, `7d`, `2w`).
 - `--tmp`: alias for `--ttl 7d`.
 - `--auto-tag` / `--no-auto-tag`: include the basename as a tag.
-- `--git-tag` / `--no-git-tag`: derive `git`, host, and repo tags from `.git/config`.
+- `--git-tag` / `--no-git-tag`: derive host and repo tags from `.git/config`.
 - `-n`, `--dry-run`: resolve and print without writing.
 
 Path defaults to `.` if omitted. Multiple paths are accepted; partial success on validation errors.
@@ -77,11 +77,12 @@ For bulk cleanup (sweep missing paths, prune expired tag rows), use `doma prune`
 ## `prune`
 
 ```
-doma prune (--gone | --expired)
+doma prune (--gone | --expired) [--hard]
 ```
 
-- `--gone`: remove every entry whose path no longer exists on disk. Trash-skipping by design (the original directory is already gone, so there's nothing to restore to).
+- `--gone`: remove every entry whose path no longer exists on disk. Snapshotted to the trash by default — recover with `doma trash list` / `doma trash restore <id>` for 7 days. The path itself is gone, but the *tags* on it (often the only thing of value) remain restorable.
 - `--expired`: drop tag rows whose TTL has elapsed and GC any tags left with no rows. Directories themselves are preserved.
+- `--hard`: skip the trash on `--gone` and delete permanently (no-op for `--expired`, which already only removes tag bindings).
 
 The two flags are mutually exclusive — each sweep has its own intent.
 

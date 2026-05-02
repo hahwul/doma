@@ -1,10 +1,12 @@
 require "option_parser"
 require "../../db/database"
 require "../../services/git_detector"
+require "../../services/trash"
 require "../../utils/config"
 require "../../utils/duration"
 require "../../utils/errors"
 require "../../utils/logger"
+require "../../utils/short_id_resolver"
 require "../../utils/validator"
 
 module Doma::CLI
@@ -80,7 +82,11 @@ module Doma::CLI
       # Done as a separate branch (rather than a flag inside the loop)
       # because there's no point even touching the database for a preview.
       if dry_run
+        # Read-only DB just to check for short_id collisions in the
+        # pre-validation hint. Same rationale as the non-dry-run branch.
+        preview_db = Doma::Database.open
         failures = process_each(positional) do |path|
+          short_id_redirect_hint(preview_db, path)
           abs = Doma::Validator.path!(path)
           applied = Doma::Validator.tags!(raw_tags).dup
           applied.concat(derive_tags(abs, use_basename, use_git, git_explicit))
@@ -89,6 +95,7 @@ module Doma::CLI
           summary += "  (#{ttl_label})" if ttl_label
           Doma::Logger.info "[dry-run] would add #{abs} #{summary}"
         end
+        preview_db.close
         exit 2 if failures > 0
         return
       end
@@ -96,6 +103,14 @@ module Doma::CLI
       db = Doma::Database.open
       begin
         failures = process_each(positional) do |path|
+          # Catch the common "user pasted a `list` short_id into `add`"
+          # mistake before path validation. Without this, `add c6b7d5d`
+          # tries to canonicalize `<cwd>/c6b7d5d` and fails with a "not
+          # a directory" error that looks like a real disk problem,
+          # when the input was actually meant for `rm` or
+          # `trash restore`.
+          short_id_redirect_hint(db, path)
+
           abs = Doma::Validator.path!(path)
 
           # User-supplied tags must validate strictly; auto-derived tags
@@ -148,6 +163,9 @@ module Doma::CLI
     # Run the block once per path, catching ValidationError so a single
     # bad input doesn't abort the rest of the batch. Returns the failure
     # count so the caller can pick a non-zero exit code if needed.
+    # Hints attached to the error are surfaced on a follow-up line so
+    # pre-validation redirects (e.g. short_id paste → trash restore) can
+    # steer the user to the right command.
     private def process_each(paths : Array(String), &)
       failures = 0
       paths.each do |path|
@@ -156,9 +174,39 @@ module Doma::CLI
         rescue ex : Doma::ValidationError
           failures += 1
           Doma::Logger.error format_failure(path, ex, paths.size)
+          if hint = ex.hint
+            STDERR.puts "  #{hint}"
+          end
         end
       end
       failures
+    end
+
+    # Pre-validation steer for inputs that look like a `list`-style
+    # short_id (4–16 hex, no path separators). When the token resolves
+    # against the active DB or sits in the trash, we know with high
+    # confidence the user meant a different verb than `add` — point
+    # them at the correct command instead of canonicalizing
+    # `<cwd>/<id>` and failing with "not a directory". Pure no-op for
+    # everyday path inputs.
+    private def short_id_redirect_hint(db : Doma::Database, raw : String)
+      return if raw.includes?('/') || raw.includes?('.') || raw.includes?('~')
+      return unless raw.matches?(/\A[0-9a-fA-F]{4,16}\z/)
+
+      if active = Doma::ShortIdResolver.resolve(db, raw)
+        raise Doma::ValidationError.new(
+          "looks like a short_id, not a path: #{raw}",
+          "already registered as #{active}. " \
+          "To re-tag, run: doma add #{active} -t <tag>"
+        )
+      end
+      if entry = Doma::Trash.find_by_short_id(raw.downcase)
+        raise Doma::ValidationError.new(
+          "looks like a short_id, not a path: #{raw}",
+          "in trash (#{entry.path}). " \
+          "Restore: doma trash restore #{entry.short_id[0..6]}"
+        )
+      end
     end
 
     # Avoid `<input>: not a directory: <input>` duplication. The

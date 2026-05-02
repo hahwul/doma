@@ -323,7 +323,7 @@ module Doma::CLI
       if path_like?(candidate)
         return "to register this path, run: doma add #{candidate}"
       end
-      Doma::Suggester.hint_for(candidate, db.tag_names)
+      Doma::Suggester.tag_hint_for(candidate, db.tag_names)
     end
 
     private def path_like?(input : String) : Bool
@@ -439,6 +439,8 @@ module Doma::CLI
     # Pick the first tag the user typed that doesn't actually exist (and
     # isn't a glob) and propose the closest catalog name. Stops at one
     # hint to keep the noise floor low when several tags are bogus.
+    # `tag_hint_for` covers two miss shapes: typo (Levenshtein) and
+    # hierarchical parent (`-t work` when only `work/...` tags exist).
     private def typo_hint(db : Doma::Database, tags : Array(String)) : String?
       return if tags.empty?
       catalog = db.tag_names
@@ -446,7 +448,7 @@ module Doma::CLI
       tags.each do |t|
         next if t.includes?('*') || t.includes?('?')
         next if known.includes?(t)
-        if hint = Doma::Suggester.hint_for(t, catalog)
+        if hint = Doma::Suggester.tag_hint_for(t, catalog)
           return hint
         end
       end

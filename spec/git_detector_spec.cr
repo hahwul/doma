@@ -39,7 +39,8 @@ describe Doma::GitDetector do
       info = Doma::GitDetector.detect(dir)
       info.git.should be_true
       info.host.should be_nil
-      info.to_tags.should eq(["git"])
+      # No `git` tag — every git repo would carry it (zero selectivity).
+      info.to_tags.should be_empty
     end
   end
 
@@ -49,7 +50,7 @@ describe Doma::GitDetector do
       info.host.should eq("github")
       info.owner.should eq("hahwul")
       info.repo.should eq("doma")
-      info.to_tags.should eq(["git", "github", "doma"])
+      info.to_tags.should eq(["github", "doma"])
     end
   end
 
@@ -96,7 +97,7 @@ describe Doma::GitDetector do
       info.git.should be_true
       info.host.should be_nil
       info.repo.should be_nil
-      info.to_tags.should eq(["git"])
+      info.to_tags.should be_empty
     ensure
       FileUtils.rm_rf(dir)
     end

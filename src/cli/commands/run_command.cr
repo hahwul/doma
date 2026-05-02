@@ -80,7 +80,7 @@ module Doma::CLI
       if paths.empty?
         raise Doma::NotFoundError.new(
           "no directories tagged '#{tag}'",
-          hint: Doma::Suggester.hint_for(tag, all_tags)
+          hint: Doma::Suggester.tag_hint_for(tag, all_tags)
         )
       end
 
