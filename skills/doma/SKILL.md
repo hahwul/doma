@@ -33,10 +33,11 @@ tag, and silent emptiness is worse than asking.
 |---|---|---|
 | One path per line, for `while read` / `xargs` | `doma list -t TAG --paths` | The default newline-separated form |
 | NUL-separated, paths with spaces | `doma list -t TAG -0` | Pipe to `xargs -0`. Safer than `--paths` when paths might contain spaces |
-| Structured (id, short_id, basename, tags) | `doma list -t TAG --json` | When you need more than just the path — e.g. preserving short_id for later reference |
+| Structured JSON (`short_id`, `path`, `basename`, `tags`) | `doma list -t TAG --json` | TTL'd tags add an `expirations` map (`tag → unix epoch`); `--check` adds a boolean `exists` |
 | Substring across path/basename/tag | `doma list <query>` | Single substring match. Combines with `-t` for intersection. Multiple positional args are joined by a space — they are *not* AND-ed |
-| Sorted by recency | `doma list --by recent` | Most-recently-used first; useful when "the project I was just working on" is in scope |
-| Just the tag names | `doma tags --names` | Cheap probe before committing to a tag |
+| Sorted by recency | `doma list --by recent` | Most-recently-used first; aliases: `used`, `recency`. Useful when "the project I was just working on" is in scope |
+| Mark missing paths inline | `doma list --check` | Tags entries whose path is gone with `[gone]`. Without it, the footer just counts them |
+| Just the tag names | `doma tags --names` | Cheap probe before committing to a tag. `doma tags --tree` shows the `work/proj/...` hierarchy; `doma tags -0` is NUL-separated for `xargs -0` |
 
 ## When the user wants to register or bookmark paths
 
@@ -49,11 +50,12 @@ unrelated work.
 | "Track this project" / "I'll be working on it" | `doma add <path> -t <category>` | Permanent (no TTL) |
 | "Track all of these as `<name>`" | `doma add <path1> <path2> ... -t <name>` | Multi-path is one command |
 | "Bookmark this for review" / "Remember this for later" | `doma mark <bookmark-name>` | cwd + 7-day TTL — equivalent to `add . -t NAME --tmp`, just shorter |
-| "Mark these for the auth review session" | `cd <each>` then `doma mark auth-review` | Loop the marks; tags accumulate |
+| "Mark these for the auth review session" | `doma mark -p <each-path> auth-review` | One call per path; tags accumulate. `-p` skips the cd dance |
 | "Save this for the next week" | `doma add . -t reading --tmp` | Or `doma mark reading` |
 | "Save this for two days" | `doma add . -t reading --ttl 2d` | Custom duration; `mark` only covers the 7d default |
 | "Untag this" | `doma rm <path> -t <tag>` | Removes the tag; the path entry stays if it has other tags |
-| "Forget this directory entirely" | `doma rm <path>` | Drops every tag and the path row |
+| "Forget this directory" | `doma rm <path>` | Soft-delete: routes to trash, recoverable for 7d via `doma trash restore <id>` |
+| "Delete permanently, skip the trash" | `doma rm <path> --hard` | Same `--hard` is available on `doma prune --gone` for sweeping dead paths irrecoverably |
 
 `mark` is the right tool for transient session-style organization
 (code review, refactor sweep, debugging deep-dive). `add` is for
@@ -65,8 +67,28 @@ durable categorization that survives multiple sessions.
 doma add /path        -t crystal -t cli           # multiple tags, one path
 doma add /a /b /c     -t shared                   # one tag, many paths
 doma add . -t crystal --auto-tag --git-tag        # +basename, +github/repo derived
+doma mark -p /elsewhere spike                     # mark a path other than cwd
 doma mark spike skim review                       # multiple temp tags on cwd at once
 ```
+
+## Recovering from `rm` (the trash)
+
+`doma rm <path>` defaults to a soft-delete: the row + tags are
+snapshotted into a trash store under `~/.config/doma/trash/` and the
+path disappears from `list` output. Anything older than 7 days is
+auto-pruned on the next trash op. `--hard` on either `rm` or
+`prune --gone` skips the snapshot and makes the deletion permanent.
+
+| User says... | Command | Notes |
+|---|---|---|
+| "What can I recover?" | `doma trash list` | One row per trashed entry: `short_id  age  path  tags` |
+| "Bring it back" | `doma trash restore <short_id>` | 7-char prefix from `trash list`. Add `--merge` if the path was re-registered in the meantime |
+| "Empty the trash" | `doma trash empty` | Confirmation prompt unless `-y` / `--yes` / `DOMA_YES=1` |
+| "Just clean up old trash" | `doma trash empty --older 7d` | Same duration grammar as `--ttl` |
+
+A short_id printed by `rm` (e.g. `trashed /foo (recover with doma
+trash restore abc1234)`) is the same id `list` and `info` use; copy-
+paste works across all three.
 
 ## Operating on read results
 
@@ -90,9 +112,11 @@ doma list -t crystal -0 | xargs -0 -I{} sh -c 'cd "{}" && grep -l TODO **/*.cr'
 **Pattern B — let doma run a command per directory:**
 
 ```bash
-doma run crystal -- shards build      # sequential, stops on Ctrl-C
-doma run crystal --parallel -- ...    # concurrent, output interleaves
-doma run crystal --fail-fast -- ...   # halt on first non-zero exit
+doma run crystal -- shards build              # sequential, stops on Ctrl-C
+doma run crystal --parallel -- ...            # concurrent, output interleaves
+doma run crystal --parallel --jobs 4 -- ...   # cap concurrency (default: CPU count)
+doma run crystal --fail-fast -- ...           # halt on first non-zero exit (sequential only)
+doma run crystal --no-header -- pwd           # suppress ▶/✓ chrome (failures still surface)
 ```
 
 Use `doma run` only when the operation is uniform enough to express as
@@ -104,9 +128,16 @@ files or making decisions, Pattern A keeps the work in your hands.
 - **`doma cd` is a shell function, not a binary subcommand.** Calling
   the bare binary with `cd` prints an error pointing at
   `doma setup install`. The agent-friendly equivalent is
-  `path=$(doma list -t <tag> --pick)` — it prints exactly one path
-  (most-recent under non-TTY, with a stderr advisory when the tag is
-  ambiguous). When you need every path, use `doma list -t TAG --paths`.
+  `path=$(doma list -t <tag> --pick)`:
+    - 0 matches → exit 3 with a hint
+    - 1 match → prints the path
+    - N matches + TTY → interactive picker
+    - N matches + non-TTY → exits 4 (refuses to silently auto-pick).
+      Pass `--first` to take the most-recent match, or set the default
+      with `doma config set selector first`. `--builtin` forces the
+      interactive picker even without a TTY.
+
+  When you need every path, use `doma list -t TAG --paths`.
 
 - **Symlinks are resolved.** doma stores the canonical real path, so a
   registered `/var/foo` will surface as `/private/var/foo` on macOS.
@@ -146,13 +177,15 @@ files or making decisions, Pattern A keeps the work in your hands.
 | "Check git status across my work repos" | `doma list -t 'work/*' --paths` (glob applies to `list -t` and `run`) |
 | "Find that bookmarked thing about auth" | `doma list -t bookmark auth` (tag filter ∩ substring `auth`) |
 | "What was I working on last?" | `doma list --by recent` (top entries are most-recent cd targets) |
-| "Is this directory registered? with what tags?" | `doma info` (cwd) or `doma info <path>` — single-entry detail, exits 3 if not registered |
-| "Run specs across all the Crystal projects in parallel" | `doma run crystal --parallel -- crystal spec` |
+| "Is this directory registered? with what tags?" | `doma info` (cwd), `doma info <path>`, `doma info <short_id>`, or `doma info <name>` (substring fallback). Surfaces last-used + relative time; exits 3 if not registered (with a trash hint when applicable) |
+| "Run specs across all the Crystal projects in parallel" | `doma run crystal --parallel -- crystal spec` (cap concurrency with `--jobs N`; suppress per-dir headers with `--no-header`) |
 | "I'll be working on this project for a while" | `doma add . -t <category>` |
 | "Bookmark this so I come back later" | `doma mark <name>` |
-| "Mark these dirs for the auth review" | loop: cd into each, `doma mark auth-review` |
+| "Mark these dirs for the auth review" | `doma mark -p <each-path> auth-review` (no need to cd around) |
 | "Forget the bookmark" | `doma rm <path> -t bookmark` (or wait for the TTL) |
 | "Show me what's expiring soon" | `doma list --include-expired` (then filter by `expires_at` in `--json`) |
+| "I deleted the wrong directory, get it back" | `doma trash list` → `doma trash restore <short_id>` (within 7d) |
+| "Sweep dead paths" / "Sweep expired tags" | `doma prune --gone` / `doma prune --expired` (both reversible from trash unless `--hard`) |
 
 ## Stable identifiers
 
@@ -168,10 +201,10 @@ ID=$(doma list -t crystal --json | jq -r '.[] | select(.basename=="doma") | .sho
 PATH_NOW=$(doma list --json | jq -r --arg id "$ID" '.[] | select(.short_id==$id) | .path')
 ```
 
-short_ids are accepted by `rm <id>` and `trash restore <id>`. They are
-*not* accepted by `list --pick` (use the tag), and the bare binary's
-`cd` subcommand has been removed in favor of the shell-wrapper +
-`list --pick` split.
+short_ids are accepted by `rm <id>`, `info <id>`, and
+`trash restore <id>`. They are *not* accepted by `list --pick` (use
+the tag), and the bare binary's `cd` subcommand has been removed in
+favor of the shell-wrapper + `list --pick` split.
 
 ## When NOT to invoke
 
