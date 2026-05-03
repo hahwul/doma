@@ -24,4 +24,4 @@ That pulls the [bundled `SKILL.md`](https://github.com/hahwul/doma/blob/main/ski
 
 ## Pages here
 
-- [Claude Code skill](./claude-skill/) — the bundled `SKILL.md` and what it teaches an agent about when (and when not) to invoke doma.
+- [AI skill](./skill/) — the bundled `SKILL.md` and what it teaches a coding agent about when (and when not) to invoke doma.

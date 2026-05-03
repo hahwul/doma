@@ -121,12 +121,15 @@ ul.page-list li a:hover {
 .docs-footer {
     margin-top: 4rem;
     padding-top: 1.5rem;
-    border-top: 1px solid var(--border);
-    color: var(--text-dim);
-    font-size: 0.8rem;
+    border-top: 1.5px dashed var(--border-light, var(--border));
+    color: var(--text-muted);
+    font-family: var(--font-hand-body, "Patrick Hand", "Kalam", "Caveat", cursive);
+    font-size: 1.1rem;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    flex-wrap: wrap;
+    gap: 0.75rem;
 }
 
 .docs-footer p {
@@ -134,13 +137,15 @@ ul.page-list li a:hover {
 }
 
 .docs-footer a {
-    color: var(--text-muted);
-    border-bottom: none;
-    transition: color 0.15s ease;
+    color: var(--text-secondary);
+    text-decoration: none;
+    border-bottom: 1px dotted var(--text-muted);
+    transition: color var(--transition-fast), border-bottom-color var(--transition-fast);
 }
 
 .docs-footer a:hover {
     color: var(--primary);
+    border-bottom-color: var(--primary);
 }
 
 .hahwul-img {

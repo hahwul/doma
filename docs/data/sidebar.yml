@@ -40,5 +40,5 @@
   items:
     - title: Overview
       url: /ai/
-    - title: Claude Code skill
-      url: /ai/claude-skill/
+    - title: AI skill
+      url: /ai/skill/
