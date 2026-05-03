@@ -1,5 +1,5 @@
 <div align="center">
-  <img alt="doma Logo" src="" width="500px;">
+  <img alt="doma Logo" src="docs/static/images/doma-wide.webp" width="500px;">
   <p>Directory tag manager — put your directories on the cutting board.</p>
 </div>
 
