@@ -32,7 +32,6 @@
 }
 
 .landing-header .brand::before {
-    content: "▌";
     color: var(--primary);
     margin-right: 0.4rem;
     font-weight: 400;
