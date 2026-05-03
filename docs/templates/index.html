@@ -8,18 +8,28 @@
   {{ og_all_tags }}
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&family=Caveat:wght@400;500;600;700&family=Patrick+Hand&family=Kalam:wght@300;400;700&display=swap" rel="stylesheet" />
   {{ auto_includes_css }}
 </head>
 <body class="landing-body">
+  <!-- Reusable SVG defs for hand-drawn doodles -->
+  <svg class="doodle-defs" aria-hidden="true" focusable="false" width="0" height="0">
+    <defs>
+      <filter id="roughen" x="-5%" y="-5%" width="110%" height="110%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="2" seed="3" />
+        <feDisplacementMap in="SourceGraphic" scale="2" />
+      </filter>
+    </defs>
+  </svg>
+
   <header class="landing-header">
     <a href="{{ base_url }}/" class="brand">
-        <img style="width:150px;" src="/images/doma-wide.webp">
+        <img style="width:150px;" src="/images/doma-wide.webp" alt="doma" />
     </a>
     <nav>
-      <a href="{{ base_url }}/start/">Docs</a>
+      <a href="{{ base_url }}/start/" class="nav-link">Docs</a>
       <a href="https://github.com/hahwul/doma" class="github-link" target="_blank" rel="noopener" aria-label="GitHub">
-        <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18">
+        <svg viewBox="0 0 24 24" fill="currentColor" width="20" height="20">
           <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
         </svg>
       </a>
@@ -27,10 +37,43 @@
   </header>
 
   <main class="landing-main">
-    <section class="landing-intro">
-      <h1>doma</h1>
-      <p class="tagline">A small Crystal CLI for tagging directories, then jumping to them or running commands across the whole pile.</p>
+    <section class="landing-hero">
+      <span class="hero-eyebrow">
+        <svg viewBox="0 0 60 12" aria-hidden="true"><path d="M2 8 Q 15 2, 30 7 T 58 5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        a tiny crystal CLI
+      </span>
 
+      <h1 class="hero-title">
+        put directories on the
+        <span class="hl-marker">cutting&nbsp;board</span>
+      </h1>
+
+      <p class="hero-tagline">
+        tag the folders you actually live in. then
+        <span class="ink-underline">jump</span>,
+        <span class="ink-underline">list</span>,
+        or <span class="ink-underline">run</span> across the whole pile.
+      </p>
+
+      <div class="landing-cta-row">
+        <a href="{{ base_url }}/start/" class="btn btn-sketch btn-primary">
+          read the docs
+          <svg class="btn-arrow" viewBox="0 0 32 12" aria-hidden="true"><path d="M1 6 Q 12 1, 24 6 L 18 2 M 24 6 L 18 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </a>
+        <a href="https://github.com/hahwul/doma" class="btn btn-sketch btn-ghost" target="_blank" rel="noopener">view on github</a>
+      </div>
+
+      <aside class="hero-aside">
+        <svg class="aside-arrow" viewBox="0 0 80 60" aria-hidden="true">
+          <path d="M70 8 Q 50 18, 35 40 Q 28 50, 18 50" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+          <path d="M18 50 L 26 46 M 18 50 L 22 42" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+        </svg>
+        <span>single static binary, no fzf needed</span>
+      </aside>
+    </section>
+
+    <!-- Story note -->
+    <section class="landing-note">
       <p>
         I kept losing track of where things lived — twelve Crystal repos in one folder,
         seven shell experiments in another, the security write-ups elsewhere. <code>cd</code>'s
@@ -39,7 +82,30 @@
         with whatever tags make sense (<code>crystal</code>, <code>work/proj-a</code>,
         <code>reading-this-week</code>), and let the tool do the recall.
       </p>
+    </section>
 
+    <!-- Sticky-note style feature cards -->
+    <section class="sticky-grid" aria-label="What it does">
+      <article class="sticky sticky-1">
+        <span class="sticky-tape" aria-hidden="true"></span>
+        <h3>tag</h3>
+        <p>label the dirs you care about with anything that makes sense — language, project, weekly spike.</p>
+      </article>
+      <article class="sticky sticky-2">
+        <span class="sticky-tape" aria-hidden="true"></span>
+        <h3>jump</h3>
+        <p><code>doma cd</code> opens a TUI picker when there's more than one match. shell wrapper makes it actually <em>cd</em>.</p>
+      </article>
+      <article class="sticky sticky-3">
+        <span class="sticky-tape" aria-hidden="true"></span>
+        <h3>fan-out</h3>
+        <p>list paths by tag and pipe them into anything — build, grep, sync — across the whole pile at once.</p>
+      </article>
+    </section>
+
+    <!-- Code transcript with sketchy frame -->
+    <div class="snippet-wrap">
+      <span class="snippet-label">~ a quick taste</span>
       <pre class="landing-snippet"><span class="comment"># put a directory on the board</span>
 <span class="prompt">$</span> doma add ~/Projects/doma -t crystal -t cli
 
@@ -51,12 +117,9 @@
 
 <span class="comment"># bookmark the current dir for the week (auto-expires after 7 days)</span>
 <span class="prompt">$</span> doma mark spike</pre>
+    </div>
 
-      <div class="landing-cta-row">
-        <a href="{{ base_url }}/start/" class="btn btn-primary">Read the docs</a>
-        <a href="https://github.com/hahwul/doma" class="btn btn-ghost" target="_blank" rel="noopener">View on GitHub</a>
-      </div>
-
+    <section class="landing-note">
       <p>
         It's a single static binary, written in Crystal, with a built-in TUI picker so you
         don't need <code>fzf</code>. Tags can be permanent or expire on a TTL. There's a
@@ -65,15 +128,16 @@
         treat your tagged paths as a first-class input list.
       </p>
 
-      <p>
-        Doma (도마) is the Korean word for cutting board — the workbench where ingredients
-        get gathered, grouped, and chopped before going into the pan. The metaphor stuck.
+      <p class="meaning">
+        <span class="hangul">도마</span> &mdash; the Korean word for cutting board. the workbench
+        where ingredients get gathered, grouped, and chopped before going into the pan.
+        the metaphor stuck.
       </p>
     </section>
   </main>
 
   <footer class="landing-footer">
-    <span>MIT · written in <a href="https://crystal-lang.org" target="_blank" rel="noopener">Crystal</a></span>
+    <span>MIT &middot; written in <a href="https://crystal-lang.org" target="_blank" rel="noopener">Crystal</a></span>
     <span><a href="https://github.com/hahwul/doma" target="_blank" rel="noopener">github.com/hahwul/doma</a></span>
   </footer>
 </body>

@@ -1,165 +1,284 @@
 /* =============================================================================
-   Landing — kept minimal on purpose. The page reads like a short note,
-   not a marketing site, so we avoid the grid/card/hero-canvas patterns
-   from a typical SSG demo.
+   Landing — hand-drawn / sketchy. Same cutting-board metaphor (warm wood,
+   copper accent), but the surface now reads like a notebook page: handwritten
+   headings, wobbly borders, sticky-notes pinned with tape. Layout still
+   collapses to a single readable column on mobile.
    ============================================================================= */
 
+:root {
+    --font-hand: "Caveat", "Patrick Hand", "Kalam", cursive;
+    --font-hand-body: "Patrick Hand", "Kalam", "Caveat", cursive;
+    /* asymmetric border radii — five+ values create an organic blob outline */
+    --blob-1: 18px 22px 14px 26px / 22px 14px 24px 18px;
+    --blob-2: 24px 16px 28px 14px / 14px 26px 16px 22px;
+    --blob-3: 12px 28px 18px 22px / 26px 14px 22px 18px;
+}
+
+/* -----------------------------------------------------------------------------
+   Page surface — paper texture using two layered gradients (no image needed).
+   Subtle enough not to fight the warm-wood palette.
+   --------------------------------------------------------------------------- */
 .landing-body {
-    background: var(--bg);
+    background:
+        radial-gradient(circle at 20% 10%, rgba(192, 133, 82, 0.06), transparent 40%),
+        radial-gradient(circle at 80% 80%, rgba(212, 155, 106, 0.05), transparent 45%),
+        repeating-linear-gradient(
+            0deg,
+            transparent 0,
+            transparent 38px,
+            rgba(192, 133, 82, 0.035) 38px,
+            rgba(192, 133, 82, 0.035) 39px
+        ),
+        var(--bg);
     color: var(--text);
     font-family: var(--font-sans);
     margin: 0;
     min-height: 100vh;
     line-height: 1.7;
+    overflow-x: hidden;
 }
 
+.doodle-defs {
+    position: absolute;
+    width: 0;
+    height: 0;
+    pointer-events: none;
+}
+
+/* -----------------------------------------------------------------------------
+   Header
+   --------------------------------------------------------------------------- */
 .landing-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 1.5rem 2rem;
-    max-width: 760px;
+    max-width: 860px;
     margin: 0 auto;
+    position: relative;
+    z-index: 2;
 }
 
-.landing-header .brand {
-    font-family: var(--font-mono);
-    font-size: 1.1rem;
-    font-weight: 600;
-    color: var(--text);
-    letter-spacing: 0.02em;
-    text-decoration: none;
+.landing-header .brand img {
+    transition: transform var(--transition-normal);
 }
-
-.landing-header .brand::before {
-    color: var(--primary);
-    margin-right: 0.4rem;
-    font-weight: 400;
+.landing-header .brand:hover img {
+    transform: rotate(-2deg);
 }
 
 .landing-header nav {
     display: flex;
-    gap: 1.5rem;
+    gap: 1.4rem;
     align-items: center;
 }
 
-.landing-header nav a {
-    color: var(--text-secondary);
-    font-size: 0.92rem;
+.landing-header .nav-link {
+    font-family: var(--font-hand);
+    font-size: 1.35rem;
+    color: var(--text);
     text-decoration: none;
+    position: relative;
+    padding: 0.1rem 0.3rem;
     transition: color var(--transition-fast);
 }
-
-.landing-header nav a:hover {
-    color: var(--text);
+.landing-header .nav-link::after {
+    content: "";
+    position: absolute;
+    left: 4%;
+    right: 8%;
+    bottom: 0;
+    height: 6px;
+    background:
+        radial-gradient(circle at 10% 60%, var(--primary) 1px, transparent 1.5px) 0 0/8px 6px,
+        linear-gradient(90deg, transparent 0%, var(--primary-glow) 50%, transparent 100%);
+    transform: scaleX(0) skewX(-12deg);
+    transform-origin: left;
+    transition: transform 0.25s ease;
 }
+.landing-header .nav-link:hover::after { transform: scaleX(1) skewX(-12deg); }
 
-.landing-header .github-link svg {
+.landing-header .github-link {
     color: var(--text-secondary);
-    transition: color var(--transition-fast);
+    transition: transform var(--transition-fast), color var(--transition-fast);
+    display: inline-flex;
 }
-
-.landing-header .github-link:hover svg {
+.landing-header .github-link:hover {
     color: var(--text);
+    transform: rotate(-8deg) scale(1.1);
 }
 
-/* The single content column. No sidebars, no hero overlay — every line
-   sits in the same gentle margin so it reads like a written note. */
+/* -----------------------------------------------------------------------------
+   Main column
+   --------------------------------------------------------------------------- */
 .landing-main {
-    max-width: 680px;
+    max-width: 760px;
     margin: 0 auto;
-    padding: 2rem 2rem 4rem;
+    padding: 1.5rem 2rem 4rem;
+    position: relative;
+    z-index: 1;
 }
 
-.landing-intro h1 {
-    font-size: 2.2rem;
+/* -----------------------------------------------------------------------------
+   Hero
+   --------------------------------------------------------------------------- */
+.landing-hero {
+    position: relative;
+    margin: 1.5rem 0 3rem;
+}
+
+.hero-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: var(--font-hand);
+    font-size: 1.4rem;
+    color: var(--primary);
+    transform: rotate(-1.2deg);
+    margin-bottom: 0.4rem;
+}
+.hero-eyebrow svg {
+    width: 60px;
+    height: 12px;
+    color: var(--primary);
+}
+
+.hero-title {
+    font-family: var(--font-hand);
     font-weight: 700;
-    letter-spacing: -0.02em;
-    margin: 1.5rem 0 0.4rem;
+    font-size: clamp(2.6rem, 6vw, 4.2rem);
+    line-height: 1.05;
+    letter-spacing: -0.005em;
     color: var(--text);
+    margin: 0.2rem 0 1rem;
 }
 
-.landing-intro .tagline {
-    font-size: 1.05rem;
+/* highlighter / marker effect — a smudgy band behind the words */
+.hl-marker {
+    position: relative;
+    display: inline-block;
+    color: var(--text);
+    padding: 0 0.15em;
+    z-index: 0;
+}
+.hl-marker::before {
+    content: "";
+    position: absolute;
+    inset: 18% -2% 8% -2%;
+    background: linear-gradient(
+        100deg,
+        rgba(192, 133, 82, 0.55) 0%,
+        rgba(212, 155, 106, 0.65) 40%,
+        rgba(192, 133, 82, 0.5) 70%,
+        rgba(154, 107, 63, 0.55) 100%
+    );
+    border-radius: 60% 40% 55% 45% / 50% 55% 45% 50%;
+    transform: rotate(-1deg) skewX(-3deg);
+    z-index: -1;
+    filter: blur(0.4px);
+}
+
+.hero-tagline {
+    font-family: var(--font-hand-body);
+    font-size: 1.5rem;
+    line-height: 1.5;
     color: var(--text-secondary);
-    margin: 0 0 1.5rem;
+    margin: 0.4rem 0 2rem;
+    max-width: 36ch;
 }
 
-.landing-intro p {
-    color: var(--text-secondary);
-    font-size: 1rem;
-    margin: 1.1rem 0;
-}
-
-.landing-intro p strong,
-.landing-intro p b {
+/* sketchy underline drawn with a rough gradient — "ink" feel */
+.ink-underline {
+    position: relative;
     color: var(--text);
-    font-weight: 600;
+    display: inline-block;
 }
-
-.landing-intro a {
-    color: var(--primary);
-    text-decoration: none;
-    border-bottom: 1px dotted var(--primary-dim);
-    transition: all var(--transition-fast);
+.ink-underline::after {
+    content: "";
+    position: absolute;
+    left: -2%;
+    right: -2%;
+    bottom: -4px;
+    height: 7px;
+    background:
+        radial-gradient(circle at 20% 60%, var(--primary) 1px, transparent 1.5px) 0 1px/10px 5px,
+        linear-gradient(90deg, transparent 0, var(--primary) 6%, var(--primary) 92%, transparent 100%) 0 4px/100% 2px no-repeat;
+    transform: rotate(-0.6deg);
+    opacity: 0.85;
 }
+.ink-underline:nth-of-type(2)::after { transform: rotate(0.8deg); }
+.ink-underline:nth-of-type(3)::after { transform: rotate(-1.2deg); }
 
-.landing-intro a:hover {
-    color: var(--primary-hover);
-    border-bottom-color: var(--primary-hover);
-}
-
-/* Code block on the landing — looks like a transcript, not a fenced
-   syntax-highlighted block. Soft warm bg, no language label. */
-.landing-snippet {
-    background: var(--bg-elevated);
-    border: 1px solid var(--border);
-    border-radius: var(--radius-lg);
-    padding: 1rem 1.25rem;
-    font-family: var(--font-mono);
-    font-size: 0.85rem;
-    line-height: 1.7;
-    color: var(--text);
-    margin: 1.5rem 0 2rem;
-    overflow-x: auto;
-}
-
-.landing-snippet .comment {
+.hero-aside {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: var(--font-hand);
+    font-size: 1.25rem;
     color: var(--text-muted);
+    transform: rotate(-1.5deg);
+    margin-top: 0.5rem;
 }
-
-.landing-snippet .prompt {
+.hero-aside .aside-arrow {
+    width: 60px;
+    height: 44px;
+    color: var(--primary-dim);
     color: var(--primary);
-    user-select: none;
-    margin-right: 0.5rem;
+    opacity: 0.8;
+    flex-shrink: 0;
 }
 
-/* Buttons: deliberate restraint. One filled (primary), one ghost. */
+/* -----------------------------------------------------------------------------
+   Sketchy buttons (organic blob borders)
+   --------------------------------------------------------------------------- */
 .landing-cta-row {
     display: flex;
-    gap: 0.75rem;
-    margin: 1.5rem 0 2.5rem;
+    gap: 0.9rem;
+    margin: 0.8rem 0 1.6rem;
     flex-wrap: wrap;
+    align-items: center;
 }
 
 .btn {
     display: inline-flex;
     align-items: center;
-    gap: 0.4rem;
-    padding: 0.55rem 1.1rem;
-    border-radius: var(--radius-md);
-    font-size: 0.9rem;
+    gap: 0.5rem;
+    padding: 0.7rem 1.4rem;
+    font-family: var(--font-hand);
+    font-size: 1.4rem;
     font-weight: 500;
     text-decoration: none;
-    transition: all var(--transition-fast);
-    border: 1px solid transparent;
+    transition:
+        transform var(--transition-fast),
+        background var(--transition-fast),
+        color var(--transition-fast),
+        box-shadow var(--transition-fast),
+        border-radius 0.4s ease;
+    border: 2px solid var(--text);
+    background: transparent;
+    color: var(--text);
+    line-height: 1;
+}
+
+.btn-sketch {
+    border-radius: var(--blob-1);
+    box-shadow: 3px 3px 0 var(--text);
+    position: relative;
+}
+.btn-sketch:hover {
+    transform: translate(-1px, -1px) rotate(-1deg);
+    box-shadow: 5px 5px 0 var(--text);
+    border-radius: var(--blob-2);
+}
+.btn-sketch:active {
+    transform: translate(2px, 2px);
+    box-shadow: 1px 1px 0 var(--text);
 }
 
 .btn-primary {
     background: var(--primary);
     color: var(--bg);
+    border-color: var(--text);
 }
-
 .btn-primary:hover {
     background: var(--primary-hover);
     color: var(--bg);
@@ -167,37 +286,240 @@
 
 .btn-ghost {
     background: transparent;
-    color: var(--text-secondary);
-    border-color: var(--border-light);
-}
-
-.btn-ghost:hover {
     color: var(--text);
-    border-color: var(--text-muted);
+}
+.btn-ghost:hover {
+    background: var(--bg-elevated);
+    color: var(--text);
 }
 
+.btn-arrow {
+    width: 30px;
+    height: 12px;
+    transition: transform var(--transition-fast);
+}
+.btn-sketch:hover .btn-arrow { transform: translateX(3px); }
+
+/* -----------------------------------------------------------------------------
+   Plain-text "note" sections (the prose paragraphs)
+   --------------------------------------------------------------------------- */
+.landing-note {
+    margin: 2rem 0;
+}
+
+.landing-note p {
+    color: var(--text-secondary);
+    font-size: 1.02rem;
+    margin: 1.1rem 0;
+    line-height: 1.75;
+}
+
+.landing-note code {
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+    background: var(--bg-elevated);
+    color: var(--primary-light);
+    padding: 0.1em 0.4em;
+    border-radius: 3px 8px 4px 9px / 8px 4px 9px 3px;
+    border: 1px dashed var(--border-light);
+}
+
+.landing-note .meaning {
+    font-family: var(--font-hand-body);
+    font-size: 1.25rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    border-left: 2px dashed var(--border-light);
+    padding: 0.4rem 0 0.4rem 1rem;
+    margin-top: 1.5rem;
+}
+
+.landing-note .hangul {
+    font-family: var(--font-sans);
+    font-weight: 700;
+    color: var(--primary);
+    font-size: 1.1rem;
+}
+
+.landing-note a,
+.landing-hero a:not(.btn) {
+    color: var(--primary);
+    text-decoration: none;
+    border-bottom: 1.5px dotted var(--primary);
+    transition: all var(--transition-fast);
+}
+.landing-note a:hover,
+.landing-hero a:not(.btn):hover {
+    color: var(--primary-hover);
+    border-bottom-style: solid;
+}
+
+/* -----------------------------------------------------------------------------
+   Sticky-note grid
+   --------------------------------------------------------------------------- */
+.sticky-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+    margin: 2.5rem 0 3rem;
+}
+
+.sticky {
+    position: relative;
+    padding: 1.6rem 1.3rem 1.4rem;
+    background: var(--bg-elevated);
+    border: 1.5px solid var(--border-light);
+    border-radius: var(--blob-1);
+    box-shadow: 4px 5px 0 rgba(192, 133, 82, 0.15);
+    transition: transform 0.25s ease, box-shadow 0.25s ease, border-radius 0.4s ease;
+}
+.sticky:hover {
+    transform: translateY(-4px) rotate(0deg) !important;
+    box-shadow: 6px 8px 0 rgba(192, 133, 82, 0.22);
+    border-radius: var(--blob-2);
+}
+.sticky-1 { transform: rotate(-2deg); }
+.sticky-2 { transform: rotate(1.4deg); }
+.sticky-3 { transform: rotate(-1deg); }
+
+.sticky h3 {
+    font-family: var(--font-hand);
+    font-size: 1.9rem;
+    font-weight: 700;
+    color: var(--text);
+    margin: 0 0 0.4rem;
+    letter-spacing: -0.01em;
+}
+.sticky h3::before {
+    content: "";
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    margin-right: 0.45rem;
+    border-radius: 60% 40% 55% 45% / 45% 55% 45% 55%;
+    background: var(--primary);
+    transform: translateY(-2px);
+}
+.sticky p {
+    font-family: var(--font-hand-body);
+    font-size: 1.15rem;
+    line-height: 1.5;
+    color: var(--text-secondary);
+    margin: 0;
+}
+.sticky p code {
+    font-family: var(--font-mono);
+    font-size: 0.85em;
+    color: var(--primary-light);
+    background: var(--bg);
+    padding: 0.05em 0.35em;
+    border-radius: 3px;
+}
+.sticky p em {
+    color: var(--primary);
+    font-style: normal;
+    font-weight: 700;
+}
+
+/* a piece of "tape" at the top of each sticky */
+.sticky-tape {
+    position: absolute;
+    top: -10px;
+    left: 50%;
+    transform: translateX(-50%) rotate(-2deg);
+    width: 60px;
+    height: 18px;
+    background: rgba(241, 232, 216, 0.18);
+    border: 1px dashed rgba(241, 232, 216, 0.25);
+    backdrop-filter: blur(2px);
+    border-radius: 1px;
+}
+.sticky-1 .sticky-tape { transform: translateX(-50%) rotate(3deg); left: 40%; }
+.sticky-2 .sticky-tape { transform: translateX(-50%) rotate(-4deg); }
+.sticky-3 .sticky-tape { transform: translateX(-50%) rotate(2deg); left: 60%; }
+
+/* -----------------------------------------------------------------------------
+   Code snippet — sketchy frame, like it's drawn around a transcript
+   --------------------------------------------------------------------------- */
+.snippet-wrap {
+    position: relative;
+    margin: 2rem 0 2.5rem;
+}
+
+.snippet-label {
+    position: absolute;
+    top: -14px;
+    left: 24px;
+    font-family: var(--font-hand);
+    font-size: 1.25rem;
+    color: var(--primary);
+    background: var(--bg);
+    padding: 0 0.6rem;
+    transform: rotate(-1.5deg);
+    z-index: 1;
+}
+
+.landing-snippet {
+    background: var(--bg-elevated);
+    border: 2px solid var(--text);
+    border-radius: var(--blob-3);
+    padding: 1.4rem 1.4rem 1.2rem;
+    font-family: var(--font-mono);
+    font-size: 0.88rem;
+    line-height: 1.85;
+    color: var(--text);
+    margin: 0;
+    overflow-x: auto;
+    box-shadow: 5px 5px 0 var(--primary-glow);
+    position: relative;
+}
+.landing-snippet .comment { color: var(--text-muted); font-style: italic; }
+.landing-snippet .prompt {
+    color: var(--primary);
+    font-weight: 700;
+    user-select: none;
+    margin-right: 0.5rem;
+}
+
+/* -----------------------------------------------------------------------------
+   Footer
+   --------------------------------------------------------------------------- */
 .landing-footer {
-    max-width: 680px;
-    margin: 3rem auto 2rem;
+    max-width: 760px;
+    margin: 4rem auto 2rem;
     padding: 1.5rem 2rem 0;
-    border-top: 1px solid var(--border);
+    border-top: 1.5px dashed var(--border-light);
     color: var(--text-muted);
-    font-size: 0.85rem;
+    font-family: var(--font-hand-body);
+    font-size: 1.1rem;
     display: flex;
     justify-content: space-between;
     align-items: center;
     flex-wrap: wrap;
     gap: 0.75rem;
 }
-
 .landing-footer a {
     color: var(--text-secondary);
     text-decoration: none;
+    border-bottom: 1px dotted var(--text-muted);
     transition: color var(--transition-fast);
 }
-
 .landing-footer a:hover {
-    color: var(--text);
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+}
+
+/* -----------------------------------------------------------------------------
+   Responsive
+   --------------------------------------------------------------------------- */
+@media (max-width: 720px) {
+    .sticky-grid {
+        grid-template-columns: 1fr;
+        gap: 1.8rem;
+    }
+    .sticky-1 { transform: rotate(-1.2deg); }
+    .sticky-2 { transform: rotate(0.8deg); }
+    .sticky-3 { transform: rotate(-0.6deg); }
 }
 
 @media (max-width: 600px) {
@@ -207,8 +529,9 @@
         padding-left: 1.25rem;
         padding-right: 1.25rem;
     }
-
-    .landing-intro h1 {
-        font-size: 1.8rem;
-    }
+    .hero-title { font-size: 2.4rem; }
+    .hero-tagline { font-size: 1.3rem; }
+    .btn { font-size: 1.2rem; padding: 0.6rem 1.1rem; }
+    .hero-aside { font-size: 1.1rem; }
+    .hero-aside .aside-arrow { width: 48px; height: 36px; }
 }
