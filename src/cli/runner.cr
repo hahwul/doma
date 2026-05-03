@@ -179,15 +179,46 @@ module Doma
         {"version | help", "Show version / this help"},
       ]
 
+      # ASCII banner — a tilted cutting board with a handle (and a hole
+      # in it) on the left. Sized to fit beside the right-column info
+      # text below; widths are equal across rows so the right column
+      # aligns. Rendered yellow at print time when color is enabled.
+      BANNER_ART = [
+        "                              ",
+        "       ╭────────────────╮     ",
+        "       │                │     ",
+        "   ╭───┘                │     ",
+        "   │ ◯                  │     ",
+        "   ╰───┐                │     ",
+        "       │                │     ",
+        "       ╰────────────────╯     ",
+        "                              ",
+      ]
+
       private def print_help
+        return if Doma::Logger.quiet?
+
         color = Doma::Logger.color_enabled?
         brand = color ? "doma".colorize(:cyan).bold.to_s : "doma"
-        slogan = "Put your directories on the cutting board"
+
+        info = [
+          "",
+          "  #{brand} v#{Doma::VERSION}",
+          "",
+          "  Put your directories",
+          "  on the cutting board.",
+          "",
+          "  Usage: doma <command> [options]",
+          "",
+          "",
+        ]
 
         puts ""
-        puts "#{brand} v#{Doma::VERSION}  —  #{slogan}"
-        puts ""
-        puts "Usage: doma <command> [options]"
+        BANNER_ART.each_with_index do |line, i|
+          right = info[i]? || ""
+          art_line = color ? line.colorize(:yellow).to_s : line
+          puts "#{art_line}#{right}"
+        end
         puts ""
         puts "Commands:"
         COMMAND_LISTING.each do |row|
