@@ -13,3 +13,4 @@ Each page here covers one domain. Start with [Tagging](./tagging/) and [Navigati
 - [Search & stats](./search-and-stats/) — finding paths and inspecting your collection
 - [Pipelines](./pipelines/) — composing doma with shell tooling
 - [Snapshots](./snapshots/) — export, import, and moving doma between machines
+- [Recipes](./recipes/) — concrete real-world workflows

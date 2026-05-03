@@ -3,6 +3,12 @@
   <p>Directory tag manager — put your directories on the cutting board.</p>
 </div>
 
+```
+   ╭──╮  doma
+   │○ │  ─────────────────────────────────
+   ╰──╯  put dirs on the cutting board
+```
+
 <p align="center">
 <a href="https://github.com/hahwul/doma/blob/main/CONTRIBUTING.md">
 <img src="https://img.shields.io/badge/CONTRIBUTIONS-WELCOME-000000?style=for-the-badge&labelColor=black"></a>

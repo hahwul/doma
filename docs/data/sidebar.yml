@@ -8,6 +8,10 @@
       url: /start/quickstart/
     - title: Shell integration
       url: /start/shell-integration/
+    - title: Concepts
+      url: /start/concepts/
+    - title: Comparison
+      url: /start/comparison/
 - title: Usage
   items:
     - title: Overview
@@ -26,6 +30,8 @@
       url: /usage/pipelines/
     - title: Snapshots
       url: /usage/snapshots/
+    - title: Recipes
+      url: /usage/recipes/
 - title: Reference
   items:
     - title: Overview
@@ -36,6 +42,8 @@
       url: /reference/config/
     - title: Environment
       url: /reference/env/
+    - title: Troubleshooting
+      url: /reference/troubleshooting/
 - title: AI agents
   items:
     - title: Overview

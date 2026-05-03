@@ -1,4 +1,96 @@
 /* =============================================================================
+   Docs search
+   ============================================================================= */
+
+.docs-search {
+    position: relative;
+    margin-right: 0.6rem;
+}
+
+.docs-search-input {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 200px;
+    max-width: 32vw;
+    padding: 0.4rem 0.7rem;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg-elevated, var(--bg-card, transparent));
+    color: var(--text);
+    font-family: var(--font-sans);
+    font-size: 0.85rem;
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+}
+.docs-search-input::placeholder { color: var(--text-muted); }
+.docs-search-input:focus {
+    outline: none;
+    border-color: var(--primary);
+    box-shadow: 0 0 0 2px rgba(192, 133, 82, 0.15);
+}
+
+.docs-search-results {
+    position: absolute;
+    top: calc(100% + 0.4rem);
+    right: 0;
+    width: 380px;
+    max-width: min(380px, 90vw);
+    max-height: 60vh;
+    overflow-y: auto;
+    background: var(--bg-elevated, var(--bg-card, var(--bg)));
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+    z-index: 50;
+}
+.docs-search-results[hidden] { display: none; }
+
+.docs-search-result {
+    display: block;
+    padding: 0.6rem 0.85rem;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+    text-decoration: none;
+    transition: background var(--transition-fast);
+}
+.docs-search-result:last-child { border-bottom: none; }
+.docs-search-result:hover,
+.docs-search-result.is-active {
+    background: rgba(192, 133, 82, 0.08);
+}
+
+.docs-search-result-title {
+    display: block;
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--text);
+    margin-bottom: 0.15rem;
+}
+
+.docs-search-result-snippet {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+}
+.docs-search-result-snippet mark {
+    background: rgba(192, 133, 82, 0.25);
+    color: inherit;
+    padding: 0 0.1em;
+    border-radius: 2px;
+}
+
+.docs-search-empty {
+    padding: 0.8rem 0.85rem;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+}
+
+@media (max-width: 720px) {
+    .docs-search-input { width: 140px; }
+    .docs-search-results { width: 90vw; }
+}
+
+/* =============================================================================
    Info Boxes — Clean Modern Style
    ============================================================================= */
 

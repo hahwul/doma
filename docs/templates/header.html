@@ -29,9 +29,11 @@
             href="/icons/apple-touch-icon.png"
         />
         <meta name="apple-mobile-web-app-title" content="Doma" />
+        <meta name="base-url" content="{{ base_url }}" />
         <link rel="manifest" href="/icons/site.webmanifest" />
 
         {{ highlight_css }} {{ auto_includes_css }}
+        <script defer src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script>
     </head>
     <body data-section="{{ page.section }}"></body>
 </html>
