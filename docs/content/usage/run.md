@@ -8,7 +8,7 @@ weight = 4
 doma run <tag> -- <command> [args...]
 ```
 
-The `--` is required: it tells doma where its own flags end and the user command starts.
+`--` is required: it separates doma's flags from the user command.
 
 ## Sequential (default)
 
@@ -16,7 +16,7 @@ The `--` is required: it tells doma where its own flags end and the user command
 doma run crystal -- shards build
 ```
 
-doma chdirs into each tagged directory and runs the command. Output streams interleaved with a per-directory header so you can tell whose lines are whose:
+Output streams interleaved with a per-directory header:
 
 ```
 ▶ /Users/me/Projects/doma
@@ -34,9 +34,7 @@ doma chdirs into each tagged directory and runs the command. Output streams inte
 doma run crystal --parallel -- shards build
 ```
 
-Spawns a fiber per directory. Output interleaves; per-directory exit reports come at the end. Best for commands whose output is summary-style (counts, exit codes) rather than rich logs you'd want to read live.
-
-`--fail-fast` is honored only in sequential mode — in parallel, every spawned command runs to completion before doma exits.
+A fiber per directory; per-directory exit reports come at the end. Best for summary-style output rather than rich live logs.
 
 ## Failure handling
 
@@ -44,22 +42,10 @@ Spawns a fiber per directory. Output interleaves; per-directory exit reports com
 doma run crystal --fail-fast -- crystal spec
 ```
 
-In sequential mode, `--fail-fast` halts the loop the first time a command exits non-zero. The doma process exit code reflects the failure.
-
-If the command itself can't be launched (binary not found, chdir failure), doma reports it with a sentinel exit code (127 for not-found, 126 for permission/IO error) and continues with the next directory unless `--fail-fast` is set.
+`--fail-fast` halts the loop on the first non-zero exit (sequential only — parallel always runs every directory to completion). doma's exit code reflects the failure.
 
 ## When to reach for `run` vs a manual loop
 
-Use `doma run` when:
+Use `doma run` when the operation is a single shell command and per-directory logic is uniform.
 
-- The operation is a single shell command (`shards build`, `git pull`).
-- Per-directory logic is uniform.
-- You want doma's headers + exit reporting for free.
-
-Use `doma list -t TAG --paths | while read` when:
-
-- You need to inspect each directory before deciding what to do.
-- The work involves reading files or making decisions in your script.
-- You want to feed the paths into another tool (`xargs`, `parallel`, etc.).
-
-See [Pipelines](../pipelines/) for the loop pattern.
+Use `doma list -t TAG --paths | while read` when you need per-directory inspection or want to feed paths into another tool. See [Pipelines](../pipelines/).

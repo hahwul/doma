@@ -35,39 +35,23 @@ The first column (`0dc0db9`) is a stable short_id. The path is the canonical rea
 doma cd crystal
 ```
 
-`doma cd` lives in a small shell function shipped by `doma setup install` — a child process can't change its parent shell's working directory, so the function captures the picked path and runs `cd` itself. Under the hood it calls `doma list -t crystal --pick`. With multiple matches you get an interactive picker — type to filter, ↑↓ to move, Enter to pick. See [Shell integration](../shell-integration/) for the one-line setup.
-
-If you haven't installed the wrapper, the same primitive works inline in any script:
-
-```bash
-cd "$(doma list -t crystal --pick)"
-```
+Multiple matches open an interactive picker — type to filter, ↑↓ to move, Enter to pick. `doma cd` needs the shell wrapper, so run `doma setup install` once if you haven't yet (see [Shell integration](../shell-integration/)).
 
 ## 4. Operate on every dir under a tag
-
-```bash
-doma list -t crystal --paths | while read -r d; do
-  (cd "$d" && shards build)
-done
-```
-
-`--paths` gives you one path per line, ideal for `while read` and `xargs`. Use `-0` instead of `--paths` for NUL-separated output (safe for paths with spaces).
-
-There's also a built-in form:
 
 ```bash
 doma run crystal --parallel -- shards build
 ```
 
-## 5. Mark something for the week
+For custom loops, `doma list -t crystal --paths` gives you one path per line (use `-0` for NUL-separated output).
 
-For transient bookmarks during a code-review or debugging session:
+## 5. Mark something for the week
 
 ```bash
 doma mark spike
 ```
 
-That's an alias for `doma add . -t spike --tmp` — it tags the current directory with a 7-day TTL. Expired tags vanish from `list` automatically; permanent tags on the same directory are unaffected.
+Shorthand for `doma add . -t spike --tmp` — tags the current directory with a 7-day TTL. Expired tags drop out of `list` automatically.
 
 ## Where to go next
 

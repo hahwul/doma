@@ -7,7 +7,7 @@ weight = 2
 Each page here covers one domain. Start with [Tagging](./tagging/) and [Navigation](./navigation/) for the everyday flow; the rest you can read when the use case shows up.
 
 - [Tagging directories](./tagging/) — `add`, `mark`, auto-tags, git remote derivation
-- [Navigation (cd)](./navigation/) — picker, short_id, `--first` / `--builtin` / `--index`
+- [Navigation](./navigation/) — picker, frecency, `--pick` / `--first` / `--builtin`
 - [TTL & marks](./ttl-and-marks/) — temporary tags that expire on their own
 - [Bulk run](./run/) — execute a command across every tagged directory
 - [Search & stats](./search-and-stats/) — finding paths and inspecting your collection
