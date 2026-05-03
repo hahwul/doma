@@ -6,6 +6,8 @@ weight = 2
 
 doma reads `~/.config/doma/config.yml` (overridable via `DOMA_CONFIG`) on startup. The file is optional — every field has a default. Parsing is **strict**: unknown keys are an error, so a typo can't silently change behavior.
 
+You can edit it by hand, or use [`doma config`](../commands/#config) to read and write keys from the CLI.
+
 ## Full schema
 
 ```yaml

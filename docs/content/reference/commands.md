@@ -7,7 +7,7 @@ weight = 1
 | Command | Purpose |
 |---|---|
 | `add [<path>]` | Register a path (defaults to `.`) with one or more tags. |
-| `mark <tag> ...` | Tag cwd with temporary (7-day) tags. Alias for `add . -t TAG ... --tmp`. |
+| `mark [-p <path>] <tag> ...` | Tag a directory with temporary (7-day) tags. Defaults to cwd. |
 | `rm <path>` | Remove tag(s) from a path, or drop the path entirely. |
 | `prune --gone\|--expired` | Bulk-delete entries whose path is missing, or tag rows past their TTL. |
 | `move <old> <new>` | Move a registered path; tags carry over. |
@@ -19,6 +19,8 @@ weight = 1
 | `run <tag> -- <cmd>` | Run a command in every tagged directory. |
 | `export` | Dump the database (JSON or YAML). |
 | `import <file>` | Load a snapshot (`--merge` or `--replace`). |
+| `trash <action>` | Recover from `rm` or empty the soft-delete store. |
+| `config <action>` | Read or write `config.yml` keys from the CLI. |
 | `setup install` | Append the shell wrapper to your rc file. |
 | `setup init <shell>` | Print the shell wrapper for manual install. |
 | `setup completion <shell>` | Print a shell completion script. |
@@ -55,10 +57,10 @@ doma add [<path> ...] [-t TAG ...] [--ttl DUR | --tmp]
 ## `mark`
 
 ```
-doma mark <tag> [<tag> ...]
+doma mark [-p PATH] <tag> [<tag> ...]
 ```
 
-Equivalent to `doma add . -t TAG ... --tmp`. cwd only, 7-day default.
+Equivalent to `doma add <path> -t TAG ... --tmp`. Path defaults to cwd; `-p PATH` marks elsewhere. 7-day TTL.
 
 ## `rm`
 
@@ -123,6 +125,33 @@ doma import <file> [--merge | --replace] [-y | --yes]
 ```
 
 `--replace` without `--yes` requires a TTY confirmation.
+
+## `trash`
+
+```
+doma trash list
+doma trash restore <short_id> [--merge]
+doma trash empty [--older DUR]
+```
+
+`rm <path>` writes to the trash by default — `trash list` shows what's recoverable (newest first), `trash restore` brings an entry back. Use `--merge` if the path is already re-registered with different tags. `empty` purges everything; `empty --older 7d` purges only old entries.
+
+Anything older than 7 days is auto-pruned on the next trash op.
+
+## `config`
+
+```
+doma config get <key>
+doma config set <key> <value>
+doma config unset <key>
+doma config list
+doma config edit
+doma config path
+```
+
+Keys: `db_path`, `selector`, `auto_tag.basename`, `auto_tag.git` (see [Configuration](../config/) for what each does).
+
+`set` / `unset` rewrite `config.yml` and don't preserve comments — use `config edit` to open the file in `$EDITOR` for hand-edits.
 
 ## `setup`
 

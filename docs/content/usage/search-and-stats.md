@@ -22,11 +22,18 @@ Path/basename hits show up regardless of tag state; tag-name hits skip expired r
 ## Glob filtering on tags
 
 ```bash
-doma list -t 'work/*'                            # every path whose tag matches the glob
+doma list -t 'work/*'                            # every tag like work/proj-a, work/proj-b
+doma list -t 'work/**'                           # every tag under work/, any depth
 doma list -t 'work*' --pick --first --by recent  # most-recent matching dir on stdout
 ```
 
-`*` and `?` in a tag argument switch matching from exact-equal to SQLite GLOB. Quote to keep your shell from expanding it first.
+`*`, `**`, and `?` in a tag argument switch matching from exact-equal to glob:
+
+- `*` matches within one segment (doesn't cross `/`)
+- `**` matches across `/`
+- `?` matches a single non-`/` character
+
+Quote the pattern to keep your shell from expanding it first.
 
 ## Listing tags
 

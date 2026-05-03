@@ -57,7 +57,25 @@ The volume mount keeps the doma database persistent across container runs.
 
 ```bash
 doma version
-doma doctor   # path / config / DB sanity check
+doma doctor
 ```
 
-`doctor` is the first command to reach for if something looks off — it reports where doma writes, whether the config parses, and how big the database has grown.
+`doctor` reports where doma writes, whether the config parses, and how the database is growing — reach for it first if something looks off:
+
+```
+Paths
+     home                 /Users/me/.config/doma
+  ·  config               /Users/me/.config/doma/config.yml
+  ✓  database             /Users/me/.config/doma/doma.db
+
+Config
+     status               not present (using defaults)
+
+Database
+     size                 52.0 KB
+     directories          4
+     tags                 4
+     schema               v2
+```
+
+`✓` means the file exists, `·` means it's missing (which is fine for `config.yml` — defaults apply).

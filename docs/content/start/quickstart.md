@@ -1,10 +1,10 @@
 +++
 title = "Quickstart"
-description = "Tag a directory, navigate to it, and operate on the whole pile in five commands."
+description = "Tag a directory, inspect it, navigate to it, and operate on the whole pile."
 weight = 2
 +++
 
-A five-minute tour of the commands you'll actually use.
+A short tour of the commands you'll actually use day-to-day.
 
 ## 1. Tag a directory
 
@@ -29,7 +29,16 @@ You'll see one line per directory:
 
 The first column (`0dc0db9`) is a stable short_id. The path is the canonical real path (symlinks resolved). Tags follow as `#name`.
 
-## 3. Jump back to it
+## 3. Check what you've tagged
+
+```bash
+doma info               # current directory's tags, TTLs, last-used
+doma tags               # every tag with its usage count
+```
+
+`doma info` answers "did I tag this? with what?" without opening `list` and squinting. `doma tags --tree` groups names by `/` prefix when you've started using hierarchical tags like `work/proj-a`.
+
+## 4. Jump back to it
 
 ```bash
 doma cd crystal
@@ -37,7 +46,7 @@ doma cd crystal
 
 Multiple matches open an interactive picker — type to filter, ↑↓ to move, Enter to pick. `doma cd` needs the shell wrapper, so run `doma setup install` once if you haven't yet (see [Shell integration](../shell-integration/)).
 
-## 4. Operate on every dir under a tag
+## 5. Operate on every dir under a tag
 
 ```bash
 doma run crystal --parallel -- shards build
@@ -45,7 +54,7 @@ doma run crystal --parallel -- shards build
 
 For custom loops, `doma list -t crystal --paths` gives you one path per line (use `-0` for NUL-separated output).
 
-## 5. Mark something for the week
+## 6. Mark something for the week
 
 ```bash
 doma mark spike

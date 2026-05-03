@@ -36,7 +36,13 @@ That's exactly equivalent to `doma add . -t bookmark --tmp`, just shorter. Multi
 doma mark spike skim review
 ```
 
-For a custom TTL or a non-cwd path, fall back to `doma add` directly.
+To mark a path other than the current directory, use `-p`:
+
+```bash
+doma mark -p ~/Projects/sandbox spike
+```
+
+For a custom TTL, fall back to `doma add --ttl` directly.
 
 ## What "expired" means
 
@@ -86,4 +92,4 @@ The last form is occasionally useful: "this thing I marked for the week — actu
 | "Keep this for two days" | `doma add . -t reading --ttl 2d` |
 | "Track this project long-term" | `doma add . -t crystal` (no TTL) |
 
-`mark` is intentionally the limited form — single positional tag list, cwd, 7d. Anything beyond that uses `add` directly.
+`mark` is the limited form — positional tag list, 7-day TTL, cwd by default with `-p` for an explicit path. Anything beyond that uses `add` directly.
