@@ -179,22 +179,20 @@ module Doma
         {"version | help", "Show version / this help"},
       ]
 
-      # ASCII banner — a cutting board tilted ~45°, with the handle
-      # protruding lower-left and the hole visible in it. Each row is
-      # padded to a fixed width so the right-column info text below
-      # lines up cleanly. Rendered yellow at print time when color
-      # is enabled.
+      # ASCII banner — a tilted cutting board with a handle (and a hole
+      # in it) on the left. Sized to fit beside the right-column info
+      # text below; widths are equal across rows so the right column
+      # aligns. Rendered yellow at print time when color is enabled.
       BANNER_ART = [
-        "                                          ",
-        "                ____________________      ",
-        "              ╱                    ╱      ",
-        "            ╱                    ╱        ",
-        "          ╱                    ╱          ",
-        "        ╱                    ╱            ",
-        "   ___╱                    ╱              ",
-        "  ╱   ╲                  ╱                ",
-        " │ ◯   ╲_______________╱                  ",
-        "  ╲____╱                                  ",
+        "                              ",
+        "       ╭────────────────╮     ",
+        "       │                │     ",
+        "   ╭───┘                │     ",
+        "   │ ◯                  │     ",
+        "   ╰───┐                │     ",
+        "       │                │     ",
+        "       ╰────────────────╯     ",
+        "                              ",
       ]
 
       private def print_help
@@ -204,7 +202,6 @@ module Doma
         brand = color ? "doma".colorize(:cyan).bold.to_s : "doma"
 
         info = [
-          "",
           "",
           "  #{brand} v#{Doma::VERSION}",
           "",
