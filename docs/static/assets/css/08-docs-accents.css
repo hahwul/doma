@@ -1,0 +1,137 @@
+/* =============================================================================
+   Docs accents — hand-drawn flavor for the documentation pages.
+   Restraint matters here: docs need to read fast, so we only touch
+   *non-typographic* surfaces (borders, dividers, container corners).
+   No handwriting fonts in body copy, no rotated content blocks.
+   ============================================================================= */
+
+:root {
+    --accent-blob-sm: 4px 9px 5px 8px / 8px 5px 9px 4px;
+    --accent-blob-md: 8px 14px 10px 12px / 12px 10px 14px 8px;
+    --accent-blob-lg: 14px 22px 16px 20px / 20px 16px 22px 14px;
+}
+
+/* -----------------------------------------------------------------------------
+   H2 — softer, sketchy divider instead of a 1px border line.
+   --------------------------------------------------------------------------- */
+.docs-main h2 {
+    border-bottom: none;
+    padding-bottom: 0.45rem;
+    background-image:
+        radial-gradient(circle at 10% 50%, var(--border-light) 1px, transparent 1.4px),
+        linear-gradient(90deg, var(--border-light) 0, var(--border-light) 100%);
+    background-repeat: no-repeat;
+    background-position: 0 100%, 0 100%;
+    background-size: 6px 2px, 100% 1px;
+}
+
+/* -----------------------------------------------------------------------------
+   Inline code — gentle asymmetric corners. Still tight, still readable.
+   --------------------------------------------------------------------------- */
+.docs-main :not(pre) > code {
+    border-radius: var(--accent-blob-sm);
+}
+
+/* -----------------------------------------------------------------------------
+   Code blocks — slightly organic corners + soft amber shadow.
+   --------------------------------------------------------------------------- */
+.docs-main pre {
+    border-radius: var(--accent-blob-md);
+    box-shadow: 2px 3px 0 rgba(192, 133, 82, 0.08);
+}
+
+/* -----------------------------------------------------------------------------
+   Blockquote — dashed accent bar + organic corners on the right side.
+   --------------------------------------------------------------------------- */
+.docs-main blockquote {
+    border-left: none;
+    background-image: linear-gradient(
+        180deg,
+        var(--primary) 0,
+        var(--primary) 6px,
+        transparent 6px,
+        transparent 12px
+    );
+    background-size: 3px 12px;
+    background-repeat: repeat-y;
+    background-position: 0 0;
+    padding-left: 1.4rem;
+    border-radius: 0 var(--accent-blob-md);
+}
+
+/* -----------------------------------------------------------------------------
+   Info boxes — keep colors, soften corners only.
+   --------------------------------------------------------------------------- */
+.docs-main .info-box {
+    border-radius: var(--accent-blob-md);
+}
+
+/* -----------------------------------------------------------------------------
+   Horizontal rule — wavy SVG instead of a solid line.
+   --------------------------------------------------------------------------- */
+.docs-main hr {
+    border: none;
+    height: 10px;
+    margin: 2.5rem 0;
+    background-color: transparent;
+    background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 10' preserveAspectRatio='none'><path d='M0 5 Q 15 1, 30 5 T 60 5 T 90 5 T 120 5' fill='none' stroke='%233a2c1f' stroke-width='1.4' stroke-linecap='round'/></svg>");
+    background-repeat: repeat-x;
+    background-size: 120px 10px;
+    background-position: center;
+}
+
+/* -----------------------------------------------------------------------------
+   Cards / list items — sketchy corner shift on hover only (no resting state
+   change, so the page still looks clean and gridded at first glance).
+   --------------------------------------------------------------------------- */
+ul.section-list li,
+ul.page-list li,
+.feature-card,
+.doc-card {
+    transition:
+        all 0.15s ease,
+        border-radius 0.4s ease;
+}
+
+ul.section-list li:hover,
+ul.page-list li:hover,
+.feature-card:hover,
+.doc-card:hover {
+    border-radius: var(--accent-blob-md);
+}
+
+/* -----------------------------------------------------------------------------
+   Heading anchor "#" — small handwritten flair when the heading is hovered.
+   Anchor stays the same icon; only the hover ring becomes blobby.
+   --------------------------------------------------------------------------- */
+.heading-anchor {
+    transition:
+        all 0.15s ease,
+        border-radius 0.35s ease;
+}
+.heading-anchor:hover {
+    border-radius: var(--accent-blob-sm);
+}
+
+/* -----------------------------------------------------------------------------
+   Tables — leave readability alone, just round the outer corners organically.
+   --------------------------------------------------------------------------- */
+.docs-main table {
+    border-radius: var(--accent-blob-md);
+}
+
+/* -----------------------------------------------------------------------------
+   Brand wink — a tiny handwriting accent on h1 only (kbd-like badge feel).
+   This is the *one* place we let the handwriting font through, because h1
+   is structural and never inside a paragraph.
+   --------------------------------------------------------------------------- */
+.docs-main > h1:first-child::before {
+    content: "~";
+    font-family: "Caveat", cursive;
+    font-weight: 600;
+    color: var(--primary);
+    margin-right: 0.4rem;
+    font-size: 1.4em;
+    vertical-align: -0.05em;
+    opacity: 0.8;
+}
