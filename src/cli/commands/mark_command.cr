@@ -18,7 +18,7 @@ module Doma::CLI
       target_path : String? = nil
 
       parser = OptionParser.new do |p|
-        p.banner = "Usage: doma mark [-p PATH] <tag> [<tag> ...]   # or: -t TAG ..."
+        p.banner = "Usage: doma mark [-p PATH] (<tag> [<tag> ...] | -t TAG [-t TAG ...])"
         p.on("-p PATH", "--path=PATH", "Mark this path instead of the current directory") do |v|
           target_path = v
         end

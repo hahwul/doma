@@ -376,6 +376,26 @@ describe "doma run" do
     end
   end
 
+  it "[positional + -t] errors instead of silently picking one" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      r = run(["run", "shared", "-t", "shared", "--", "echo"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(2)
+      r[:err].should contain("both positionally and via -t")
+    end
+  end
+
+  it "[-t '' ] surfaces the empty-tag validator" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      r = run(["run", "-t", "", "--", "echo"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(2)
+      r[:err].should contain("empty")
+    end
+  end
+
   it "[unknown tag] errors with 3" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     with_home do |home|
