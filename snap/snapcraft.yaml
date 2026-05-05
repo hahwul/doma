@@ -1,48 +1,53 @@
 name: doma
 base: core24
-version: 0.1.0
 summary: Directory tag manager — put your directories on the cutting board.
 description: |
   doma (도마) is a directory tag manager written in Crystal. Tag any path
   with one or more labels and recall, browse, or batch-execute commands
   across them — a single SQLite-backed CLI with optional fzf integration.
 
+adopt-info: doma
 grade: stable
 confinement: strict
 license: MIT
 
+platforms:
+  amd64:
+    build-on: amd64
+    build-for: amd64
+  arm64:
+    build-on: arm64
+    build-for: arm64
+
 apps:
   doma:
-    command: doma
+    command: bin/doma
     plugs:
       - home
       - removable-media
       - network
-      - network-bind
 
 parts:
   doma:
-    source: ./
     plugin: nil
-    override-build: |
-      curl -fsSL https://crystal-lang.org/install.sh | bash
-      shards install --production
-      shards build --release --no-debug --production
-      cp ./bin/doma $CRAFT_PART_INSTALL/
     build-packages:
-      - git
       - curl
-      - pkg-config
-      - libssl-dev
-      - libxml2-dev
-      - libz-dev
-      - libyaml-dev
-      - libpcre2-dev
-      - libevent-dev
-      - libgmp-dev
-      - libsqlite3-dev
-    stage-packages:
-      - libxml2
-      - zlib1g
-      - libyaml-0-2
-      - libsqlite3-0
+      - ca-certificates
+    override-build: |
+      set -euo pipefail
+      tag="$(curl -fsSL https://api.github.com/repos/hahwul/doma/releases/latest | grep -m1 '"tag_name"' | cut -d'"' -f4)"
+      version="${tag#v}"
+
+      case "$CRAFT_ARCH_BUILD_FOR" in
+        amd64) asset="doma-${tag}-linux-x86_64" ;;
+        arm64) asset="doma-${tag}-linux-arm64" ;;
+        *) echo "unsupported arch: $CRAFT_ARCH_BUILD_FOR" >&2; exit 1 ;;
+      esac
+
+      mkdir -p "$CRAFT_PART_INSTALL/bin"
+      curl -fsSL --retry 5 --retry-delay 5 \
+        "https://github.com/hahwul/doma/releases/download/${tag}/${asset}" \
+        -o "$CRAFT_PART_INSTALL/bin/doma"
+      chmod +x "$CRAFT_PART_INSTALL/bin/doma"
+
+      craftctl set version="$version"
