@@ -1,14 +1,44 @@
 +++
 title = "Installation"
-description = "Install doma via Homebrew, from source, prebuilt binary, or container."
+description = "Install doma via Homebrew, AUR, Snap, prebuilt binary, container, or from source."
 weight = 1
 +++
 
 ## Homebrew
 
+macOS and Linux:
+
 ```bash
 brew tap hahwul/doma
 brew install doma
+```
+
+## AUR (Arch Linux)
+
+The [`doma`](https://aur.archlinux.org/packages/doma) package tracks the latest tagged release and pulls the static x86_64 binary from GitHub:
+
+```bash
+# with an AUR helper
+paru -S doma
+# or
+yay -S doma
+
+# or manually
+git clone https://aur.archlinux.org/doma.git
+cd doma
+makepkg -si
+```
+
+## Snap
+
+```bash
+sudo snap install doma
+```
+
+The snap ships with `home`, `removable-media`, and `network` plugs. If you want doma to read or tag paths outside `$HOME` (e.g. `/mnt`, `/media`), connect the removable-media plug after install:
+
+```bash
+sudo snap connect doma:removable-media
 ```
 
 ## From source

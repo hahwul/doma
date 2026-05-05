@@ -13,13 +13,16 @@ on:
         description: Test scenario tags
 jobs:
   snapcraft-releaser:
-    runs-on: ubuntu-latest
-    name: snapcraft-releaser
+    name: snapcraft-releaser (${{ matrix.arch }})
+    runs-on: ${{ matrix.runs-on }}
     strategy:
       fail-fast: false
       matrix:
-        platform:
-          - amd64
+        include:
+          - arch: amd64
+            runs-on: ubuntu-latest
+          - arch: arm64
+            runs-on: ubuntu-24.04-arm
     steps:
       - name: Check out Git repository
         uses: actions/checkout@v6
