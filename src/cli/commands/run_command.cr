@@ -68,6 +68,13 @@ module Doma::CLI
       # Global -q already implies --no-header — both want a quieter run.
       no_header ||= Doma::Logger.quiet?
 
+      # Check the missing-`--` case first: if the user typed
+      # `run -t shared echo hi` (no separator), `echo`/`hi` land in
+      # positional_tags and would trip the "both forms" rule below
+      # with a misleading message. Surfacing the real mistake (no `--`)
+      # is what the user actually needs.
+      raise Doma::ValidationError.new("command is required after '--'") if cmd_args.empty?
+
       if !flag_tags.empty? && !positional_tags.empty?
         raise Doma::ValidationError.new(
           "tag specified both positionally and via -t; pick one"
@@ -81,7 +88,6 @@ module Doma::CLI
       tag_args = flag_tags.empty? ? positional_tags : flag_tags
 
       raise Doma::ValidationError.new("tag is required") if tag_args.empty?
-      raise Doma::ValidationError.new("command is required after '--'") if cmd_args.empty?
 
       tag = tag_args.first
       db = Doma::Database.open

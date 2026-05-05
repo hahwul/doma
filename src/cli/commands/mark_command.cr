@@ -52,7 +52,7 @@ module Doma::CLI
       if tags.empty?
         raise Doma::ValidationError.new(
           "mark requires at least one tag",
-          hint: "usage: doma mark <tag> [<tag> ...]   (alias of add . -t … --tmp)"
+          hint: "usage: doma mark (<tag> [<tag> ...] | -t TAG [-t TAG ...])   (alias of add . -t … --tmp)"
         )
       end
 
