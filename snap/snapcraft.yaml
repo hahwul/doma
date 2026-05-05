@@ -35,7 +35,9 @@ parts:
       - ca-certificates
     override-build: |
       set -euo pipefail
-      tag="$(curl -fsSL https://api.github.com/repos/hahwul/doma/releases/latest | grep -m1 '"tag_name"' | cut -d'"' -f4)"
+      release_json="$(curl -fsSL --retry 5 --retry-delay 5 \
+        https://api.github.com/repos/hahwul/doma/releases/latest)"
+      tag="$(printf '%s' "$release_json" | grep '"tag_name"' | head -n1 | cut -d'"' -f4)"
       version="${tag#v}"
 
       case "$CRAFT_ARCH_BUILD_FOR" in
