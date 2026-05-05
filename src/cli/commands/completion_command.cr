@@ -154,7 +154,7 @@ module Doma::CLI
           # the most-used flags first; rare ones still work via tab-twice.
           case "$cmd" in
             add)    COMPREPLY=( $(compgen -W "-t --tag --ttl --tmp --auto-tag --no-auto-tag --git-tag --no-git-tag --dry-run -h --help" -- "$cur") ) ;;
-            mark)   COMPREPLY=( $(compgen -W "-h --help" -- "$cur") ) ;;
+            mark)   COMPREPLY=( $(compgen -W "-t --tag -p --path -h --help" -- "$cur") ) ;;
             rm)     COMPREPLY=( $(compgen -W "-t --tag --hard -h --help" -- "$cur") ) ;;
             prune)  COMPREPLY=( $(compgen -W "--gone --expired -h --help" -- "$cur") ) ;;
             move)   COMPREPLY=( $(compgen -W "--allow-missing -h --help" -- "$cur") ) ;;
@@ -163,7 +163,7 @@ module Doma::CLI
             info)   COMPREPLY=( $(compgen -W "--json -h --help" -- "$cur") ) ;;
             cd)     COMPREPLY=( $(compgen -W "-h --help" -- "$cur") ) ;;
             stats)  COMPREPLY=( $(compgen -W "--top --recent --used --json -h --help" -- "$cur") ) ;;
-            run)    COMPREPLY=( $(compgen -W "--fail-fast --parallel --no-header -h --help" -- "$cur") ) ;;
+            run)    COMPREPLY=( $(compgen -W "-t --tag --fail-fast --parallel --jobs --no-header -h --help" -- "$cur") ) ;;
             export) COMPREPLY=( $(compgen -W "--json --yaml -h --help" -- "$cur") ) ;;
             import) COMPREPLY=( $(compgen -W "--merge --replace --yes -h --help" -- "$cur") ) ;;
             setup)  COMPREPLY=( $(compgen -W "install init completion" -- "$cur") ) ;;
@@ -275,7 +275,7 @@ module Doma::CLI
           local -a flags
           case $cmd in
             add)    flags=(-t --tag --ttl --tmp --auto-tag --no-auto-tag --git-tag --no-git-tag --dry-run -h --help) ;;
-            mark)   flags=(-h --help) ;;
+            mark)   flags=(-t --tag -p --path -h --help) ;;
             rm)     flags=(-t --tag --hard -h --help) ;;
             prune)  flags=(--gone --expired -h --help) ;;
             move)   flags=(--allow-missing -h --help) ;;
@@ -284,7 +284,7 @@ module Doma::CLI
             info)   flags=(--json -h --help) ;;
             cd)     flags=(-h --help) ;;
             stats)  flags=(--top --recent --used --json -h --help) ;;
-            run)    flags=(--fail-fast --parallel --no-header -h --help) ;;
+            run)    flags=(-t --tag --fail-fast --parallel --jobs --no-header -h --help) ;;
             export) flags=(--json --yaml -h --help) ;;
             import) flags=(--merge --replace --yes -h --help) ;;
             doctor) flags=(-h --help) ;;
@@ -372,7 +372,8 @@ module Doma::CLI
         "list"   => %w[--tag --by --check --include-expired --json --paths --pick --query --first --builtin],
         "info"   => %w[--json],
         "stats"  => %w[--top --recent --used --json],
-        "run"    => %w[--fail-fast --parallel --no-header],
+        "mark"   => %w[--tag --path],
+        "run"    => %w[--tag --fail-fast --parallel --jobs --no-header],
         "export" => %w[--json --yaml],
         "import" => %w[--merge --replace --yes],
       }

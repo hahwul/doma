@@ -18,9 +18,15 @@ module Doma::CLI
       target_path : String? = nil
 
       parser = OptionParser.new do |p|
-        p.banner = "Usage: doma mark [-p PATH] <tag> [<tag> ...]"
+        p.banner = "Usage: doma mark [-p PATH] (<tag> [<tag> ...] | -t TAG [-t TAG ...])"
         p.on("-p PATH", "--path=PATH", "Mark this path instead of the current directory") do |v|
           target_path = v
+        end
+        p.on("-t TAG", "--tag=TAG", "Add this tag (alias for positional; repeatable, comma-separated allowed)") do |t|
+          if t.strip.empty?
+            raise Doma::ValidationError.new("tag is empty (-t got an empty value)")
+          end
+          tags << t
         end
         p.on("-h", "--help", "Show help") do
           puts p
@@ -29,8 +35,11 @@ module Doma::CLI
           STDOUT.puts "Each tag expires after 7 days. Equivalent to:"
           STDOUT.puts "    doma add <path> -t TAG ... --tmp"
           STDOUT.puts ""
-          STDOUT.puts "Defaults to the current directory; pass -p PATH to mark"
-          STDOUT.puts "elsewhere. For a custom TTL, use `doma add --ttl`."
+          STDOUT.puts "Tags can be passed positionally (`mark work personal`)"
+          STDOUT.puts "or via `-t TAG` (`mark -t work -t personal`); both forms"
+          STDOUT.puts "may be mixed. Defaults to the current directory; pass"
+          STDOUT.puts "-p PATH to mark elsewhere. For a custom TTL, use"
+          STDOUT.puts "`doma add --ttl`."
           exit 0
         end
         p.unknown_args do |before, after|

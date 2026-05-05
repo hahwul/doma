@@ -24,11 +24,18 @@ module Doma::CLI
       parallel = false
       no_header = false
       jobs : Int32? = nil
-      tag_args = [] of String
+      flag_tags = [] of String
+      positional_tags = [] of String
       cmd_args = [] of String
 
       parser = OptionParser.new do |p|
-        p.banner = "Usage: doma run <tag> [--fail-fast] [--parallel [--jobs N]] [--no-header] -- <cmd> [args...]"
+        p.banner = "Usage: doma run (<tag> | -t TAG) [--fail-fast] [--parallel [--jobs N]] [--no-header] -- <cmd> [args...]"
+        p.on("-t TAG", "--tag=TAG", "Tag selector — single tag, no comma split (alias for positional)") do |t|
+          if t.strip.empty?
+            raise Doma::ValidationError.new("tag is empty (-t got an empty value)")
+          end
+          flag_tags << t
+        end
         p.on("--fail-fast", "Stop on first failure") { stop_on_fail = true }
         p.on("--parallel", "Run commands in parallel (best-effort, output interleaves)") { parallel = true }
         p.on("--jobs N", "Max concurrent invocations under --parallel (default: CPU count)") do |n|
@@ -41,10 +48,16 @@ module Doma::CLI
         p.on("--no-header", "Suppress per-directory ▶/✓ markers (failures still surface as ✗)") { no_header = true }
         p.on("-h", "--help", "Show help") do
           puts p
+          STDOUT.puts ""
+          STDOUT.puts "Runs <cmd> in every directory tagged with <tag>. The tag"
+          STDOUT.puts "can be passed positionally (`run work -- cmd`) or via"
+          STDOUT.puts "`-t TAG` (`run -t work -- cmd`), but not both. Only a"
+          STDOUT.puts "single tag is accepted; glob patterns (`*`, `?`) still"
+          STDOUT.puts "match across multiple tags."
           exit 0
         end
         p.unknown_args do |before, after|
-          tag_args.concat(before)
+          positional_tags.concat(before)
           cmd_args.concat(after)
         end
       end
@@ -54,6 +67,18 @@ module Doma::CLI
       end
       # Global -q already implies --no-header — both want a quieter run.
       no_header ||= Doma::Logger.quiet?
+
+      if !flag_tags.empty? && !positional_tags.empty?
+        raise Doma::ValidationError.new(
+          "tag specified both positionally and via -t; pick one"
+        )
+      end
+      if flag_tags.size > 1
+        raise Doma::ValidationError.new(
+          "run accepts a single tag; got #{flag_tags.size} via -t"
+        )
+      end
+      tag_args = flag_tags.empty? ? positional_tags : flag_tags
 
       raise Doma::ValidationError.new("tag is required") if tag_args.empty?
       raise Doma::ValidationError.new("command is required after '--'") if cmd_args.empty?
