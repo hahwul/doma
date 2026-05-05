@@ -47,7 +47,17 @@ module Doma::CLI
         # tags AND together — i.e. only directories carrying every listed
         # tag survive the filter. Pre-fix this clobbered to last-wins.
         p.on("-t TAG", "--tag=TAG", "Filter by tag (repeatable; AND semantics)") do |t|
-          t.split(',').each { |x| tags << x.strip unless x.strip.empty? }
+          # Reject empty `-t ''` outright; otherwise the silent
+          # filter-of-nothing returns every path and looks like a match.
+          # Mirrors the add/rm/mark/run validation.
+          if t.strip.empty?
+            raise Doma::ValidationError.new("tag is empty (-t got an empty value)")
+          end
+          parts = t.split(',').map(&.strip).reject(&.empty?)
+          if parts.empty?
+            raise Doma::ValidationError.new("tag is empty (-t got an empty value)")
+          end
+          parts.each { |x| tags << x }
         end
         p.on("--by SORT", "Sort by 'path' (default) or 'recent' ('used'/'recency')") do |val|
           sort = case val

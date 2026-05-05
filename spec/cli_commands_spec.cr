@@ -386,6 +386,20 @@ describe "doma run" do
     end
   end
 
+  it "[-t TAG cmd...] (forgot --) surfaces missing-`--` not double-tag" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      # Without a leading `--`, `echo`/`hi` would otherwise land in
+      # positional_tags and trip the "both forms" rule with a misleading
+      # message. The validator should prefer the actual mistake first.
+      r = run(["run", "-t", "shared", "echo", "hi"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(2)
+      r[:err].should contain("command is required after '--'")
+      r[:err].should_not contain("both positionally")
+    end
+  end
+
   it "[-t '' ] surfaces the empty-tag validator" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     with_home do |home|
@@ -724,6 +738,26 @@ describe "doma list flags" do
     end
   end
 
+  it "[-t '' ] rejects empty tag instead of silently matching everything" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      r = run(["list", "-t", "", "--paths"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(2)
+      r[:err].should contain("empty")
+    end
+  end
+
+  it "[-t '   '] also rejects whitespace-only tag" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      r = run(["list", "-t", "   ", "--paths"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(2)
+      r[:err].should contain("empty")
+    end
+  end
+
   it "[--check] flags missing paths with [gone]" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     with_home do |home|
@@ -938,6 +972,16 @@ describe "doma mark validation" do
       r = run(["mark", "has space"], {"DOMA_HOME" => home})
       r[:status].exit_code.should eq(2)
       r[:err].should contain("invalid")
+    end
+  end
+
+  it "[no tags] hint advertises both positional and -t forms" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      r = run(["mark"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(2)
+      r[:err].should contain("requires at least one tag")
+      r[:err].should contain("-t TAG")
     end
   end
 end
