@@ -58,9 +58,10 @@ doma add [<path> ...] [-t TAG ...] [--ttl DUR | --tmp]
 
 ```
 doma mark [-p PATH] <tag> [<tag> ...]
+doma mark [-p PATH] -t TAG [-t TAG ...]
 ```
 
-Equivalent to `doma add <path> -t TAG ... --tmp`. Path defaults to cwd; `-p PATH` marks elsewhere. 7-day TTL.
+Equivalent to `doma add <path> -t TAG ... --tmp`. Path defaults to cwd; `-p PATH` marks elsewhere. 7-day TTL. Tags accept positional or `-t/--tag`; both forms may be mixed.
 
 ## `rm`
 
@@ -113,9 +114,10 @@ Defaults to `.`. Accepts either a path or a short_id (full or unique prefix). Pr
 
 ```
 doma run <tag> [--fail-fast] [--parallel] -- <cmd> [args...]
+doma run -t TAG [--fail-fast] [--parallel] -- <cmd> [args...]
 ```
 
-`--` is required. `--fail-fast` is sequential-only.
+`--` is required. `--fail-fast` is sequential-only. The tag can be passed positionally or via `-t/--tag` (alias).
 
 ## `export` / `import`
 

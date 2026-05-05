@@ -366,6 +366,16 @@ describe "doma run" do
     end
   end
 
+  it "[-t TAG] accepts the tag via flag as an alias for positional" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      r = run(["run", "-t", "shared", "--", "echo", "hello"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(0)
+      (r[:out].split("hello").size - 1).should eq(2)
+    end
+  end
+
   it "[unknown tag] errors with 3" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     with_home do |home|
@@ -1213,6 +1223,26 @@ describe "doma mark --path" do
       r = run(["mark", "-p", "/no/such/place", "tag"], {"DOMA_HOME" => home})
       r[:status].exit_code.should eq(2)
       r[:err].should contain("not a directory")
+    end
+  end
+
+  it "[-t TAG] accepts tags via flag as an alias for positional args" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      r = run(["mark", "-p", "/var", "-t", "alpha", "-t", "beta"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(0)
+      tags = run(["tags", "--names"], {"DOMA_HOME" => home})
+      tags[:out].split('\n', remove_empty: true).sort!.should eq(["alpha", "beta"])
+    end
+  end
+
+  it "[-t TAG + positional] mixes flag and positional tags in one call" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      r = run(["mark", "-p", "/var", "-t", "alpha", "beta"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(0)
+      tags = run(["tags", "--names"], {"DOMA_HOME" => home})
+      tags[:out].split('\n', remove_empty: true).sort!.should eq(["alpha", "beta"])
     end
   end
 end

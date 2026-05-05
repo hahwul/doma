@@ -29,6 +29,12 @@ module Doma::CLI
 
       parser = OptionParser.new do |p|
         p.banner = "Usage: doma run <tag> [--fail-fast] [--parallel [--jobs N]] [--no-header] -- <cmd> [args...]"
+        p.on("-t TAG", "--tag=TAG", "Tag selector (alias for positional)") do |t|
+          if t.strip.empty?
+            raise Doma::ValidationError.new("tag is empty (-t got an empty value)")
+          end
+          tag_args << t
+        end
         p.on("--fail-fast", "Stop on first failure") { stop_on_fail = true }
         p.on("--parallel", "Run commands in parallel (best-effort, output interleaves)") { parallel = true }
         p.on("--jobs N", "Max concurrent invocations under --parallel (default: CPU count)") do |n|
