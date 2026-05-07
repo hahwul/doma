@@ -87,7 +87,7 @@ The two flags are mutually exclusive.
 ## `list`
 
 ```
-doma list [<query>] [-t TAG] [--by path|recent]
+doma list [<query>] [-t TAG] [--by path|recent|tag]
                     [--check] [--include-expired]
                     [--json] [--paths] [-0]
                     [--pick [--first | --builtin] [--query Q]]
@@ -95,7 +95,7 @@ doma list [<query>] [-t TAG] [--by path|recent]
 
 - `<query>`: substring match across path/basename/tag.
 - `-t TAG`: exact tag (or glob if `*` / `?` is present).
-- `--by`: sort by `path` (default) or `recent` (last-used).
+- `--by`: sort by `path` (default), `recent` (last-used), or `tag` (group output under per-tag headers — entries with multiple tags appear under each; untagged entries collect under `(no tags)`). Incompatible with `--pick`. Under `--json`, the result is an object keyed by tag name (`""` for untagged) instead of a flat array. Under `--paths` / `-0`, paths are emitted in tag-sorted order with duplicates collapsed.
 - `--check`: annotate entries whose path is gone with `[gone]`.
 - `--include-expired`: include tag rows whose TTL has elapsed.
 - `--json` / `--paths` / `-0`: machine-readable forms (see [Pipelines](../../usage/pipelines/)).

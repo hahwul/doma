@@ -796,6 +796,75 @@ describe "doma list flags" do
       parsed.first.as_h.keys.should contain("exists")
     end
   end
+
+  it "[--by tag] groups entries under per-tag headers and (no tags) for untagged" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      # An untagged entry to verify the (no tags) bucket renders last.
+      bare = File.tempname("doma-bare")
+      FileUtils.mkdir_p(bare)
+      begin
+        run(["add", bare], {"DOMA_HOME" => home})
+        r = run(["list", "--by", "tag"], {"DOMA_HOME" => home})
+        out = r[:out]
+        out.should contain("#fs")
+        out.should contain("#shared")
+        out.should contain("(no tags)")
+        # `shared` is on two seed entries → both appear under the
+        # header. Anchor on the header line (start-of-line `#shared`)
+        # since `#shared` also appears inside other groups' tag lists.
+        shared_idx = (out =~ /(?:^|\n)#shared\n/).not_nil!
+        section_start = shared_idx + (out[shared_idx] == '\n' ? 1 : 0) + "#shared\n".size
+        next_header = out.index(/\n#|\n\(no tags\)/, section_start) || out.size
+        out[section_start, next_header - section_start].lines.count { |l| l.starts_with?("  ") }.should eq(2)
+      ensure
+        FileUtils.rm_rf(bare)
+      end
+    end
+  end
+
+  it "[--by tag --json] returns an object keyed by tag with \"\" for untagged" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      run(["add", "/tmp", "-t", "alpha"], {"DOMA_HOME" => home})
+      run(["add", "/var"], {"DOMA_HOME" => home})
+      r = run(["list", "--by", "tag", "--json"], {"DOMA_HOME" => home})
+      parsed = JSON.parse(r[:out]).as_h
+      parsed.keys.should contain("alpha")
+      parsed.keys.should contain("")
+      parsed[""].as_a.first.as_h["path"].as_s.should eq(Doma::Validator.canonicalize("/var"))
+    end
+  end
+
+  it "[--by tag --paths] dedups paths in tag-sorted order" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      run(["add", "/tmp", "-t", "alpha", "-t", "beta"], {"DOMA_HOME" => home})
+      r = run(["list", "--by", "tag", "--paths"], {"DOMA_HOME" => home})
+      r[:out].split('\n', remove_empty: true).size.should eq(1)
+    end
+  end
+
+  it "[--by tag --pick] is rejected as incompatible" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      r = run(["list", "--by", "tag", "--pick"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(2)
+      r[:err].should contain("--by tag is incompatible with --pick")
+    end
+  end
+
+  it "[--by bogus] rejects unknown sort with the new tag option in the message" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      r = run(["list", "--by", "bogus"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(2)
+      r[:err].should contain("'tag'")
+    end
+  end
 end
 
 # ---------- add flag matrix ----------

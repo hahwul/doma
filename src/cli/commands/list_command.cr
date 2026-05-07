@@ -38,10 +38,11 @@ module Doma::CLI
       check_existence = false
       include_expired = false
       sort = Doma::Database::SortBy::Path
+      group_by_tag = false
       positional = [] of String
 
       parser = OptionParser.new do |p|
-        p.banner = "Usage: doma list [<query>] [-t TAG ...] [--by path|recent] [--check] [--include-expired] [--json] [--paths] [-0] [--pick]\n" \
+        p.banner = "Usage: doma list [<query>] [-t TAG ...] [--by path|recent|tag] [--check] [--include-expired] [--json] [--paths] [-0] [--pick]\n" \
                    "  (aliases for 'recent': 'used', 'recency')"
         # Repeatable / comma-separated, mirroring `add` and `rm`. Multiple
         # tags AND together — i.e. only directories carrying every listed
@@ -56,17 +57,24 @@ module Doma::CLI
           end
           parts.each { |x| tags << x }
         end
-        p.on("--by SORT", "Sort by 'path' (default) or 'recent' ('used'/'recency')") do |val|
-          sort = case val
-                 when "path" then Doma::Database::SortBy::Path
-                 when "recent",
-                      "used",
-                      "recency" then Doma::Database::SortBy::Recent
-                 else
-                   raise Doma::ValidationError.new(
-                     "--by must be 'path' or 'recent' (aliases: 'used', 'recency'), got '#{val}'"
-                   )
-                 end
+        p.on("--by SORT", "Sort by 'path' (default), 'recent' ('used'/'recency'), or 'tag' (group)") do |val|
+          case val
+          when "path"
+            sort = Doma::Database::SortBy::Path
+          when "recent", "used", "recency"
+            sort = Doma::Database::SortBy::Recent
+          when "tag"
+            # `tag` is a *grouping* mode rather than a flat sort: one
+            # entry can carry N tags and shows up under each. Internal
+            # row order within a group still uses path-asc so the output
+            # is stable across runs.
+            group_by_tag = true
+            sort = Doma::Database::SortBy::Path
+          else
+            raise Doma::ValidationError.new(
+              "--by must be 'path', 'recent' (aliases: 'used', 'recency'), or 'tag', got '#{val}'"
+            )
+          end
         end
         p.on("--check", "Mark entries whose path is gone from disk") { check_existence = true }
         p.on("--include-expired", "Show tags whose TTL has elapsed") { include_expired = true }
@@ -108,6 +116,11 @@ module Doma::CLI
       if pick_mode && (json_mode || paths_only)
         raise Doma::ValidationError.new("--pick is incompatible with --json / --paths / -0")
       end
+      if group_by_tag && pick_mode
+        # --pick resolves to a single path; grouping by tag is purely a
+        # display dimension that doesn't fit a single-path result.
+        raise Doma::ValidationError.new("--by tag is incompatible with --pick")
+      end
       if pick_query && !pick_mode
         raise Doma::ValidationError.new("--query requires --pick")
       end
@@ -131,23 +144,17 @@ module Doma::CLI
         ttl_by_id = db.tag_expirations_bulk(entries.map(&.id), include_past: include_expired)
 
         if json_mode
-          payload = entries.map do |e|
-            row = {
-              "short_id" => JSON::Any.new(e.short_id),
-              "path"     => JSON::Any.new(e.path),
-              "basename" => JSON::Any.new(e.basename),
-              "tags"     => JSON::Any.new(e.tags.map { |t| JSON::Any.new(t) }),
-            }
-            # `expirations` matches the export/import schema (tag_name =>
-            # unix epoch). Only attached when at least one tag has a TTL,
-            # so the common all-permanent case stays diff-friendly.
-            if ttl_map = ttl_by_id[e.id]?
-              row["expirations"] = JSON::Any.new(ttl_map.transform_values { |v| JSON::Any.new(v) })
+          if group_by_tag
+            # Object keyed by tag name; untagged entries land under "".
+            grouped = {} of String => Array(Hash(String, JSON::Any))
+            group_entries_by_tag(entries).each do |(tag_key, group)|
+              grouped[tag_key] = group.map { |e| json_row(e, ttl_by_id, check_existence) }
             end
-            row["exists"] = JSON::Any.new(Dir.exists?(e.path)) if check_existence
-            row
+            puts grouped.to_json
+          else
+            payload = entries.map { |e| json_row(e, ttl_by_id, check_existence) }
+            puts payload.to_json
           end
-          puts payload.to_json
           return
         end
 
@@ -173,23 +180,33 @@ module Doma::CLI
           # delimiter, matching `find -print0` semantics so xargs -0 sees
           # a clean N-record stream.
           sep = null_sep ? '\0' : '\n'
-          entries.each { |e| STDOUT.print(e.path); STDOUT.print(sep) }
+          if group_by_tag
+            # Walk groups in display order so paths come out tag-sorted,
+            # but dedup so an entry with N tags doesn't break xargs by
+            # showing up N times.
+            seen = Set(String).new
+            group_entries_by_tag(entries).each do |(_, group)|
+              group.each do |e|
+                next unless seen.add?(e.path)
+                STDOUT.print(e.path); STDOUT.print(sep)
+              end
+            end
+          else
+            entries.each { |e| STDOUT.print(e.path); STDOUT.print(sep) }
+          end
           return
         end
 
         color = Doma::Logger.color_enabled?
-        entries.each do |e|
-          # short_id is shown dim so the eye lands on path/tags first
-          # but it's still copy-pasteable for `doma cd <id>`.
-          short_str = color ? e.short_id.colorize(:dark_gray).to_s : e.short_id
-          path_str = color ? e.path.colorize(:cyan).to_s : e.path
-          ttl_map = ttl_by_id[e.id]? || EMPTY_TTL
-          tags_str = e.tags.empty? ? "" : e.tags.map { |t| render_tag(t, ttl_map[t]?, color) }.join(' ')
-          marker = ""
-          if check_existence && !Dir.exists?(e.path)
-            marker = color ? " #{"[gone]".colorize(:red)}" : " [gone]"
+        if group_by_tag
+          group_entries_by_tag(entries).each do |(tag_key, group)|
+            header = tag_key.empty? ? "(no tags)" : "##{tag_key}"
+            header = header.colorize(:yellow).bold.to_s if color
+            puts header
+            group.each { |e| puts "  #{render_row(e, ttl_by_id, check_existence, color)}" }
           end
-          puts "#{short_str}  #{path_str}\t#{tags_str}#{marker}"
+        else
+          entries.each { |e| puts render_row(e, ttl_by_id, check_existence, color) }
         end
 
         # Footer: when expired rows were filtered out, surface the count
@@ -426,6 +443,58 @@ module Doma::CLI
       return if tags.empty?
       return "'#{tags.first}'" if tags.size == 1
       tags.map { |t| "'#{t}'" }.join(" AND ")
+    end
+
+    # Bucket entries by tag name. An entry with N tags lands in N
+    # buckets — the `--by tag` view is meant to show *every* tag's
+    # contents, not pick a primary. Untagged entries collect under the
+    # empty-string key so they can render under a "(no tags)" header
+    # at the end.
+    private def group_entries_by_tag(entries : Array(Doma::Entry)) : Array({String, Array(Doma::Entry)})
+      buckets = {} of String => Array(Doma::Entry)
+      entries.each do |e|
+        if e.tags.empty?
+          (buckets[""] ||= [] of Doma::Entry) << e
+        else
+          e.tags.each { |t| (buckets[t] ||= [] of Doma::Entry) << e }
+        end
+      end
+      ordered = buckets.keys.reject(&.empty?).sort.map { |k| {k, buckets[k]} }
+      if untagged = buckets[""]?
+        ordered << {"", untagged}
+      end
+      ordered
+    end
+
+    # Shared row formatter for the default (non-paths, non-json) output.
+    # Extracted so the grouped renderer can prefix each line with two
+    # spaces of indent without duplicating the column logic.
+    private def render_row(e : Doma::Entry, ttl_by_id : Hash(Int64, Hash(String, Int64)), check_existence : Bool, color : Bool) : String
+      short_str = color ? e.short_id.colorize(:dark_gray).to_s : e.short_id
+      path_str = color ? e.path.colorize(:cyan).to_s : e.path
+      ttl_map = ttl_by_id[e.id]? || EMPTY_TTL
+      tags_str = e.tags.empty? ? "" : e.tags.map { |t| render_tag(t, ttl_map[t]?, color) }.join(' ')
+      marker = ""
+      if check_existence && !Dir.exists?(e.path)
+        marker = color ? " #{"[gone]".colorize(:red)}" : " [gone]"
+      end
+      "#{short_str}  #{path_str}\t#{tags_str}#{marker}"
+    end
+
+    # Build one JSON row for an entry, matching the export/import schema.
+    # Used by both the flat and grouped JSON render paths.
+    private def json_row(e : Doma::Entry, ttl_by_id : Hash(Int64, Hash(String, Int64)), check_existence : Bool) : Hash(String, JSON::Any)
+      row = {
+        "short_id" => JSON::Any.new(e.short_id),
+        "path"     => JSON::Any.new(e.path),
+        "basename" => JSON::Any.new(e.basename),
+        "tags"     => JSON::Any.new(e.tags.map { |t| JSON::Any.new(t) }),
+      }
+      if ttl_map = ttl_by_id[e.id]?
+        row["expirations"] = JSON::Any.new(ttl_map.transform_values { |v| JSON::Any.new(v) })
+      end
+      row["exists"] = JSON::Any.new(Dir.exists?(e.path)) if check_existence
+      row
     end
 
     # Decorate `#tag` with a `~3d` / `~expired` suffix when the tag has
