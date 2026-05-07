@@ -1,0 +1,65 @@
+/* =============================================================================
+   CSS Variables — doma documentation theme.
+
+   The metaphor is the cutting board: warm dark wood as the surface, a
+   single copper-amber accent for highlights (knife glint, ember on the
+   board), cream-warm text instead of cold white. Everything here is
+   tuned to make the rest of the structural CSS (02–08) look "of a
+   piece" with the brand without touching layout rules.
+   ============================================================================= */
+
+:root {
+    /* Primary — copper / amber on aged wood */
+    --primary: #c08552;
+    --primary-hover: #d49b6a;
+    --primary-dark: #9a6b3f;
+    --primary-dim: rgba(192, 133, 82, 0.1);
+    --primary-glow: rgba(192, 133, 82, 0.25);
+
+    /* Accent — slightly warmer amber */
+    --accent: #d49b6a;
+    --accent-dim: rgba(212, 155, 106, 0.08);
+
+    /* Text — warm cream rather than cold white */
+    --text: #f1e8d8;
+    --text-secondary: #c2b4a0;
+    --text-muted: #9a8c79;
+    --text-dim: #5e544a;
+
+    /* Backgrounds — dark warm browns, not pure black */
+    --bg: #0d0a07;
+    --bg-elevated: #15100a;
+    --bg-subtle: #1a140d;
+    --bg-hover: #1f1810;
+    --bg-card: #120e08;
+    --code-bg: #16110b;
+
+    /* Borders — subtle warm tones */
+    --border: #2a1f15;
+    --border-light: #3a2c1f;
+
+    /* Semantic */
+    --primary-light: #dca677;
+    --success: #3fa856;
+
+    /* Layout */
+    --header-h: 56px;
+    --sidebar-w: 260px;
+    --toc-w: 220px;
+
+    /* Typography */
+    --font-mono:
+        "JetBrains Mono", "SF Mono", "Fira Code", "Monaco", Consolas, monospace;
+    --font-sans:
+        "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+        sans-serif;
+
+    /* Radius */
+    --radius-sm: 4px;
+    --radius-md: 6px;
+    --radius-lg: 8px;
+
+    /* Transitions */
+    --transition-fast: 0.12s ease;
+    --transition-normal: 0.2s ease;
+}

@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta name="description" content="Real-world workflows that combine doma with the rest of your toolkit." />
+        <title>
+            Recipes - doma
+        </title>
+        <meta property="og:title" content="Recipes">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://doma.hahwul.com/usage/recipes/">
+<meta property="og:description" content="Real-world workflows that combine doma with the rest of your toolkit.">
+<meta property="og:image" content="https://doma.hahwul.com/images/og-default.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Recipes">
+<meta name="twitter:description" content="Real-world workflows that combine doma with the rest of your toolkit.">
+<meta name="twitter:image" content="https://doma.hahwul.com/images/og-default.png">
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+            href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Caveat:wght@500;600&family=Patrick+Hand&family=Kalam:wght@300;400;700&display=swap"
+            rel="stylesheet"
+        />
+        <link
+            rel="icon"
+            type="image/png"
+            href="/icons/favicon-96x96.png"
+            sizes="96x96"
+        />
+        <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg" />
+        <link rel="shortcut icon" href="/icons/favicon.ico" />
+        <link
+            rel="apple-touch-icon"
+            sizes="180x180"
+            href="/icons/apple-touch-icon.png"
+        />
+        <meta name="apple-mobile-web-app-title" content="Doma" />
+        <meta name="base-url" content="https://doma.hahwul.com" />
+        <link rel="manifest" href="/icons/site.webmanifest" />
+
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark-dimmed.min.css"> <link rel="stylesheet" href="https://doma.hahwul.com/assets/css/01-variables.css?v=68ee8ea0">
+<link rel="stylesheet" href="https://doma.hahwul.com/assets/css/02-base.css?v=68ee8ea0">
+<link rel="stylesheet" href="https://doma.hahwul.com/assets/css/03-layout.css?v=68ee8ea0">
+<link rel="stylesheet" href="https://doma.hahwul.com/assets/css/04-content.css?v=68ee8ea0">
+<link rel="stylesheet" href="https://doma.hahwul.com/assets/css/05-components.css?v=68ee8ea0">
+<link rel="stylesheet" href="https://doma.hahwul.com/assets/css/06-responsive.css?v=68ee8ea0">
+<link rel="stylesheet" href="https://doma.hahwul.com/assets/css/07-landing.css?v=68ee8ea0">
+<link rel="stylesheet" href="https://doma.hahwul.com/assets/css/08-docs-accents.css?v=68ee8ea0">
+        <script defer src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script>
+    </head>
+    <body data-section="usage"></body>
+</html>
+<header class="docs-header">
+  <a href="https://doma.hahwul.com/" class="logo">
+    <img style="width:110px;" src="/images/doma-wide.webp">
+  </a>
+  <nav>
+    <a href="https://doma.hahwul.com/start/">Start</a>
+    <a href="https://doma.hahwul.com/usage/" class="active">Usage</a>
+    <a href="https://doma.hahwul.com/reference/">Reference</a>
+    <a href="https://doma.hahwul.com/ai/">AI agents</a>
+  </nav>
+  <div class="header-right">
+    <div class="docs-search" data-search>
+      <input type="search" class="docs-search-input" placeholder="Search docs…" aria-label="Search docs" autocomplete="off" spellcheck="false">
+      <div class="docs-search-results" role="listbox" hidden></div>
+    </div>
+    <a href="https://github.com/hahwul/doma" class="github-link" target="_blank" rel="noopener" aria-label="GitHub">
+      <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+    </a>
+  </div>
+</header>
+<style>
+  .logo { display: inline-flex; align-items: center; gap: 0.4rem; text-decoration: none; }
+  .logo-mark { color: var(--primary); font-weight: 400; line-height: 1; font-size: 1.4rem; }
+  .logo-text { color: var(--text); font-family: var(--font-mono); font-weight: 600; font-size: 1rem; letter-spacing: 0.02em; }
+  .logo:hover .logo-text { color: var(--primary-hover); }
+</style>
+<div class="docs-container">
+  <aside class="docs-sidebar">
+  
+  <div class="sidebar-section">
+    <div class="sidebar-title">Start</div>
+    <ul class="sidebar-links">
+      
+      
+      <li><a href="https://doma.hahwul.com/start/">Overview</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/start/installation/">Installation</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/start/quickstart/">Quickstart</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/start/shell-integration/">Shell integration</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/start/concepts/">Concepts</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/start/comparison/">Comparison</a></li>
+      
+      
+    </ul>
+  </div>
+  
+  <div class="sidebar-section">
+    <div class="sidebar-title">Usage</div>
+    <ul class="sidebar-links">
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/">Overview</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/tagging/">Tagging directories</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/navigation/">Navigation</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/ttl-and-marks/">TTL & marks</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/run/">Bulk run</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/search-and-stats/">Search & stats</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/pipelines/">Pipelines</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/snapshots/">Snapshots</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/recipes/" class="active">Recipes</a></li>
+      
+      
+    </ul>
+  </div>
+  
+  <div class="sidebar-section">
+    <div class="sidebar-title">Reference</div>
+    <ul class="sidebar-links">
+      
+      
+      <li><a href="https://doma.hahwul.com/reference/">Overview</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/reference/commands/">Commands</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/reference/config/">Configuration</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/reference/env/">Environment</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/reference/troubleshooting/">Troubleshooting</a></li>
+      
+      
+    </ul>
+  </div>
+  
+  <div class="sidebar-section">
+    <div class="sidebar-title">AI agents</div>
+    <ul class="sidebar-links">
+      
+      
+      <li><a href="https://doma.hahwul.com/ai/">Overview</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/ai/skill/">AI skill</a></li>
+      
+      
+    </ul>
+  </div>
+  
+</aside>
+  <main class="docs-main no-toc">
+    <h1>Recipes</h1>
+    <p>Concrete patterns. Pick what fits, ignore the rest.</p>
+<h2 id="monday-morning-pull-every-active-project">Monday morning: pull every active project</h2>
+<pre><code class="language-bash hljs">doma run work -- git -C . fetch --all --prune
+doma run work --parallel -- git pull --ff-only
+</code></pre>
+<p>Sequential fetch (a quick cache warm) followed by parallel <code>pull --ff-only</code>. If anything has unmerged work or upstream divergence, it surfaces in the per-directory exit summary at the end.</p>
+<p>For a tighter loop with custom logic:</p>
+<pre><code class="language-bash hljs">doma list -t work --paths | while read -r d; do
+  cd &quot;$d&quot; || continue
+  branch=$(git symbolic-ref --short HEAD 2&gt;/dev/null) || continue
+  [ &quot;$branch&quot; = &quot;main&quot; ] &amp;&amp; git pull --ff-only
+done
+</code></pre>
+<h2 id="bookmark-a-prs-checkout-for-the-review-window">Bookmark a PR's checkout for the review window</h2>
+<pre><code class="language-bash hljs">gh pr checkout 1234
+doma mark review-1234              # cwd, 7-day TTL
+# … review, comment, push fixes …
+doma rm . -t review-1234           # done; entry stays if you have other tags
+</code></pre>
+<p>If reviews routinely run longer than a week, use <code>doma add . -t review-1234 --ttl 30d</code> instead. Re-running the same <code>add</code> resets the clock.</p>
+<h2 id="quotwhat-did-i-tag-for-the-spike-last-weekquot">&quot;What did I tag for the spike last week?&quot;</h2>
+<pre><code class="language-bash hljs">doma list -t spike --include-expired --by recent
+</code></pre>
+<p>Expired-but-not-pruned tags survive until the next <code>prune --expired</code> (or until you re-tag, which clears <code>expires_at</code>). Useful for retrospectives.</p>
+<h2 id="periodic-cleanup-cron-launchd-systemd-timer">Periodic cleanup (cron / launchd / systemd timer)</h2>
+<p>A weekly sweep that snapshots first, then drops expired bindings and missing paths:</p>
+<pre><code class="language-bash hljs">#!/usr/bin/env bash
+set -euo pipefail
+
+snap_dir=&quot;${HOME}/.doma-snapshots&quot;
+mkdir -p &quot;$snap_dir&quot;
+doma export --json -o &quot;${snap_dir}/$(date +%F).json&quot;
+
+doma prune --expired -y
+doma prune --gone -y                # snapshotted to trash; recoverable for 7d
+</code></pre>
+<p>Run it with whatever scheduler you trust. The export gives you a rollback if a sweep nukes something you wanted.</p>
+<h2 id="project-bootstrap-tag-on-cd">Project-bootstrap: tag on <code>cd</code></h2>
+<p>If you want any directory you <code>cd</code> into and that contains <code>.doma-tags</code> to auto-register, add this to your shell rc <em>after</em> <code>doma setup install</code>:</p>
+<pre><code class="language-bash hljs">chpwd_doma_autoadd() {
+  local f=&quot;$PWD/.doma-tags&quot;
+  [ -f &quot;$f&quot; ] || return
+  local tags
+  tags=$(tr '\n' ',' &lt; &quot;$f&quot; | sed 's/,$//')
+  doma add . -t &quot;$tags&quot; &gt;/dev/null 2&gt;&amp;1
+}
+# zsh:
+autoload -U add-zsh-hook
+add-zsh-hook chpwd chpwd_doma_autoadd
+chpwd_doma_autoadd
+</code></pre>
+<p>Drop a <code>.doma-tags</code> file in any project (one tag per line) and the tags follow the repo around in version control.</p>
+<h2 id="snapshot-to-a-dotfiles-repo">Snapshot to a dotfiles repo</h2>
+<p>Commit your tag set so a fresh machine setup is one command:</p>
+<pre><code class="language-bash hljs"># in your dotfiles repo
+doma export --json -o ./doma.json
+git add doma.json &amp;&amp; git commit -m &quot;doma: refresh snapshot&quot;
+
+# on a new machine
+doma import ./doma.json --replace --yes
+</code></pre>
+<p>Paths that don't exist on the new machine are warned and skipped. Re-run <code>doma list --check</code> after import to see what didn't survive.</p>
+<h2 id="pick-a-project-to-open-in-your-editor">Pick a project to open in your editor</h2>
+<pre><code class="language-bash hljs">doma list -t crystal --pick --by recent | xargs -I{} code {}
+</code></pre>
+<p><code>--pick</code> resolves to one path (interactive picker if more than one match), recency-first. Swap <code>code</code> for <code>cursor</code>, <code>subl</code>, <code>idea</code>, etc.</p>
+<p>A nicer one-liner for zsh users:</p>
+<pre><code class="language-bash hljs">function dcode() { code &quot;$(doma list -t &quot;${1:-}&quot; --pick --by recent)&quot; }
+dcode crystal
+</code></pre>
+<h2 id="cross-tag-pipelines">Cross-tag pipelines</h2>
+<p>&quot;Every Crystal repo that I also marked as work&quot;:</p>
+<pre><code class="language-bash hljs">doma list -t crystal --json \
+  | jq -r '.[] | select(.tags | index(&quot;work&quot;)) | .path'
+</code></pre>
+<p><code>-t TAG</code> is exact-match against one tag; for set intersection, fall back to <code>--json | jq</code>.</p>
+<h2 id="run-only-on-dirs-that-still-build">Run only on dirs that still build</h2>
+<pre><code class="language-bash hljs">doma list -t crystal --paths | while read -r d; do
+  cd &quot;$d&quot; || continue
+  shards check &gt;/dev/null 2&gt;&amp;1 || continue
+  doma add . -t buildable --tmp     # 7d TTL bookmark
+done
+doma list -t buildable
+</code></pre>
+<p>A &quot;compiles right now&quot; view that auto-expires.</p>
+<h2 id="backup-before-a-risky-import">Backup before a risky import</h2>
+<pre><code class="language-bash hljs">doma export --json -o ~/doma-pre-restore-$(date +%s).json
+doma import some-snapshot.json --replace --yes
+</code></pre>
+<p>If <code>--replace</code> was the wrong call, <code>doma import ~/doma-pre-restore-*.json --replace --yes</code> puts you back.</p>
+<h2 id="find-dead-entries-without-committing-to-a-sweep">Find dead entries without committing to a sweep</h2>
+<pre><code class="language-bash hljs">doma list --check | grep '\[gone\]'
+</code></pre>
+<p><code>prune --gone</code> is the destructive form; <code>--check</code> is the report. Use the report to decide whether the disk is just unmounted or the path is genuinely gone.</p>
+
+    <footer class="docs-footer">
+      <span>MIT &middot; written in <a href="https://crystal-lang.org" target="_blank" rel="noopener">Crystal</a> &middot; built with <a href="https://hwaro.hahwul.com" target="_blank" rel="noopener">hwaro</a></span>
+      <span><a href="https://github.com/hahwul/doma" target="_blank" rel="noopener">GitHub</a> &middot; <a href="https://github.com/hahwul/doma/edit/main/docs/content/usage/recipes/.md" target="_blank" rel="noopener">Edit this page</a></span>
+    </footer>
+  </main>
+  
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+<script src="https://doma.hahwul.com/assets/js/search.js?v=68ee8ea0"></script>
+</body>
+</html>

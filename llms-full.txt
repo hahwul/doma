@@ -1,0 +1,1527 @@
+# doma
+Directory tag manager — put your directories on the cutting board (Crystal CLI)
+
+Base URL: https://doma.hahwul.com
+
+This is documentation for doma, an open-source directory tag manager written in Crystal. Content is provided under the MIT license.
+
+---
+
+Title: AI agents
+URL: https://doma.hahwul.com/ai/
+Source: content/ai/_index.md
+
+doma is a clean **path source** for the rest of your shell — and that includes AI coding agents. Instead of asking the user to re-state every project they want operated on, an agent that knows about doma can pull a precise list with one command.
+
+## What it looks like in practice
+
+> **You:** Update the Crystal version to 1.20 in CI for all my Crystal projects.
+
+The agent doesn't have to guess which repos qualify or scan the filesystem. It probes doma:
+
+```bash
+$ doma tags --names | grep -i crystal
+crystal
+
+$ doma list -t crystal --paths
+/Users/me/Projects/doma
+/Users/me/Projects/sandbox
+/Users/me/Projects/cr-utils
+```
+
+…then iterates with its own `Read` / `Edit` / `Bash` tools across exactly the directories you've already curated under that tag. No "did you mean…?", no scanning `~/Projects` for `shard.yml`.
+
+The same shape applies to *"run tests across my work projects"*, *"bump dependencies in everything I marked for review last week"*, *"open the most-recently used Crystal repo in my editor"*. Whatever shape your tags already have, that's the shape the agent operates in.
+
+## Installing the skill
+
+See [AI skill](./skill/) for the bundled `SKILL.md`, what it teaches the agent, and how to install it for Claude Code or other agents.
+
+---
+
+Title: AI skill
+URL: https://doma.hahwul.com/ai/skill/
+Source: content/ai/skill.md
+
+The repo ships [`skills/doma/SKILL.md`](https://github.com/hahwul/doma/blob/main/skills/doma/SKILL.md) — a portable agent skill file. It follows the Claude Code skill format, but it's just markdown with YAML frontmatter, so other coding agents (Codex, Gemini CLI, Cursor, Aider, …) can consume it directly or with light edits.
+
+## What it teaches the agent
+
+1. **Recognize category-style requests** ("my Crystal projects", "everything tagged X", "every repo I marked as Y") and reach for `doma list -t TAG --paths` before guessing.
+2. **Pick the right output mode** — `--paths` for newline-separated, `-0` for NUL-safe pipelines, `--json` when it needs id/short_id/tags structurally.
+3. **Compose with its own tools** — `doma cd` is useless inside an agent (no parent shell to mutate); use `doma list --pick` (one path) or `doma list --paths` (many) and pass the results to `Bash` / `Read` / `Edit` directly.
+4. **Treat write ops as intent-driven** — `add` and `mark` only when the user clearly wants to track or bookmark a directory.
+5. **Avoid bulk-destructive housekeeping** — `prune --gone`, `prune --expired`, and `import --replace` need explicit user authorization.
+
+## Install
+
+The recommended path is [Vercel Skills](https://github.com/vercel-labs/skills):
+
+```bash
+npx skills add hahwul/doma
+```
+
+That drops `SKILL.md` into your agent's skill directory. Restart your agent session to pick it up.
+
+For a manual install (no node toolchain, or you want a working-tree symlink):
+
+```bash
+# copy into your agent's skill dir
+cp -r skills/doma ~/.claude/skills/
+
+# or symlink so updates land automatically
+ln -s "$(pwd)/skills/doma" ~/.claude/skills/doma
+```
+
+The path above is for Claude Code. Substitute your agent's equivalent (e.g. `~/.codex/skills/`, project-local `.skills/`).
+
+## Adapting for other agents
+
+Most coding agents that support a "skills" or "rules" mechanism can consume the file directly or with light edits. The actionable content is the request-shape table near the bottom — port that into whatever your agent expects.
+
+---
+
+Title: Reference
+URL: https://doma.hahwul.com/reference/
+Source: content/reference/_index.md
+
+- [Commands](./commands/) — every subcommand and flag.
+- [Configuration](./config/) — `~/.config/doma/config.yml` schema.
+- [Environment](./env/) — `DOMA_HOME`, `DOMA_DB`, `DOMA_CONFIG`, `NO_COLOR`, etc.
+- [Troubleshooting](./troubleshooting/) — common errors and recovery flows.
+
+---
+
+Title: Commands
+URL: https://doma.hahwul.com/reference/commands/
+Source: content/reference/commands.md
+
+| Command | Purpose |
+|---|---|
+| `add [<path>]` | Register a path (defaults to `.`) with one or more tags. |
+| `mark [-p <path>] <tag> ...` | Tag a directory with temporary (7-day) tags. Defaults to cwd. |
+| `rm <path>` | Remove tag(s) from a path, or drop the path entirely. |
+| `prune --gone\|--expired` | Bulk-delete entries whose path is missing, or tag rows past their TTL. |
+| `move <old> <new>` | Move a registered path; tags carry over. |
+| `tags` | List all tags with usage counts. |
+| `rename <old> <new>` | Rename a tag, or merge into an existing one. |
+| `list [<query>]` | List or search directories (`--pick` to resolve to one path). |
+| `info [<path>]` | Show one entry's details (tags, TTLs, last-used). Defaults to cwd. |
+| `stats` | Top tags + recently added/used paths. |
+| `run <tag> -- <cmd>` | Run a command in every tagged directory. |
+| `export` | Dump the database (JSON or YAML). |
+| `import <file>` | Load a snapshot (`--merge` or `--replace`). |
+| `trash <action>` | Recover from `rm` or empty the soft-delete store. |
+| `config <action>` | Read or write `config.yml` keys from the CLI. |
+| `setup install` | Append the shell wrapper to your rc file. |
+| `setup init <shell>` | Print the shell wrapper for manual install. |
+| `setup completion <shell>` | Print a shell completion script. |
+| `doctor` | Check the install (paths, config, DB). |
+| `version` / `help` | Show version / help. |
+
+`doma cd <tag>` lives in the shell wrapper from `setup install`, not in the binary.
+
+## Global flags
+
+| Flag | Effect |
+|---|---|
+| `-q`, `--quiet` | Suppress success/info output (errors still print). |
+| `-v`, `--verbose`, `--debug` | Print debug traces to stderr. |
+| `--no-color` | Force color off. |
+| `--color` | Force color on (defaults to TTY auto-detect). |
+
+`NO_COLOR` env is honored automatically.
+
+## `add`
+
+```
+doma add [<path> ...] [-t TAG ...] [--ttl DUR | --tmp]
+                                   [--auto-tag] [--git-tag] [--dry-run]
+```
+
+- `-t TAG`: add a tag. Repeatable; comma-separated also works (`-t a,b`).
+- `--ttl DUR`: tag expires after `DUR` (e.g. `30s`, `5m`, `1h`, `7d`, `2w`).
+- `--tmp`: alias for `--ttl 7d`.
+- `--auto-tag` / `--no-auto-tag`: include the basename as a tag.
+- `--git-tag` / `--no-git-tag`: derive host and repo tags from `.git/config`.
+- `-n`, `--dry-run`: resolve and print without writing.
+
+## `mark`
+
+```
+doma mark [-p PATH] (<tag> [<tag> ...] | -t TAG [-t TAG ...])
+```
+
+Equivalent to `doma add <path> -t TAG ... --tmp`. Path defaults to cwd; `-p PATH` marks elsewhere. 7-day TTL. Tags accept positional or `-t/--tag`; both forms may be mixed.
+
+## `rm`
+
+```
+doma rm <path> [<path> ...] [-t TAG ...] [--hard]
+```
+
+- `<path>` alone: drop the path and all its tags (snapshotted to trash by default).
+- `<path> -t TAG`: untag.
+- `--hard`: skip the trash and delete permanently.
+
+## `prune`
+
+```
+doma prune (--gone | --expired) [--hard]
+```
+
+- `--gone`: remove entries whose path no longer exists (snapshotted to trash for 7 days; recover with `doma trash list` / `doma trash restore <id>`).
+- `--expired`: drop tag rows whose TTL has elapsed and GC any tags left orphaned.
+- `--hard`: skip the trash on `--gone`.
+
+The two flags are mutually exclusive.
+
+## `list`
+
+```
+doma list [<query>] [-t TAG] [--by path|recent|tag]
+                    [--check] [--include-expired]
+                    [--json] [--paths] [-0]
+                    [--pick [--first | --builtin] [--query Q]]
+```
+
+- `<query>`: substring match across path/basename/tag.
+- `-t TAG`: exact tag (or glob if `*` / `?` is present).
+- `--by`: sort/group key.
+  - `path` (default): alphabetical by path.
+  - `recent` (aliases: `used`, `recency`): most-recently-used first.
+  - `tag`: group output under per-tag headers. Entries with multiple tags appear under each; entries with no active tags collect under `(no tags)` at the end. Notes:
+    - Incompatible with `--pick`.
+    - With `--json`, the result is an object keyed by tag name (`""` for untagged) instead of a flat array.
+    - With `--paths` / `-0`, paths are emitted in tag-sorted order with duplicates collapsed.
+    - Only **active** tags create headers — TTL-expired tags are hidden unless `--include-expired` is set, so an entry whose only tags have expired falls into `(no tags)` by default.
+    - Combining with `-t TAG` filters which entries appear, but each surviving entry still renders under every tag it carries (not only `TAG`).
+- `--check`: annotate entries whose path is gone with `[gone]`.
+- `--include-expired`: include tag rows whose TTL has elapsed.
+- `--json` / `--paths` / `-0`: machine-readable forms (see [Pipelines](../../usage/pipelines/)).
+- `--pick`: resolve to a single path on stdout. `--first` for deterministic auto-pick, `--builtin` to force the picker even off-TTY.
+
+## `info`
+
+```
+doma info [<path-or-short-id>] [--json]
+```
+
+Defaults to `.`. Accepts either a path or a short_id (full or unique prefix). Prints short_id, canonical path, tags (with TTL or `~expired` suffix), `created_at`, `last_used_at`, and an `exists` check. Exits 3 when not registered. If the entry is in the trash, surfaces the trash short_id and a restore hint.
+
+## `run`
+
+```
+doma run (<tag> | -t TAG) [--fail-fast] [--parallel] -- <cmd> [args...]
+```
+
+`--` is required. `--fail-fast` is sequential-only. The tag can be passed positionally or via `-t/--tag` (alias) — pick one. A single tag is accepted; commas are not split, but glob patterns (`*`, `?`) match across multiple tags.
+
+## `export` / `import`
+
+```
+doma export [--json | --yaml] [-o FILE]
+doma import <file> [--merge | --replace] [-y | --yes]
+```
+
+`--replace` without `--yes` requires a TTY confirmation.
+
+## `trash`
+
+```
+doma trash list
+doma trash restore <short_id> [--merge]
+doma trash empty [--older DUR]
+```
+
+`rm <path>` writes to the trash by default — `trash list` shows what's recoverable (newest first), `trash restore` brings an entry back. Use `--merge` if the path is already re-registered with different tags. `empty` purges everything; `empty --older 7d` purges only old entries.
+
+Anything older than 7 days is auto-pruned on the next trash op.
+
+## `config`
+
+```
+doma config get <key>
+doma config set <key> <value>
+doma config unset <key>
+doma config list
+doma config edit
+doma config path
+```
+
+Keys: `db_path`, `selector`, `auto_tag.basename`, `auto_tag.git` (see [Configuration](../config/) for what each does).
+
+`set` / `unset` rewrite `config.yml` and don't preserve comments — use `config edit` to open the file in `$EDITOR` for hand-edits.
+
+## `setup`
+
+```
+doma setup install [<shell>] [-y | --yes] [-n | --dry-run]
+doma setup init <bash|zsh|fish>
+doma setup completion <bash|zsh|fish>
+```
+
+## `doctor`
+
+```
+doma doctor
+```
+
+Reports paths (home / config / DB), config-file status, and database stats (directories, tags, missing-on-disk count, schema version).
+
+---
+
+Title: Configuration
+URL: https://doma.hahwul.com/reference/config/
+Source: content/reference/config.md
+
+doma reads `~/.config/doma/config.yml` (overridable via `DOMA_CONFIG`) on startup. The file is optional — every field has a default. Parsing is **strict**: unknown keys are an error, so a typo can't silently change behavior.
+
+You can edit it by hand, or use [`doma config`](../commands/#config) to read and write keys from the CLI.
+
+## Full schema
+
+```yaml
+# Where the SQLite database lives. Defaults to <home>/doma.db.
+db_path: ~/.config/doma/doma.db
+
+# Picker strategy.
+# - auto    : interactive picker if STDIN is a TTY, else first-match.
+# - builtin : force the picker (will block if no TTY available).
+# - first   : always pick the first match (scriptable).
+selector: auto
+
+# Default behavior for tag derivation flags. CLI flags
+# (--auto-tag / --no-auto-tag, --git-tag / --no-git-tag) override.
+auto_tag:
+  basename: false
+  git: false
+```
+
+## Where doma writes
+
+| Path | Override env | Notes |
+|---|---|---|
+| `~/.config/doma/` | `DOMA_HOME` | Parent dir for everything else. |
+| `~/.config/doma/doma.db` | `DOMA_DB` | SQLite database (WAL files: `.db-shm`, `.db-wal`). |
+| `~/.config/doma/config.yml` | `DOMA_CONFIG` | This file. |
+| `~/.config/doma/.cd-hint-shown` | — | Sentinel. Tells `cd` not to print the wrapper-not-loaded hint twice. |
+
+`~` is honored everywhere — both in the env vars and in any path you write into the config file.
+
+## Migration
+
+doma uses `PRAGMA user_version` to track the schema. Each release that needs new columns ships an additive migration; old databases upgrade transparently on first open. There's no manual migration step.
+
+The current schema version is reported under **Database** in `doma doctor`.
+
+---
+
+Title: Environment
+URL: https://doma.hahwul.com/reference/env/
+Source: content/reference/env.md
+
+| Variable | Purpose | Default |
+|---|---|---|
+| `DOMA_HOME` | doma's config + state directory. | `~/.config/doma` |
+| `DOMA_DB` | Path to the SQLite database. | `<DOMA_HOME>/doma.db` |
+| `DOMA_CONFIG` | Path to `config.yml`. | `<DOMA_HOME>/config.yml` |
+| `NO_COLOR` | If set (any value), disables ANSI colors. Honored by default; `--color` overrides. | unset |
+| `COLUMNS` | Terminal width hint. Used by the picker for layout. | autodetected |
+| `SHELL` | Read by `setup install` to pick the right rc file. | from process env |
+
+Each path-shaped variable is `~`-expanded before use. Pre-existing tilde is fine:
+
+```bash
+DOMA_HOME=~/scratch-doma doma list   # works as expected
+```
+
+## Misconfiguration → friendly errors
+
+Pointing an env var at the wrong kind of thing surfaces as a clean `ConfigError`, not an internal trace:
+
+```
+$ DOMA_HOME=/etc/passwd doma list
+✗ DOMA_HOME points at a file, not a directory: /etc/passwd
+```
+
+```
+$ DOMA_DB=/var doma list
+✗ DOMA_DB points at a directory, not a file: /var
+```
+
+Both exit 5 (the ConfigError exit code) so scripts can branch on it.
+
+---
+
+Title: Troubleshooting
+URL: https://doma.hahwul.com/reference/troubleshooting/
+Source: content/reference/troubleshooting.md
+
+When something looks off, start here:
+
+```bash
+doma doctor
+```
+
+`doctor` reports paths, config status, and database stats — most issues show up in its output before they show up as a confusing error.
+
+## `doma cd` does nothing / "command not found"
+
+The wrapper isn't loaded. doma's `cd` lives in a shell function (a child process can't change its parent shell's cwd), and it has to be sourced into your interactive shell.
+
+```bash
+doma setup install     # auto-append the wrapper to your rc file
+exec $SHELL            # reload (or restart the terminal)
+```
+
+To verify, run `type doma` — you should see it as a function in zsh/bash, or `doma is a function` in fish. If it still shows as a binary, the rc file change didn't take effect; check `~/.zshrc` / `~/.bashrc` for the `# >>> doma shell integration >>>` block.
+
+## "DOMA_HOME points at a file" / similar config errors
+
+Exit code 5 means doma's environment is misconfigured. The error message names exactly which variable and why:
+
+```
+✗ DOMA_HOME points at a file, not a directory: /etc/passwd
+```
+
+Unset the bad value (`unset DOMA_HOME`) or fix the path. doma's defaults under `~/.config/doma/` are usually what you want.
+
+## `doma list` shows nothing after a path moved
+
+Two cases:
+
+1. **Path moved on disk, doma doesn't know yet.** Update with `doma move /old /new` — tags carry over.
+2. **Path is gone for real.** `doma list --check` annotates dead paths with `[gone]`. Sweep with `doma prune --gone` (snapshotted to trash for 7 days; recoverable via `doma trash list` / `doma trash restore <id>`).
+
+If an external disk is *temporarily* unmounted, prefer leaving the entries alone — `prune --gone` would mark them all as missing. They reappear automatically once the disk is back.
+
+## "schema mismatch" or "version is higher than I understand" on import
+
+You're importing a snapshot from a newer doma than you're running. Upgrade doma (`brew upgrade doma`, or fetch the latest release) and retry. Lower-version snapshots are always readable; only newer ones are refused.
+
+## I deleted something I shouldn't have
+
+```bash
+doma trash list                  # what's recoverable
+doma trash restore <short_id>    # bring it back
+```
+
+Anything from `doma rm <path>` or `doma prune --gone` (without `--hard`) is recoverable for 7 days. After that the next trash op auto-prunes it.
+
+If you used `--hard`, the snapshot wasn't written and recovery isn't possible — restore from your most recent `doma export` instead.
+
+## A tag I expected isn't matching
+
+Common causes:
+
+- **TTL elapsed.** Expired tags are hidden from `list` by default. Check with `doma list --include-expired`.
+- **Glob vs exact match.** `-t work/auth` is an exact match; `-t 'work/*'` is a glob. `*` matches within one segment, `**` crosses `/`, `?` is a single non-`/` character.
+- **Typo / case.** Tag matching is case-sensitive. `doma tags --names | grep -i ...` to confirm what's actually stored.
+
+## Picker doesn't open in a script
+
+`--pick` falls back to "first match" when stdin isn't a TTY (with a stderr advisory). For scripts you usually want this — pass `--first` explicitly to silence the advisory. To force the picker on anyway (e.g. through a terminal multiplexer), use `--builtin`.
+
+## Auto-tag silently skipped
+
+`--auto-tag` tries to use the directory's basename. If the basename can't form a valid tag even after sanitization (e.g. `...`), doma skips it rather than erroring. Same for `--git-tag` when there's no `[remote "origin"]` in `.git/config`.
+
+If you wanted that tag, add it explicitly with `-t TAG`.
+
+## Database locked / "another doma is running"
+
+doma uses SQLite WAL with `busy_timeout`, so concurrent reads from multiple shells work fine. A persistent lock usually means a previous process crashed mid-write. Check for stale `*.db-shm` / `*.db-wal` files next to `doma.db`, and if no doma is actually running, removing them is safe — SQLite will recreate on next open.
+
+## Reporting a bug
+
+Include the output of `doma doctor` and `doma version` in the issue. Those answer 80% of "what does your environment look like?" questions before we have to ask.
+
+If the problem is reproducible from a fresh DB, even better — point `DOMA_DB` at a scratch location and reproduce there:
+
+```bash
+DOMA_DB=/tmp/doma-repro.db doma add /some/path -t test
+DOMA_DB=/tmp/doma-repro.db doma list
+```
+
+---
+
+Title: Start
+URL: https://doma.hahwul.com/start/
+Source: content/start/_index.md
+
+doma is a CLI for tagging directories so you can recall, browse, or run commands across them. Pages here take you from zero install to mental model.
+
+- **[Installation](./installation/)** — Homebrew, source, prebuilt binary, container.
+- **[Quickstart](./quickstart/)** — `add`, `cd`, `list`, `run` in one walkthrough.
+- **[Shell integration](./shell-integration/)** — wire `doma cd` so it actually changes directory.
+- **[Concepts](./concepts/)** — how doma thinks: paths, tags, frecency, soft delete.
+- **[Comparison](./comparison/)** — vs zoxide / autojump / fasd / fzf.
+
+---
+
+Title: Comparison
+URL: https://doma.hahwul.com/start/comparison/
+Source: content/start/comparison.md
+
+doma overlaps with several familiar tools. Short version: those tools *infer* where you've been; doma *asks you to label* what matters. They give heuristic recall; doma gives deterministic recall plus bulk operations.
+
+## At a glance
+
+| | doma | zoxide / z / autojump | fasd | fzf |
+|---|---|---|---|---|
+| Recall by | tag (deliberate) | frecency on `cd` history (inferred) | frecency on `cd` + file history | interactive fuzzy match against any list |
+| Multi-directory ops (`run` across N dirs) | yes | no | no | no |
+| Directory metadata (TTL, last-used, tags) | yes | last-used only | last-used only | n/a |
+| Pipeline-friendly (`--paths`, `-0`, `--json`) | yes | partial | partial | yes (consumer) |
+| Built-in picker | yes (Crystal-native) | no (delegates to fzf) | no | yes |
+| Soft delete / recovery | yes (trash) | n/a | n/a | n/a |
+| Database | SQLite | flat file | flat file | n/a |
+
+## vs zoxide / autojump / z
+
+These are *autojump* tools. They watch `cd` and rank directories by how often + how recently you visit them, then `z foo` jumps to the best match.
+
+**Use zoxide when**: you want zero-friction recall and don't care about labels.
+**Use doma when**: you want explicit categories (`crystal`, `work/proj-a`, `bookmark`), or you need to operate on *every* directory in a category at once.
+
+They compose fine — `z` for casual jumping, `doma cd` when you want a specific lens. Some users keep both.
+
+The picker model also differs: zoxide leans on `fzf` for interactive selection; doma ships its own picker so the binary works with no extra dependencies, but you can still pipe `doma list -t TAG --paths | fzf` if you prefer.
+
+## vs fasd
+
+fasd is autojump + recent-files in one tool. The directory side overlaps with zoxide; the file side is out of doma's scope. If you mostly use fasd's `z` and `f` commands, doma replaces `z` (with deliberate labels) and is orthogonal to `f`.
+
+## vs fzf
+
+fzf is a fuzzy finder — a generic pipe consumer. It doesn't store anything, it just matches against whatever list you feed it. doma is an upstream of fzf: it remembers paths, you can pipe its output to fzf if you want fuzzy filtering on top.
+
+```bash
+# pick a doma-tracked directory with fzf
+cd "$(doma list --paths | fzf)"
+
+# or use doma's built-in picker (no fzf needed)
+doma cd
+```
+
+## vs `cdr` / shell history
+
+zsh's `cdr` and similar shell built-ins recall recent directories. They share zoxide's "implicit history" model — useful, but doesn't survive across machines, doesn't carry tags, and can't operate across multiple directories at once.
+
+doma's snapshots (`export` / `import`) are explicit and portable; tags travel with the entries.
+
+## When you don't need doma
+
+If your "directories I work in" set is small enough to type by hand, or your IDE's project picker covers it, doma is overkill. The value compounds when:
+
+- You have 10+ directories you actually return to.
+- You operate on them in *categories* (`run shards build across all my Crystal projects`).
+- You want bookmarks that auto-expire (`mark spike` for the week).
+- You want an AI coding agent to know which directories qualify for a category-spanning task ([AI agents](../../ai/)).
+
+---
+
+Title: Concepts
+URL: https://doma.hahwul.com/start/concepts/
+Source: content/start/concepts.md
+
+A short mental model so the rest of the docs land cleanly.
+
+## The unit is the path
+
+doma's primary record is a **directory** — a canonical absolute path on disk. Every other thing (tags, TTLs, last-used timestamps) hangs off that path. Tags are labels, not buckets: removing a tag doesn't remove the directory; removing a directory removes all its tags.
+
+```
+path: /Users/me/Projects/doma
+  ├─ tags: crystal, cli
+  ├─ short_id: 0dc0db9          ← stable handle that survives renames
+  ├─ created_at, last_used_at
+  └─ exists?: true
+```
+
+Paths are canonicalized — `~`, symlinks, and trailing slashes all collapse to one stable key. So `doma add ~/dotfiles` and `doma add /Users/me/dotfiles` are the same row.
+
+## Tags are many-to-many
+
+A directory can have any number of tags; a tag can cover any number of directories. There's no hierarchy stored anywhere — `work/proj-a` is just a tag whose name happens to contain a `/`. `tags --tree` renders that visually but doesn't impose structure.
+
+```
+crystal     →  /a/proj-1, /a/proj-2, /b/sandbox
+work/auth   →  /work/auth-svc
+work/billing→  /work/billing-svc
+```
+
+This means: tag the same directory under multiple lenses (`crystal`, `work/proj-a`, `weekly-spike`) and use whichever one fits the current task.
+
+## Frecency
+
+Every successful `--pick` (or `doma cd`) bumps `last_used_at` on the chosen directory. That timestamp drives:
+
+- The picker's default order (most-recently-used first).
+- `doma list --by recent`.
+- The **Most used** section in `doma stats`.
+
+You don't have to think about it — using doma trains it.
+
+## TTL: tags can expire
+
+Most tags are durable (`crystal`, `work/proj-a`). Some are transient (`bookmark`, `code-review`, `weekly-spike`). doma supports both: any tag can carry a TTL, after which it's hidden from queries automatically. The directory itself stays put — only that one tag binding expires.
+
+```bash
+doma add . -t bookmark --ttl 7d   # bookmark expires in 7 days
+doma mark spike                   # shorthand: cwd, 7-day TTL
+```
+
+Re-tagging refreshes the clock. Adding a tag without `--ttl` makes it permanent. See [TTL & marks](../../usage/ttl-and-marks/) for the full mechanics.
+
+## Soft delete
+
+`doma rm <path>` doesn't immediately destroy the row — it goes into a trash store under `~/.config/doma/trash/`, recoverable for 7 days via `doma trash list` / `doma trash restore <id>`. Same for `prune --gone`.
+
+This matters in two real cases:
+
+1. An external disk got unplugged → `prune --gone` would mark everything on it as missing, but `trash restore` brings it all back.
+2. You typo'd an `rm` → 7 days to undo.
+
+`--hard` skips the trash for when you really do want it gone.
+
+## Path source for the rest of your shell
+
+doma is designed to compose with everything you already use. Most commands have a flag for parseable output:
+
+```bash
+doma list -t TAG --paths    # newline-separated, for `while read` / xargs
+doma list -t TAG -0         # NUL-separated, safe for paths with spaces
+doma list -t TAG --json     # structured: short_id, path, tags, expirations
+doma list -t TAG --pick     # exactly one path on stdout
+```
+
+That last one is what makes `doma cd` possible — and the same primitive an AI agent uses when it needs to operate across "all my X projects".
+
+## Where data lives
+
+Single SQLite file: `~/.config/doma/doma.db`. Override with `DOMA_DB`. Strict YAML config at `~/.config/doma/config.yml` (optional — defaults are sensible). Trash store under `~/.config/doma/trash/`. Schema migrations run transparently on open (`PRAGMA user_version`).
+
+`doma doctor` prints all of this in one shot when you want to know what doma's actually doing.
+
+## What doma is *not*
+
+- **Not a directory autojump tool.** zoxide / autojump / z infer "where you've been" from `cd` history. doma asks you to label deliberately. The flip side: precision instead of guess.
+- **Not a workspace manager.** No project files, no init scripts, no env loading. doma resolves a path; what you do there is up to your shell.
+- **Not a sync tool.** State is local. [Snapshots](../../usage/snapshots/) make it portable, but there's no built-in cloud.
+
+## Next
+
+- [Quickstart](../quickstart/) — five-minute hands-on tour
+- [Comparison](../comparison/) — vs zoxide / autojump / fzf / fasd
+- [Tagging directories](../../usage/tagging/) — auto-tags, git remote derivation, glob filters
+
+---
+
+Title: Installation
+URL: https://doma.hahwul.com/start/installation/
+Source: content/start/installation.md
+
+## Homebrew
+
+macOS and Linux:
+
+```bash
+brew tap hahwul/doma
+brew install doma
+```
+
+## AUR (Arch Linux)
+
+The [`doma`](https://aur.archlinux.org/packages/doma) package tracks the latest tagged release and pulls the static x86_64 binary from GitHub:
+
+```bash
+# with an AUR helper
+paru -S doma
+# or
+yay -S doma
+
+# or manually
+git clone https://aur.archlinux.org/doma.git
+cd doma
+makepkg -si
+```
+
+## Snap
+
+```bash
+sudo snap install doma
+```
+
+The snap ships with `home`, `removable-media`, and `network` plugs. If you want doma to read or tag paths outside `$HOME` (e.g. `/mnt`, `/media`), connect the removable-media plug after install:
+
+```bash
+sudo snap connect doma:removable-media
+```
+
+## From source
+
+Requires [Crystal](https://crystal-lang.org/) 1.19 or newer and the SQLite headers.
+
+```bash
+git clone https://github.com/hahwul/doma.git
+cd doma
+shards install
+shards build --release --no-debug --production
+# binary lands at ./bin/doma
+```
+
+## Prebuilt binaries
+
+Static Linux (x86_64, arm64) and macOS (x86_64, arm64) binaries are attached to every [release](https://github.com/hahwul/doma/releases). The Linux binaries are fully musl-static — no glibc or libsqlite3 dependency.
+
+`.deb`, `.rpm`, and `.apk` packages are published alongside the binaries:
+
+```bash
+# Debian / Ubuntu
+sudo dpkg -i doma_X.Y.Z_amd64.deb
+
+# RHEL / Fedora
+sudo rpm -i doma-X.Y.Z.x86_64.rpm
+
+# Alpine
+sudo apk add --allow-untrusted doma-X.Y.Z-x86_64.apk
+```
+
+## Container
+
+Multi-arch image at `ghcr.io/hahwul/doma`:
+
+```bash
+docker pull ghcr.io/hahwul/doma:latest
+docker run --rm -it \
+  -v "$HOME/.config/doma:/root/.config/doma" \
+  ghcr.io/hahwul/doma list
+```
+
+The volume mount keeps the doma database persistent across container runs.
+
+## Verify the install
+
+```bash
+doma version
+doma doctor
+```
+
+`doctor` reports where doma writes, whether the config parses, and how the database is growing — reach for it first if something looks off:
+
+```
+Paths
+     home                 /Users/me/.config/doma
+  ·  config               /Users/me/.config/doma/config.yml
+  ✓  database             /Users/me/.config/doma/doma.db
+
+Config
+     status               not present (using defaults)
+
+Database
+     size                 52.0 KB
+     directories          4
+     tags                 4
+     schema               v2
+```
+
+`✓` means the file exists, `·` means it's missing (which is fine for `config.yml` — defaults apply).
+
+---
+
+Title: Quickstart
+URL: https://doma.hahwul.com/start/quickstart/
+Source: content/start/quickstart.md
+
+A short tour of the commands you'll actually use day-to-day.
+
+## 1. Tag a directory
+
+```bash
+cd ~/Projects/doma
+doma add . -t crystal -t cli
+```
+
+`add` defaults to the current directory when you don't pass a path. Tags can repeat (`-t a -t b`) or be comma-separated (`-t a,b`).
+
+## 2. List what's on the board
+
+```bash
+doma list
+```
+
+You'll see one line per directory:
+
+```
+0dc0db9  /Users/me/Projects/doma   #cli #crystal
+```
+
+The first column (`0dc0db9`) is a stable short_id. The path is the canonical real path (symlinks resolved). Tags follow as `#name`.
+
+## 3. Check what you've tagged
+
+```bash
+doma info               # current directory's tags, TTLs, last-used
+doma tags               # every tag with its usage count
+```
+
+`doma info` answers "did I tag this? with what?" without opening `list` and squinting. `doma tags --tree` groups names by `/` prefix when you've started using hierarchical tags like `work/proj-a`.
+
+## 4. Jump back to it
+
+```bash
+doma cd crystal
+```
+
+Multiple matches open an interactive picker — type to filter, ↑↓ to move, Enter to pick. `doma cd` needs the shell wrapper, so run `doma setup install` once if you haven't yet (see [Shell integration](../shell-integration/)).
+
+## 5. Operate on every dir under a tag
+
+```bash
+doma run crystal --parallel -- shards build
+```
+
+For custom loops, `doma list -t crystal --paths` gives you one path per line (use `-0` for NUL-separated output).
+
+## 6. Mark something for the week
+
+```bash
+doma mark spike
+```
+
+Shorthand for `doma add . -t spike --tmp` — tags the current directory with a 7-day TTL. Expired tags drop out of `list` automatically.
+
+## Where to go next
+
+- [Shell integration](../shell-integration/) — make `doma cd` actually change directory
+- [Tagging directories](../../usage/tagging/) — auto-tags, git remote derivation, glob filters
+- [Pipelines](../../usage/pipelines/) — composing doma with `xargs`, `jq`, and friends
+
+---
+
+Title: Shell integration
+URL: https://doma.hahwul.com/start/shell-integration/
+Source: content/start/shell-integration.md
+
+`doma cd` is a small shell function, not a binary subcommand — a child process can't change its parent shell's cwd. The function takes a tag, calls `doma list -t <tag> --pick` to resolve it to one path, then runs `cd` for you.
+
+## One-shot install
+
+```bash
+doma setup install
+```
+
+Detects your shell from `$SHELL` and appends an `eval` line (between marker comments) to `~/.zshrc`, `~/.bashrc`, or `~/.config/fish/config.fish`. Idempotent.
+
+Restart your shell or source the rc file, then:
+
+```bash
+doma cd crystal
+```
+
+## Manual install
+
+`setup init` prints the wrapper to stdout:
+
+```bash
+# Bash / Zsh
+eval "$(doma setup init zsh)"
+
+# Fish
+doma setup init fish | source
+```
+
+## Without the wrapper
+
+For scripts and one-offs, use `list --pick` inline:
+
+```bash
+cd "$(doma list -t crystal --pick)"
+```
+
+`--pick` prints exactly one path: the only match if there's one, an interactive picker if you're on a TTY, or the most-recent match (with a stderr advisory) if you're piping.
+
+## Uninstalling
+
+The wrapper block is bracketed by sentinel comments:
+
+```
+# >>> doma shell integration >>>
+…
+# <<< doma shell integration <<<
+```
+
+Delete those lines and restart your shell.
+
+---
+
+Title: Usage
+URL: https://doma.hahwul.com/usage/
+Source: content/usage/_index.md
+
+Each page here covers one domain. Start with [Tagging](./tagging/) and [Navigation](./navigation/) for the everyday flow; the rest you can read when the use case shows up.
+
+- [Tagging directories](./tagging/) — `add`, `mark`, auto-tags, git remote derivation
+- [Navigation](./navigation/) — picker, frecency, `--pick` / `--first` / `--builtin`
+- [TTL & marks](./ttl-and-marks/) — temporary tags that expire on their own
+- [Bulk run](./run/) — execute a command across every tagged directory
+- [Search & stats](./search-and-stats/) — finding paths and inspecting your collection
+- [Pipelines](./pipelines/) — composing doma with shell tooling
+- [Snapshots](./snapshots/) — export, import, and moving doma between machines
+- [Recipes](./recipes/) — concrete real-world workflows
+
+---
+
+Title: Navigation
+URL: https://doma.hahwul.com/usage/navigation/
+Source: content/usage/navigation.md
+
+`doma list --pick` resolves a filtered set down to a single path on stdout. The shell wrapper installed by [`doma setup install`](../../start/shell-integration/) builds `doma cd <tag>` on top of it.
+
+## The primitive
+
+```bash
+doma list -t crystal --pick     # one path on stdout (interactive if TTY)
+doma list --pick                # browse every registered directory
+doma list -t 'work/*' --pick    # glob-filtered set
+```
+
+Resolution rules:
+
+- **Single match** → that path is printed.
+- **Multiple matches + TTY** → built-in picker opens.
+- **Multiple matches + non-TTY** → most-recent match wins, with a stderr advisory.
+- **Zero matches** → exit code 3, NotFound error.
+
+When the input *looks like a path* (`/var`, `~/Downloads`, `./src`), the miss hint steers you to `doma add` instead of an unrelated tag.
+
+## The picker
+
+```
+doma pick -t crystal›
+▌ /Users/me/Projects/doma         #cli #crystal
+  /Users/me/Projects/sandbox      #crystal
+  /Users/me/Projects/cr-utils     #crystal
+```
+
+- Type to filter (case-insensitive substring across path and tags).
+- ↑/↓ to move; Enter to pick; Esc / Ctrl-C to cancel.
+- Order is recency-first.
+
+## Skipping the picker
+
+```bash
+doma list -t crystal --pick --first       # most-recent without prompting
+doma list -t crystal --pick --builtin     # force picker even off-TTY
+doma list -t crystal --pick --query auth  # pre-filter the picker
+```
+
+## Frecency
+
+Every successful `--pick` updates `last_used_at` on the chosen directory. That feeds:
+
+1. The picker's default order (most-recent first).
+2. `doma list --by recent`.
+3. The **Most used** section in `doma stats`.
+
+---
+
+Title: Pipelines
+URL: https://doma.hahwul.com/usage/pipelines/
+Source: content/usage/pipelines.md
+
+doma is designed as a path source — most commands have a flag that emits a parseable form.
+
+## Output modes for `list`
+
+| Flag | Output | Best for |
+|---|---|---|
+| `--paths` | one path per line | `while read`, `xargs`, `awk` |
+| `-0` / `--print0` | NUL-separated paths | `xargs -0` (paths with spaces) |
+| `--json` | structured JSON array | `jq`, scripts that need short_id / tags |
+| (default) | aligned text with short_id + tags | humans |
+
+`-0` implies `--paths`.
+
+## Common shapes
+
+### while-read loop
+
+```bash
+doma list -t crystal --paths | while read -r dir; do
+  (cd "$dir" && git pull)
+done
+```
+
+### NUL-safe xargs
+
+```bash
+doma list -t crystal -0 | xargs -0 -I{} sh -c 'cd "{}" && shards build'
+```
+
+### Filter with jq
+
+```bash
+doma list --json | jq -r '.[] | select(.tags | index("crystal")) | .path'
+doma list --json | jq -r '.[] | "\(.short_id)\t\(.path)"'
+```
+
+### Top 5 by recency
+
+```bash
+doma list --by recent --paths | head -5
+```
+
+## Tags-only pipelines
+
+```bash
+doma tags --names                     # one tag per line
+doma tags -0 | xargs -0 ...           # NUL-separated
+doma tags --json | jq -r '.[] | select(.count > 5) | .name'
+```
+
+## What doesn't compose
+
+`doma list --pick` is interactive when there's more than one match. In a pipeline it falls back to first-match with a stderr advisory — for deterministic resolution pass `--first`, narrow the filter, or skip `--pick` and select yourself with `list --paths`.
+
+`doma run` produces decorated stderr that's hard to parse; for machine-readable per-directory results, drive the loop yourself.
+
+---
+
+Title: Recipes
+URL: https://doma.hahwul.com/usage/recipes/
+Source: content/usage/recipes.md
+
+Concrete patterns. Pick what fits, ignore the rest.
+
+## Monday morning: pull every active project
+
+```bash
+doma run work -- git -C . fetch --all --prune
+doma run work --parallel -- git pull --ff-only
+```
+
+Sequential fetch (a quick cache warm) followed by parallel `pull --ff-only`. If anything has unmerged work or upstream divergence, it surfaces in the per-directory exit summary at the end.
+
+For a tighter loop with custom logic:
+
+```bash
+doma list -t work --paths | while read -r d; do
+  cd "$d" || continue
+  branch=$(git symbolic-ref --short HEAD 2>/dev/null) || continue
+  [ "$branch" = "main" ] && git pull --ff-only
+done
+```
+
+## Bookmark a PR's checkout for the review window
+
+```bash
+gh pr checkout 1234
+doma mark review-1234              # cwd, 7-day TTL
+# … review, comment, push fixes …
+doma rm . -t review-1234           # done; entry stays if you have other tags
+```
+
+If reviews routinely run longer than a week, use `doma add . -t review-1234 --ttl 30d` instead. Re-running the same `add` resets the clock.
+
+## "What did I tag for the spike last week?"
+
+```bash
+doma list -t spike --include-expired --by recent
+```
+
+Expired-but-not-pruned tags survive until the next `prune --expired` (or until you re-tag, which clears `expires_at`). Useful for retrospectives.
+
+## Periodic cleanup (cron / launchd / systemd timer)
+
+A weekly sweep that snapshots first, then drops expired bindings and missing paths:
+
+```bash
+#!/usr/bin/env bash
+set -euo pipefail
+
+snap_dir="${HOME}/.doma-snapshots"
+mkdir -p "$snap_dir"
+doma export --json -o "${snap_dir}/$(date +%F).json"
+
+doma prune --expired -y
+doma prune --gone -y                # snapshotted to trash; recoverable for 7d
+```
+
+Run it with whatever scheduler you trust. The export gives you a rollback if a sweep nukes something you wanted.
+
+## Project-bootstrap: tag on `cd`
+
+If you want any directory you `cd` into and that contains `.doma-tags` to auto-register, add this to your shell rc *after* `doma setup install`:
+
+```bash
+chpwd_doma_autoadd() {
+  local f="$PWD/.doma-tags"
+  [ -f "$f" ] || return
+  local tags
+  tags=$(tr '\n' ',' < "$f" | sed 's/,$//')
+  doma add . -t "$tags" >/dev/null 2>&1
+}
+# zsh:
+autoload -U add-zsh-hook
+add-zsh-hook chpwd chpwd_doma_autoadd
+chpwd_doma_autoadd
+```
+
+Drop a `.doma-tags` file in any project (one tag per line) and the tags follow the repo around in version control.
+
+## Snapshot to a dotfiles repo
+
+Commit your tag set so a fresh machine setup is one command:
+
+```bash
+# in your dotfiles repo
+doma export --json -o ./doma.json
+git add doma.json && git commit -m "doma: refresh snapshot"
+
+# on a new machine
+doma import ./doma.json --replace --yes
+```
+
+Paths that don't exist on the new machine are warned and skipped. Re-run `doma list --check` after import to see what didn't survive.
+
+## Pick a project to open in your editor
+
+```bash
+doma list -t crystal --pick --by recent | xargs -I{} code {}
+```
+
+`--pick` resolves to one path (interactive picker if more than one match), recency-first. Swap `code` for `cursor`, `subl`, `idea`, etc.
+
+A nicer one-liner for zsh users:
+
+```bash
+function dcode() { code "$(doma list -t "${1:-}" --pick --by recent)" }
+dcode crystal
+```
+
+## Cross-tag pipelines
+
+"Every Crystal repo that I also marked as work":
+
+```bash
+doma list -t crystal --json \
+  | jq -r '.[] | select(.tags | index("work")) | .path'
+```
+
+`-t TAG` is exact-match against one tag; for set intersection, fall back to `--json | jq`.
+
+## Run only on dirs that still build
+
+```bash
+doma list -t crystal --paths | while read -r d; do
+  cd "$d" || continue
+  shards check >/dev/null 2>&1 || continue
+  doma add . -t buildable --tmp     # 7d TTL bookmark
+done
+doma list -t buildable
+```
+
+A "compiles right now" view that auto-expires.
+
+## Backup before a risky import
+
+```bash
+doma export --json -o ~/doma-pre-restore-$(date +%s).json
+doma import some-snapshot.json --replace --yes
+```
+
+If `--replace` was the wrong call, `doma import ~/doma-pre-restore-*.json --replace --yes` puts you back.
+
+## Find dead entries without committing to a sweep
+
+```bash
+doma list --check | grep '\[gone\]'
+```
+
+`prune --gone` is the destructive form; `--check` is the report. Use the report to decide whether the disk is just unmounted or the path is genuinely gone.
+
+---
+
+Title: Bulk run
+URL: https://doma.hahwul.com/usage/run/
+Source: content/usage/run.md
+
+```bash
+doma run <tag> -- <command> [args...]
+```
+
+`--` is required: it separates doma's flags from the user command.
+
+## Sequential (default)
+
+```bash
+doma run crystal -- shards build
+```
+
+Output streams interleaved with a per-directory header:
+
+```
+▶ /Users/me/Projects/doma
+…build output…
+✓ /Users/me/Projects/doma (exit 0)
+
+▶ /Users/me/Projects/sandbox
+…
+✓ /Users/me/Projects/sandbox (exit 0)
+```
+
+## Parallel
+
+```bash
+doma run crystal --parallel -- shards build
+```
+
+A fiber per directory; per-directory exit reports come at the end. Best for summary-style output rather than rich live logs.
+
+## Failure handling
+
+```bash
+doma run crystal --fail-fast -- crystal spec
+```
+
+`--fail-fast` halts the loop on the first non-zero exit (sequential only — parallel always runs every directory to completion). doma's exit code reflects the failure.
+
+## When to reach for `run` vs a manual loop
+
+Use `doma run` when the operation is a single shell command and per-directory logic is uniform.
+
+Use `doma list -t TAG --paths | while read` when you need per-directory inspection or want to feed paths into another tool. See [Pipelines](../pipelines/).
+
+---
+
+Title: Search & stats
+URL: https://doma.hahwul.com/usage/search-and-stats/
+Source: content/usage/search-and-stats.md
+
+## Search
+
+```bash
+doma list <query>
+```
+
+Case-insensitive substring match across the canonical path, the basename, and every active tag name:
+
+```bash
+doma list auth                # any path/tag containing "auth"
+doma list -t crystal auth     # crystal-tagged AND containing "auth"
+```
+
+Path/basename hits show up regardless of tag state; tag-name hits skip expired rows.
+
+## Glob filtering on tags
+
+```bash
+doma list -t 'work/*'                            # every tag like work/proj-a, work/proj-b
+doma list -t 'work/**'                           # every tag under work/, any depth
+doma list -t 'work*' --pick --first --by recent  # most-recent matching dir on stdout
+```
+
+`*`, `**`, and `?` in a tag argument switch matching from exact-equal to glob:
+
+- `*` matches within one segment (doesn't cross `/`)
+- `**` matches across `/`
+- `?` matches a single non-`/` character
+
+Quote the pattern to keep your shell from expanding it first.
+
+## Listing tags
+
+```bash
+doma tags                     # every tag with a usage count
+doma tags --names             # just the names (one per line, scriptable)
+doma tags --tree              # group by `/` prefix
+```
+
+`--tree` groups hierarchically:
+
+```
+work/    2
+  ├─ proj-a    1
+  └─ proj-b    1
+
+crystal    3
+home    1
+```
+
+## Stats
+
+```bash
+doma stats
+```
+
+- Total directories and total tags.
+- Top tags by usage count (`--top N`).
+- Most recently *added* paths (`--recent N`).
+- Most recently *used* paths via `cd` frecency (`--used N`).
+
+`--json` emits the same data structured.
+
+---
+
+Title: Snapshots
+URL: https://doma.hahwul.com/usage/snapshots/
+Source: content/usage/snapshots.md
+
+doma stores its state in a single SQLite file. For backup, version control, or moving between machines, use the snapshot commands — they produce a portable JSON or YAML payload.
+
+## Export
+
+```bash
+doma export --json                     # to stdout
+doma export --yaml                     # YAML form
+doma export --json -o doma.json        # to a file (atomic write)
+```
+
+The output:
+
+```json
+{
+  "version": 1,
+  "generated_at": 1733000000,
+  "entries": [
+    { "path": "/Users/me/Projects/doma", "basename": "doma", "tags": ["crystal", "cli"] }
+  ]
+}
+```
+
+## Import
+
+```bash
+doma import doma.json                  # merge with existing data
+doma import doma.json --replace        # wipe DB first, then import
+```
+
+The whole import runs in one transaction — a malformed entry rolls everything back.
+
+`--replace` requires `--yes` when stdin isn't a TTY:
+
+```bash
+doma import doma.json --replace --yes
+```
+
+Import skips the "directory exists on disk" check (snapshots from machine A may reference paths machine B doesn't have). Missing paths are warned and skipped:
+
+```
+import: skipped /Users/alice/Projects/doma (not a directory)
+```
+
+## Use cases
+
+### Backup before a risky operation
+
+```bash
+doma export --json -o ~/doma-backup-$(date +%F).json
+```
+
+### Version-control your tagging
+
+Commit `~/doma.json` into a dotfiles repo. Re-apply on a fresh checkout:
+
+```bash
+doma import ~/doma.json --replace --yes
+```
+
+### Move to a new machine
+
+Export on the old, scp to the new, import.
+
+### Diff two snapshots
+
+```bash
+diff <(doma export --json) doma-yesterday.json
+```
+
+## Schema versioning
+
+The `version` field protects forward-compat — doma refuses to import snapshots from a newer schema. Lower versions are still readable.
+
+---
+
+Title: Tagging directories
+URL: https://doma.hahwul.com/usage/tagging/
+Source: content/usage/tagging.md
+
+## Basics
+
+```bash
+doma add /path/to/dir -t TAG [-t TAG ...]
+```
+
+Path defaults to `.`:
+
+```bash
+cd ~/Projects/doma
+doma add -t crystal -t cli
+```
+
+Multiple paths in one shot:
+
+```bash
+doma add /a /b /c -t shared
+```
+
+Validation failures on one path don't block the others — doma exits non-zero and reports the failed path on stderr.
+
+## Tag rules
+
+A valid tag is `[A-Za-z0-9][A-Za-z0-9_.\-+:/]{0,63}` — starts with a letter or digit, 1–64 bytes, allows `_ . - + : /`. Whitespace and commas are rejected (commas are reserved as a CLI separator: `-t a,b,c` adds three tags).
+
+`/` in tag names gets special treatment in `doma tags --tree`, which groups `work/proj-a` and `work/proj-b` under a `work/` header.
+
+## Auto-derived tags
+
+```bash
+doma add . --auto-tag       # tag with the directory's basename
+doma add . --git-tag        # tag with the git remote host + repo (if any)
+doma add . --auto-tag --git-tag
+```
+
+`--git-tag` reads `.git/config`'s `[remote "origin"]` and derives a host tag (`github`, `gitlab`, `bitbucket`, `codeberg`, or the raw hostname for self-hosted) and the repo name.
+
+Auto-derived tags are sanitized — `.dotfiles` becomes `dotfiles`. If sanitization can't produce a valid tag, the auto-tag is silently skipped.
+
+Defaults are configurable in [config](../../reference/config/).
+
+## Re-tagging
+
+`add` is idempotent on path — second call doesn't duplicate, it merges:
+
+```bash
+doma add . -t alpha     # path now tagged: alpha
+doma add . -t beta      # path now tagged: alpha, beta
+```
+
+To remove:
+
+```bash
+doma rm /path -t alpha   # untag
+doma rm /path            # drop the path entirely (and all its tags)
+```
+
+## Renaming and merging
+
+```bash
+doma rename old-name new-name
+```
+
+Simple rename if `new-name` doesn't exist; otherwise the two are merged in one transaction.
+
+## Moving paths
+
+```bash
+doma move /old/path /new/path
+```
+
+Tags carry over. If `/new/path` is already registered, the two are merged. `--allow-missing` skips the existence check on the destination — useful for cross-machine snapshots.
+
+## Dry run
+
+```bash
+doma add . -t crystal --auto-tag --git-tag --dry-run
+```
+
+Resolves the tag set without writing.
+
+---
+
+Title: TTL & marks
+URL: https://doma.hahwul.com/usage/ttl-and-marks/
+Source: content/usage/ttl-and-marks.md
+
+Some tags are durable organization (`crystal`, `work/proj-a`); others are transient — bookmarks during a code review, a debugging session, a week of reading. doma supports both as the same kind of tag with an optional time-to-live.
+
+## Adding with a TTL
+
+```bash
+doma add . -t bookmark --ttl 7d
+doma add . -t bookmark --ttl 30m
+doma add . -t bookmark --ttl 2w
+```
+
+Accepted units: `s`, `m`, `h`, `d`, `w`. Single number + single unit. No compound like `1d2h`.
+
+`--tmp` is shorthand for `--ttl 7d`:
+
+```bash
+doma add . -t bookmark --tmp
+```
+
+## The `mark` shortcut
+
+The most common case is "tag the current directory for a week":
+
+```bash
+doma mark bookmark
+```
+
+That's exactly equivalent to `doma add . -t bookmark --tmp`, just shorter. Multiple tags work:
+
+```bash
+doma mark spike skim review
+```
+
+To mark a path other than the current directory, use `-p`:
+
+```bash
+doma mark -p ~/Projects/sandbox spike
+```
+
+For a custom TTL, fall back to `doma add --ttl` directly.
+
+## What "expired" means
+
+When a tag's `expires_at` is in the past, the row is **hidden** from queries by default:
+
+- `doma list -t TAG` doesn't show it.
+- `doma list -t TAG --pick` (and the `doma cd TAG` shell wrapper that calls it) won't resolve via it.
+- The directory itself is unaffected — if it has other (non-expired) tags, it still appears under those.
+
+Expired rows aren't deleted on their own. Two reasons:
+
+1. Re-tagging a path *refreshes* the TTL — `doma add . -t bookmark --tmp` resets the clock to 7 days from now. The row needs to still be there for the update to land.
+2. You can audit what expired with `--include-expired`:
+
+```bash
+doma list --include-expired
+```
+
+## Cleaning up
+
+To physically remove every expired tag row:
+
+```bash
+doma prune --expired
+```
+
+That's a maintenance op — it deletes the `directory_tags` rows whose TTL has elapsed and garbage-collects any tags left with no rows. Directories themselves are preserved. (Sister command: `doma prune --gone` for entries whose path no longer exists on disk.)
+
+## Re-tag semantics
+
+Re-tagging a path with `add` is the **source of truth** for that tag's lifetime:
+
+```bash
+doma add . -t bookmark --ttl 7d   # expires in 7 days
+doma add . -t bookmark --tmp      # expires in 7 days (refreshed)
+doma add . -t bookmark            # now permanent (expires_at cleared)
+```
+
+The last form is occasionally useful: "this thing I marked for the week — actually keep it."
+
+## When to use `mark` vs `add --ttl`
+
+| Use case | Command |
+|---|---|
+| "I'll come back to this for the week" | `doma mark <name>` |
+| "Bookmark these for a code review" | `cd` into each, `doma mark code-review` |
+| "Keep this for two days" | `doma add . -t reading --ttl 2d` |
+| "Track this project long-term" | `doma add . -t crystal` (no TTL) |
+
+`mark` is the limited form — positional tag list, 7-day TTL, cwd by default with `-p` for an explicit path. Anything beyond that uses `add` directly.

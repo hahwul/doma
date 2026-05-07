@@ -1,0 +1,40 @@
+# doma
+
+> Directory tag manager — put your directories on the cutting board (Crystal CLI)
+
+This is documentation for doma, an open-source directory tag manager written in Crystal. Content is provided under the MIT license.
+
+## Pages
+
+- [doma](https://doma.hahwul.com/): Directory tag manager — put your directories on the cutting board
+
+## AI agents
+
+- [AI skill](https://doma.hahwul.com/ai/skill/): The bundled SKILL.md teaches a coding agent when to query doma and when to skip it.
+
+## Reference
+
+- [Commands](https://doma.hahwul.com/reference/commands/): All doma subcommands at a glance.
+- [Configuration](https://doma.hahwul.com/reference/config/): Schema for ~/.config/doma/config.yml.
+- [Environment](https://doma.hahwul.com/reference/env/): Environment variables doma honors.
+- [Troubleshooting](https://doma.hahwul.com/reference/troubleshooting/): Common errors, diagnostic flow, and recovery paths.
+
+## Start
+
+- [Comparison](https://doma.hahwul.com/start/comparison/): How doma differs from zoxide, autojump, z, fasd, and fzf.
+- [Concepts](https://doma.hahwul.com/start/concepts/): How doma thinks: paths as the unit, tags as labels, frecency, soft-delete.
+- [Installation](https://doma.hahwul.com/start/installation/): Install doma via Homebrew, AUR, Snap, prebuilt binary, container, or from source.
+- [Quickstart](https://doma.hahwul.com/start/quickstart/): Tag a directory, inspect it, navigate to it, and operate on the whole pile.
+- [Shell integration](https://doma.hahwul.com/start/shell-integration/): Make doma cd actually change your shell's working directory.
+
+## Usage
+
+- [Navigation](https://doma.hahwul.com/usage/navigation/): Resolve a tagged directory to a single path with list --pick, then cd to it via the shell wrapper.
+- [Pipelines](https://doma.hahwul.com/usage/pipelines/): Compose doma with xargs, jq, and the rest of your shell toolbox.
+- [Recipes](https://doma.hahwul.com/usage/recipes/): Real-world workflows that combine doma with the rest of your toolkit.
+- [Bulk run](https://doma.hahwul.com/usage/run/): Execute a command in every directory under a tag, sequentially or in parallel.
+- [Search & stats](https://doma.hahwul.com/usage/search-and-stats/): Substring search across paths and tags, plus the stats summary.
+- [Snapshots](https://doma.hahwul.com/usage/snapshots/): Export and import doma's database — for backup, version control, or moving to a new machine.
+- [Tagging directories](https://doma.hahwul.com/usage/tagging/): Add tags to directories, derive them automatically from basename or git remote, and manage them as your collection grows.
+- [TTL & marks](https://doma.hahwul.com/usage/ttl-and-marks/): Temporary tags that expire on their own, and the mark shorthand for the everyday case.
+

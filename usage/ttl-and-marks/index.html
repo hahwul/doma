@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta name="description" content="Temporary tags that expire on their own, and the mark shorthand for the everyday case." />
+        <title>
+            TTL &amp; marks - doma
+        </title>
+        <meta property="og:title" content="TTL &amp; marks">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://doma.hahwul.com/usage/ttl-and-marks/">
+<meta property="og:description" content="Temporary tags that expire on their own, and the mark shorthand for the everyday case.">
+<meta property="og:image" content="https://doma.hahwul.com/images/og-default.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="TTL &amp; marks">
+<meta name="twitter:description" content="Temporary tags that expire on their own, and the mark shorthand for the everyday case.">
+<meta name="twitter:image" content="https://doma.hahwul.com/images/og-default.png">
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+            href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Caveat:wght@500;600&family=Patrick+Hand&family=Kalam:wght@300;400;700&display=swap"
+            rel="stylesheet"
+        />
+        <link
+            rel="icon"
+            type="image/png"
+            href="/icons/favicon-96x96.png"
+            sizes="96x96"
+        />
+        <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg" />
+        <link rel="shortcut icon" href="/icons/favicon.ico" />
+        <link
+            rel="apple-touch-icon"
+            sizes="180x180"
+            href="/icons/apple-touch-icon.png"
+        />
+        <meta name="apple-mobile-web-app-title" content="Doma" />
+        <meta name="base-url" content="https://doma.hahwul.com" />
+        <link rel="manifest" href="/icons/site.webmanifest" />
+
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark-dimmed.min.css"> <link rel="stylesheet" href="https://doma.hahwul.com/assets/css/01-variables.css?v=68ee8ea0">
+<link rel="stylesheet" href="https://doma.hahwul.com/assets/css/02-base.css?v=68ee8ea0">
+<link rel="stylesheet" href="https://doma.hahwul.com/assets/css/03-layout.css?v=68ee8ea0">
+<link rel="stylesheet" href="https://doma.hahwul.com/assets/css/04-content.css?v=68ee8ea0">
+<link rel="stylesheet" href="https://doma.hahwul.com/assets/css/05-components.css?v=68ee8ea0">
+<link rel="stylesheet" href="https://doma.hahwul.com/assets/css/06-responsive.css?v=68ee8ea0">
+<link rel="stylesheet" href="https://doma.hahwul.com/assets/css/07-landing.css?v=68ee8ea0">
+<link rel="stylesheet" href="https://doma.hahwul.com/assets/css/08-docs-accents.css?v=68ee8ea0">
+        <script defer src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script>
+    </head>
+    <body data-section="usage"></body>
+</html>
+<header class="docs-header">
+  <a href="https://doma.hahwul.com/" class="logo">
+    <img style="width:110px;" src="/images/doma-wide.webp">
+  </a>
+  <nav>
+    <a href="https://doma.hahwul.com/start/">Start</a>
+    <a href="https://doma.hahwul.com/usage/" class="active">Usage</a>
+    <a href="https://doma.hahwul.com/reference/">Reference</a>
+    <a href="https://doma.hahwul.com/ai/">AI agents</a>
+  </nav>
+  <div class="header-right">
+    <div class="docs-search" data-search>
+      <input type="search" class="docs-search-input" placeholder="Search docs…" aria-label="Search docs" autocomplete="off" spellcheck="false">
+      <div class="docs-search-results" role="listbox" hidden></div>
+    </div>
+    <a href="https://github.com/hahwul/doma" class="github-link" target="_blank" rel="noopener" aria-label="GitHub">
+      <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+    </a>
+  </div>
+</header>
+<style>
+  .logo { display: inline-flex; align-items: center; gap: 0.4rem; text-decoration: none; }
+  .logo-mark { color: var(--primary); font-weight: 400; line-height: 1; font-size: 1.4rem; }
+  .logo-text { color: var(--text); font-family: var(--font-mono); font-weight: 600; font-size: 1rem; letter-spacing: 0.02em; }
+  .logo:hover .logo-text { color: var(--primary-hover); }
+</style>
+<div class="docs-container">
+  <aside class="docs-sidebar">
+  
+  <div class="sidebar-section">
+    <div class="sidebar-title">Start</div>
+    <ul class="sidebar-links">
+      
+      
+      <li><a href="https://doma.hahwul.com/start/">Overview</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/start/installation/">Installation</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/start/quickstart/">Quickstart</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/start/shell-integration/">Shell integration</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/start/concepts/">Concepts</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/start/comparison/">Comparison</a></li>
+      
+      
+    </ul>
+  </div>
+  
+  <div class="sidebar-section">
+    <div class="sidebar-title">Usage</div>
+    <ul class="sidebar-links">
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/">Overview</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/tagging/">Tagging directories</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/navigation/">Navigation</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/ttl-and-marks/" class="active">TTL & marks</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/run/">Bulk run</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/search-and-stats/">Search & stats</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/pipelines/">Pipelines</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/snapshots/">Snapshots</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/recipes/">Recipes</a></li>
+      
+      
+    </ul>
+  </div>
+  
+  <div class="sidebar-section">
+    <div class="sidebar-title">Reference</div>
+    <ul class="sidebar-links">
+      
+      
+      <li><a href="https://doma.hahwul.com/reference/">Overview</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/reference/commands/">Commands</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/reference/config/">Configuration</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/reference/env/">Environment</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/reference/troubleshooting/">Troubleshooting</a></li>
+      
+      
+    </ul>
+  </div>
+  
+  <div class="sidebar-section">
+    <div class="sidebar-title">AI agents</div>
+    <ul class="sidebar-links">
+      
+      
+      <li><a href="https://doma.hahwul.com/ai/">Overview</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/ai/skill/">AI skill</a></li>
+      
+      
+    </ul>
+  </div>
+  
+</aside>
+  <main class="docs-main no-toc">
+    <h1>TTL & marks</h1>
+    <p>Some tags are durable organization (<code>crystal</code>, <code>work/proj-a</code>); others are transient — bookmarks during a code review, a debugging session, a week of reading. doma supports both as the same kind of tag with an optional time-to-live.</p>
+<h2 id="adding-with-a-ttl">Adding with a TTL</h2>
+<pre><code class="language-bash hljs">doma add . -t bookmark --ttl 7d
+doma add . -t bookmark --ttl 30m
+doma add . -t bookmark --ttl 2w
+</code></pre>
+<p>Accepted units: <code>s</code>, <code>m</code>, <code>h</code>, <code>d</code>, <code>w</code>. Single number + single unit. No compound like <code>1d2h</code>.</p>
+<p><code>--tmp</code> is shorthand for <code>--ttl 7d</code>:</p>
+<pre><code class="language-bash hljs">doma add . -t bookmark --tmp
+</code></pre>
+<h2 id="the-mark-shortcut">The <code>mark</code> shortcut</h2>
+<p>The most common case is &quot;tag the current directory for a week&quot;:</p>
+<pre><code class="language-bash hljs">doma mark bookmark
+</code></pre>
+<p>That's exactly equivalent to <code>doma add . -t bookmark --tmp</code>, just shorter. Multiple tags work:</p>
+<pre><code class="language-bash hljs">doma mark spike skim review
+</code></pre>
+<p>To mark a path other than the current directory, use <code>-p</code>:</p>
+<pre><code class="language-bash hljs">doma mark -p ~/Projects/sandbox spike
+</code></pre>
+<p>For a custom TTL, fall back to <code>doma add --ttl</code> directly.</p>
+<h2 id="what-quotexpiredquot-means">What &quot;expired&quot; means</h2>
+<p>When a tag's <code>expires_at</code> is in the past, the row is <strong>hidden</strong> from queries by default:</p>
+<ul>
+<li><code>doma list -t TAG</code> doesn't show it.</li>
+<li><code>doma list -t TAG --pick</code> (and the <code>doma cd TAG</code> shell wrapper that calls it) won't resolve via it.</li>
+<li>The directory itself is unaffected — if it has other (non-expired) tags, it still appears under those.</li>
+</ul>
+<p>Expired rows aren't deleted on their own. Two reasons:</p>
+<ol>
+<li>Re-tagging a path <em>refreshes</em> the TTL — <code>doma add . -t bookmark --tmp</code> resets the clock to 7 days from now. The row needs to still be there for the update to land.</li>
+<li>You can audit what expired with <code>--include-expired</code>:</li>
+</ol>
+<pre><code class="language-bash hljs">doma list --include-expired
+</code></pre>
+<h2 id="cleaning-up">Cleaning up</h2>
+<p>To physically remove every expired tag row:</p>
+<pre><code class="language-bash hljs">doma prune --expired
+</code></pre>
+<p>That's a maintenance op — it deletes the <code>directory_tags</code> rows whose TTL has elapsed and garbage-collects any tags left with no rows. Directories themselves are preserved. (Sister command: <code>doma prune --gone</code> for entries whose path no longer exists on disk.)</p>
+<h2 id="re-tag-semantics">Re-tag semantics</h2>
+<p>Re-tagging a path with <code>add</code> is the <strong>source of truth</strong> for that tag's lifetime:</p>
+<pre><code class="language-bash hljs">doma add . -t bookmark --ttl 7d   # expires in 7 days
+doma add . -t bookmark --tmp      # expires in 7 days (refreshed)
+doma add . -t bookmark            # now permanent (expires_at cleared)
+</code></pre>
+<p>The last form is occasionally useful: &quot;this thing I marked for the week — actually keep it.&quot;</p>
+<h2 id="when-to-use-mark-vs-add-ttl">When to use <code>mark</code> vs <code>add --ttl</code></h2>
+<table>
+<thead>
+<tr>
+<th>Use case</th>
+<th>Command</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>&quot;I&#39;ll come back to this for the week&quot;</td>
+<td><code>doma mark &lt;name&gt;</code></td>
+</tr>
+<tr>
+<td>&quot;Bookmark these for a code review&quot;</td>
+<td><code>cd</code> into each, <code>doma mark code-review</code></td>
+</tr>
+<tr>
+<td>&quot;Keep this for two days&quot;</td>
+<td><code>doma add . -t reading --ttl 2d</code></td>
+</tr>
+<tr>
+<td>&quot;Track this project long-term&quot;</td>
+<td><code>doma add . -t crystal</code> (no TTL)</td>
+</tr>
+</tbody>
+</table>
+<p><code>mark</code> is the limited form — positional tag list, 7-day TTL, cwd by default with <code>-p</code> for an explicit path. Anything beyond that uses <code>add</code> directly.</p>
+
+    <footer class="docs-footer">
+      <span>MIT &middot; written in <a href="https://crystal-lang.org" target="_blank" rel="noopener">Crystal</a> &middot; built with <a href="https://hwaro.hahwul.com" target="_blank" rel="noopener">hwaro</a></span>
+      <span><a href="https://github.com/hahwul/doma" target="_blank" rel="noopener">GitHub</a> &middot; <a href="https://github.com/hahwul/doma/edit/main/docs/content/usage/ttl-and-marks/.md" target="_blank" rel="noopener">Edit this page</a></span>
+    </footer>
+  </main>
+  
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+<script src="https://doma.hahwul.com/assets/js/search.js?v=68ee8ea0"></script>
+</body>
+</html>
