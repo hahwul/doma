@@ -459,7 +459,7 @@ module Doma::CLI
           e.tags.each { |t| (buckets[t] ||= [] of Doma::Entry) << e }
         end
       end
-      ordered = buckets.keys.reject(&.empty?).sort.map { |k| {k, buckets[k]} }
+      ordered = buckets.keys.reject(&.empty?).sort!.map { |k| {k, buckets[k]} }
       if untagged = buckets[""]?
         ordered << {"", untagged}
       end

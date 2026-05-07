@@ -816,8 +816,8 @@ describe "doma list flags" do
         # raw string to keep the assertion readable. Spec runs are
         # non-TTY, so headers render as plain `#shared` (no ANSI).
         lines = out.lines
-        shared_at = lines.index { |l| l.chomp == "#shared" }.not_nil!
-        section = lines[(shared_at + 1)..].take_while { |l| l.starts_with?("  ") }
+        shared_at = lines.index! { |l| l.chomp == "#shared" }
+        section = lines[(shared_at + 1)..].take_while(&.starts_with?("  "))
         section.size.should eq(2)
       ensure
         FileUtils.rm_rf(bare)
