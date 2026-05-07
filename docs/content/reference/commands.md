@@ -87,7 +87,7 @@ The two flags are mutually exclusive.
 ## `list`
 
 ```
-doma list [<query>] [-t TAG] [--by path|recent]
+doma list [<query>] [-t TAG] [--by path|recent|tag]
                     [--check] [--include-expired]
                     [--json] [--paths] [-0]
                     [--pick [--first | --builtin] [--query Q]]
@@ -95,7 +95,15 @@ doma list [<query>] [-t TAG] [--by path|recent]
 
 - `<query>`: substring match across path/basename/tag.
 - `-t TAG`: exact tag (or glob if `*` / `?` is present).
-- `--by`: sort by `path` (default) or `recent` (last-used).
+- `--by`: sort/group key.
+  - `path` (default): alphabetical by path.
+  - `recent` (aliases: `used`, `recency`): most-recently-used first.
+  - `tag`: group output under per-tag headers. Entries with multiple tags appear under each; entries with no active tags collect under `(no tags)` at the end. Notes:
+    - Incompatible with `--pick`.
+    - With `--json`, the result is an object keyed by tag name (`""` for untagged) instead of a flat array.
+    - With `--paths` / `-0`, paths are emitted in tag-sorted order with duplicates collapsed.
+    - Only **active** tags create headers — TTL-expired tags are hidden unless `--include-expired` is set, so an entry whose only tags have expired falls into `(no tags)` by default.
+    - Combining with `-t TAG` filters which entries appear, but each surviving entry still renders under every tag it carries (not only `TAG`).
 - `--check`: annotate entries whose path is gone with `[gone]`.
 - `--include-expired`: include tag rows whose TTL has elapsed.
 - `--json` / `--paths` / `-0`: machine-readable forms (see [Pipelines](../../usage/pipelines/)).

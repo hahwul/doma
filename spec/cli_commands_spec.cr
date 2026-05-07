@@ -796,6 +796,109 @@ describe "doma list flags" do
       parsed.first.as_h.keys.should contain("exists")
     end
   end
+
+  it "[--by tag] groups entries under per-tag headers and (no tags) for untagged" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      # An untagged entry to verify the (no tags) bucket renders last.
+      bare = File.tempname("doma-bare")
+      FileUtils.mkdir_p(bare)
+      begin
+        run(["add", bare], {"DOMA_HOME" => home})
+        r = run(["list", "--by", "tag"], {"DOMA_HOME" => home})
+        out = r[:out]
+        out.should contain("#fs")
+        out.should contain("#shared")
+        out.should contain("(no tags)")
+        # `shared` is on two seed entries → both should appear indented
+        # under the `#shared` header. Walk lines instead of slicing the
+        # raw string to keep the assertion readable. Spec runs are
+        # non-TTY, so headers render as plain `#shared` (no ANSI).
+        lines = out.lines
+        shared_at = lines.index! { |l| l.chomp == "#shared" }
+        section = lines[(shared_at + 1)..].take_while(&.starts_with?("  "))
+        section.size.should eq(2)
+      ensure
+        FileUtils.rm_rf(bare)
+      end
+    end
+  end
+
+  it "[--by tag --json] returns an object keyed by tag with \"\" for untagged" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      run(["add", "/tmp", "-t", "alpha"], {"DOMA_HOME" => home})
+      run(["add", "/var"], {"DOMA_HOME" => home})
+      r = run(["list", "--by", "tag", "--json"], {"DOMA_HOME" => home})
+      parsed = JSON.parse(r[:out]).as_h
+      parsed.keys.should contain("alpha")
+      parsed.keys.should contain("")
+      parsed[""].as_a.first.as_h["path"].as_s.should eq(Doma::Validator.canonicalize("/var"))
+    end
+  end
+
+  it "[--by tag --paths] dedups paths in tag-sorted order" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      run(["add", "/tmp", "-t", "alpha", "-t", "beta"], {"DOMA_HOME" => home})
+      r = run(["list", "--by", "tag", "--paths"], {"DOMA_HOME" => home})
+      r[:out].split('\n', remove_empty: true).size.should eq(1)
+    end
+  end
+
+  it "[--by tag --pick] is rejected as incompatible" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      r = run(["list", "--by", "tag", "--pick"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(2)
+      r[:err].should contain("--by tag is incompatible with --pick")
+    end
+  end
+
+  it "[--by bogus] rejects unknown sort with the new tag option in the message" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      r = run(["list", "--by", "bogus"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(2)
+      r[:err].should contain("'tag'")
+    end
+  end
+
+  it "[--by tag --include-expired] surfaces a header for an expired tag" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      run(["add", "/tmp", "-t", "fade", "--ttl", "1s"], {"DOMA_HOME" => home})
+      sleep 1.5.seconds
+
+      # Default --by tag drops the expired tag → entry falls into (no tags).
+      bare = run(["list", "--by", "tag"], {"DOMA_HOME" => home})
+      bare[:out].should_not contain("#fade")
+      bare[:out].should contain("(no tags)")
+
+      # --include-expired brings the header back.
+      audit = run(["list", "--by", "tag", "--include-expired"], {"DOMA_HOME" => home})
+      audit[:out].should contain("#fade")
+    end
+  end
+
+  it "[--by tag -t TAG] groups surviving entries under all of their tags, not just the filter" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      # /tmp carries both `keep` (the filter) and `extra`. After
+      # filtering for `keep`, the entry should still render under
+      # both #keep and #extra headers — `--by tag` shows every tag
+      # the surviving entries actually carry.
+      run(["add", "/tmp", "-t", "keep", "-t", "extra"], {"DOMA_HOME" => home})
+      run(["add", "/var", "-t", "other"], {"DOMA_HOME" => home})
+      r = run(["list", "-t", "keep", "--by", "tag"], {"DOMA_HOME" => home})
+      r[:out].should contain("#keep")
+      r[:out].should contain("#extra")
+      r[:out].should_not contain("#other")
+    end
+  end
 end
 
 # ---------- add flag matrix ----------

@@ -100,7 +100,7 @@ module Doma::CLI
               return
               ;;
             --by)
-              COMPREPLY=( $(compgen -W "path recent used recency" -- "$cur") )
+              COMPREPLY=( $(compgen -W "path recent used recency tag" -- "$cur") )
               return
               ;;
             --ttl)
@@ -267,7 +267,7 @@ module Doma::CLI
           # Flag-value completion across commands.
           case $words[CURRENT-1] in
             -t|--tag) _doma_tags; return ;;
-            --by)     _values 'sort key' path recent used recency; return ;;
+            --by)     _values 'sort key' path recent used recency tag; return ;;
             --ttl)    _values 'duration' 30m 1h 4h 1d 7d 2w 30d; return ;;
           esac
 
@@ -341,7 +341,7 @@ module Doma::CLI
 
       # -t/--tag value completion across the suite.
       lines << "complete -c doma -s t -l tag -x -a '(command doma tags --names 2>/dev/null)' -d 'tag'"
-      lines << "complete -c doma -l by -x -a 'path recent used recency' -d 'sort key'"
+      lines << "complete -c doma -l by -x -a 'path recent used recency tag' -d 'sort key'"
       lines << "complete -c doma -l ttl -x -a '30m 1h 4h 1d 7d 2w 30d' -d 'duration'"
       lines << ""
 
