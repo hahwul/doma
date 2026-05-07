@@ -811,13 +811,14 @@ describe "doma list flags" do
         out.should contain("#fs")
         out.should contain("#shared")
         out.should contain("(no tags)")
-        # `shared` is on two seed entries → both appear under the
-        # header. Anchor on the header line (start-of-line `#shared`)
-        # since `#shared` also appears inside other groups' tag lists.
-        shared_idx = (out =~ /(?:^|\n)#shared\n/).not_nil!
-        section_start = shared_idx + (out[shared_idx] == '\n' ? 1 : 0) + "#shared\n".size
-        next_header = out.index(/\n#|\n\(no tags\)/, section_start) || out.size
-        out[section_start, next_header - section_start].lines.count { |l| l.starts_with?("  ") }.should eq(2)
+        # `shared` is on two seed entries → both should appear indented
+        # under the `#shared` header. Walk lines instead of slicing the
+        # raw string to keep the assertion readable. Spec runs are
+        # non-TTY, so headers render as plain `#shared` (no ANSI).
+        lines = out.lines
+        shared_at = lines.index { |l| l.chomp == "#shared" }.not_nil!
+        section = lines[(shared_at + 1)..].take_while { |l| l.starts_with?("  ") }
+        section.size.should eq(2)
       ensure
         FileUtils.rm_rf(bare)
       end
@@ -863,6 +864,39 @@ describe "doma list flags" do
       r = run(["list", "--by", "bogus"], {"DOMA_HOME" => home})
       r[:status].exit_code.should eq(2)
       r[:err].should contain("'tag'")
+    end
+  end
+
+  it "[--by tag --include-expired] surfaces a header for an expired tag" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      run(["add", "/tmp", "-t", "fade", "--ttl", "1s"], {"DOMA_HOME" => home})
+      sleep 1.5.seconds
+
+      # Default --by tag drops the expired tag → entry falls into (no tags).
+      bare = run(["list", "--by", "tag"], {"DOMA_HOME" => home})
+      bare[:out].should_not contain("#fade")
+      bare[:out].should contain("(no tags)")
+
+      # --include-expired brings the header back.
+      audit = run(["list", "--by", "tag", "--include-expired"], {"DOMA_HOME" => home})
+      audit[:out].should contain("#fade")
+    end
+  end
+
+  it "[--by tag -t TAG] groups surviving entries under all of their tags, not just the filter" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      # /tmp carries both `keep` (the filter) and `extra`. After
+      # filtering for `keep`, the entry should still render under
+      # both #keep and #extra headers — `--by tag` shows every tag
+      # the surviving entries actually carry.
+      run(["add", "/tmp", "-t", "keep", "-t", "extra"], {"DOMA_HOME" => home})
+      run(["add", "/var", "-t", "other"], {"DOMA_HOME" => home})
+      r = run(["list", "-t", "keep", "--by", "tag"], {"DOMA_HOME" => home})
+      r[:out].should contain("#keep")
+      r[:out].should contain("#extra")
+      r[:out].should_not contain("#other")
     end
   end
 end
