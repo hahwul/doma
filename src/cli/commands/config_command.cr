@@ -290,19 +290,7 @@ module Doma::CLI
         return
       end
       head, *rest = parts
-      child_any = data[head]?
-      child = if child_any
-                inner = child_any.raw
-                if inner.is_a?(Hash)
-                  m = YamlMap.new
-                  inner.each { |k, v| m[k.as_s] = v }
-                  m
-                else
-                  YamlMap.new
-                end
-              else
-                YamlMap.new
-              end
+      child = as_yaml_map(data[head]?) || YamlMap.new
       set_in(child, rest.join('.'), value)
       data[head] = wrap_map(child)
     end
@@ -313,18 +301,14 @@ module Doma::CLI
         return data.delete(parts.first) ? true : false
       end
       head, *rest = parts
-      child_any = data[head]?
-      return false if child_any.nil?
-      inner = child_any.raw
-      return false unless inner.is_a?(Hash)
-      m = YamlMap.new
-      inner.each { |k, v| m[k.as_s] = v }
-      removed = unset_in(m, rest.join('.'))
+      child = as_yaml_map(data[head]?)
+      return false if child.nil?
+      removed = unset_in(child, rest.join('.'))
       if removed
-        if m.empty?
+        if child.empty?
           data.delete(head)
         else
-          data[head] = wrap_map(m)
+          data[head] = wrap_map(child)
         end
       end
       removed
@@ -336,21 +320,28 @@ module Doma::CLI
       YAML::Any.new(hash)
     end
 
+    # Coerce a YAML::Any node into a YamlMap copy, or nil if the node
+    # is missing or not a mapping. The copy keeps the dotted-path
+    # helpers working on String-keyed hashes without mutating the
+    # original tree until we re-`wrap_map` it on the way back up.
+    private def as_yaml_map(any : YAML::Any?) : YamlMap?
+      return if any.nil?
+      raw = any.raw
+      return unless raw.is_a?(Hash)
+      m = YamlMap.new
+      raw.each { |k, v| m[k.as_s] = v }
+      m
+    end
+
     private def key_present?(data : YamlMap, key : String) : Bool
       parts = key.split('.')
-      cur : YAML::Any? = nil
-      data_any = wrap_map(data)
-      cur = data_any
-      parts.each do |part|
-        node = cur
-        return false if node.nil?
-        raw = node.raw
-        return false unless raw.is_a?(Hash)
-        next_node = raw[YAML::Any.new(part)]?
-        return false if next_node.nil?
-        cur = next_node
+      cur = data
+      parts[0...-1].each do |part|
+        child = as_yaml_map(cur[part]?)
+        return false if child.nil?
+        cur = child
       end
-      true
+      cur.has_key?(parts.last)
     end
 
     # ------------------------------------------------------------------
