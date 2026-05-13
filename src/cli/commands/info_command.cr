@@ -7,6 +7,7 @@ require "../../utils/duration"
 require "../../utils/errors"
 require "../../utils/logger"
 require "../../utils/short_id_resolver"
+require "../../utils/tag_renderer"
 require "../../utils/validator"
 
 module Doma::CLI
@@ -196,7 +197,7 @@ module Doma::CLI
       if tags.empty?
         kv "tags", "(none)"
       else
-        rendered = tags.map { |t| render_tag(t, ttl_map[t]?, color) }.join(' ')
+        rendered = tags.map { |t| Doma::TagRenderer.render(t, ttl_map[t]?, color) }.join(' ')
         kv "tags", rendered
       end
 
@@ -224,16 +225,6 @@ module Doma::CLI
 
     private def kv(key : String, value : String)
       puts "  #{key.ljust(11)} #{value}"
-    end
-
-    private def render_tag(tag : String, expires_at : Int64?, color : Bool) : String
-      base = color ? "##{tag}".colorize(:yellow).to_s : "##{tag}"
-      return base unless expires_at
-      remaining = Doma::Duration.humanize_remaining(expires_at)
-      suffix = "~#{remaining}"
-      return "#{base}#{suffix}" unless color
-      tinted = remaining == "expired" ? suffix.colorize(:red) : suffix.colorize(:dark_gray)
-      "#{base}#{tinted}"
     end
 
     # ISO-ish local-time format. Stable, sortable, and unambiguous —

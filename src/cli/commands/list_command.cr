@@ -9,6 +9,7 @@ require "../../utils/errors"
 require "../../utils/logger"
 require "../../utils/suggester"
 require "../../utils/tag_glob"
+require "../../utils/tag_renderer"
 
 module Doma::CLI
   # Lists registered directories. Three filter dimensions, all optional
@@ -22,9 +23,9 @@ module Doma::CLI
   #   doma list -t crystal foo  → both: tag-tagged AND containing "foo"
   class ListCommand
     # Sentinel returned to the renderer when an entry has no TTL'd tags
-    # at all, so the inner `t -> render_tag(t, ttl_map[t]?, color)` loop
-    # never has to special-case "no entry in the bulk map." Frozen at
-    # module load time and never mutated.
+    # at all, so the inner `t -> TagRenderer.render(t, ttl_map[t]?, color)`
+    # loop never has to special-case "no entry in the bulk map." Frozen
+    # at module load time and never mutated.
     private EMPTY_TTL = {} of String => Int64
 
     def run(args : Array(String))
@@ -473,7 +474,7 @@ module Doma::CLI
       short_str = color ? e.short_id.colorize(:dark_gray).to_s : e.short_id
       path_str = color ? e.path.colorize(:cyan).to_s : e.path
       ttl_map = ttl_by_id[e.id]? || EMPTY_TTL
-      tags_str = e.tags.empty? ? "" : e.tags.map { |t| render_tag(t, ttl_map[t]?, color) }.join(' ')
+      tags_str = e.tags.empty? ? "" : e.tags.map { |t| Doma::TagRenderer.render(t, ttl_map[t]?, color) }.join(' ')
       marker = ""
       if check_existence && !Dir.exists?(e.path)
         marker = color ? " #{"[gone]".colorize(:red)}" : " [gone]"
@@ -495,21 +496,6 @@ module Doma::CLI
       end
       row["exists"] = JSON::Any.new(Dir.exists?(e.path)) if check_existence
       row
-    end
-
-    # Decorate `#tag` with a `~3d` / `~expired` suffix when the tag has
-    # a TTL. The suffix uses the same compact form (`Nu`) the parser
-    # accepts, so a glance at the listing tells you what to renew. An
-    # already-lapsed TTL renders red instead of dim so it pops next to
-    # active rows when --include-expired surfaces them.
-    private def render_tag(tag : String, expires_at : Int64?, color : Bool) : String
-      base = color ? "##{tag}".colorize(:yellow).to_s : "##{tag}"
-      return base unless expires_at
-      remaining = Doma::Duration.humanize_remaining(expires_at)
-      suffix = "~#{remaining}"
-      return "#{base}#{suffix}" unless color
-      tinted = remaining == "expired" ? suffix.colorize(:red) : suffix.colorize(:dark_gray)
-      "#{base}#{tinted}"
     end
 
     # Pick the first tag the user typed that doesn't actually exist (and
