@@ -54,6 +54,14 @@ module Doma::CLI
       end
     end
 
+    # ------------------------------------------------------------------
+    # Shared completion data — single source of truth for values that
+    # appear identically in every shell. The per-shell renderers below
+    # only diverge on idioms (compgen vs _values vs `complete -c`), not
+    # on the values themselves; previously each script carried its own
+    # copy and silent drift was one typo away.
+    # ------------------------------------------------------------------
+
     # Top-level commands shared across all three completion scripts.
     # Keep this in lockstep with the dispatch table in `runner.cr`.
     private COMMANDS = %w[
@@ -64,6 +72,35 @@ module Doma::CLI
     # out to `doma tags --names`. Picked deliberately conservative: only
     # commands where the first positional is *unambiguously* a tag.
     private TAG_FIRST_ARG = %w[cd run rename]
+
+    # Subcommands whose first positional is a known directory path.
+    private PATH_FIRST_ARG = %w[add move rm info]
+
+    # Subcommands whose first positional is a filesystem path (any file,
+    # not just registered directories).
+    private FILE_FIRST_ARG = %w[import]
+
+    # Subcommand → list of action keywords. Used wherever a shell needs
+    # to know "what comes after `doma setup`/`doma config`/`doma trash`".
+    private ACTION_SUBCOMMANDS = {
+      "setup"  => %w[install init completion],
+      "config" => %w[get set unset list edit path],
+      "trash"  => %w[list restore empty],
+    }
+
+    # Known config keys for `config get/set/unset` value completion.
+    private CONFIG_KEYS = %w[db_path selector auto_tag.basename auto_tag.git]
+
+    # Argument-value enums shared by every shell.
+    private BY_VALUES  = %w[path recent used recency tag]
+    private TTL_VALUES = %w[30m 1h 4h 1d 7d 2w 30d]
+
+    # ------------------------------------------------------------------
+    # Per-shell generators. These intentionally keep their native
+    # idioms (compgen / _values / complete -c) — only the *data* is
+    # shared, because the syntax differences are large enough that a
+    # common emitter would obscure more than it would dedupe.
+    # ------------------------------------------------------------------
 
     private def bash_script : String
       <<-BASH
@@ -100,11 +137,11 @@ module Doma::CLI
               return
               ;;
             --by)
-              COMPREPLY=( $(compgen -W "path recent used recency tag" -- "$cur") )
+              COMPREPLY=( $(compgen -W "#{BY_VALUES.join(' ')}" -- "$cur") )
               return
               ;;
             --ttl)
-              COMPREPLY=( $(compgen -W "30m 1h 4h 1d 7d 2w 30d" -- "$cur") )
+              COMPREPLY=( $(compgen -W "#{TTL_VALUES.join(' ')}" -- "$cur") )
               return
               ;;
           esac
@@ -115,30 +152,30 @@ module Doma::CLI
           # not value completion, even at this position.
           if [ "$cword" -eq 2 ] && [[ "$cur" != -* ]]; then
             case "$cmd" in
-              cd|run|rename)
+              #{TAG_FIRST_ARG.join('|')})
                 local tags
                 tags=$(command doma tags --names 2>/dev/null)
                 COMPREPLY=( $(compgen -W "$tags" -- "$cur") )
                 return
                 ;;
-              add|move|rm|info)
+              #{PATH_FIRST_ARG.join('|')})
                 COMPREPLY=( $(compgen -d -- "$cur") )
                 return
                 ;;
-              import)
+              #{FILE_FIRST_ARG.join('|')})
                 COMPREPLY=( $(compgen -f -- "$cur") )
                 return
                 ;;
               setup)
-                COMPREPLY=( $(compgen -W "install init completion" -- "$cur") )
+                COMPREPLY=( $(compgen -W "#{ACTION_SUBCOMMANDS["setup"].join(' ')}" -- "$cur") )
                 return
                 ;;
               config)
-                COMPREPLY=( $(compgen -W "get set unset list edit path" -- "$cur") )
+                COMPREPLY=( $(compgen -W "#{ACTION_SUBCOMMANDS["config"].join(' ')}" -- "$cur") )
                 return
                 ;;
               trash)
-                COMPREPLY=( $(compgen -W "list restore empty" -- "$cur") )
+                COMPREPLY=( $(compgen -W "#{ACTION_SUBCOMMANDS["trash"].join(' ')}" -- "$cur") )
                 return
                 ;;
             esac
@@ -146,7 +183,7 @@ module Doma::CLI
 
           # Second positional after `config <action>` → key name.
           if [ "$cword" -eq 3 ] && [ "$cmd" = "config" ]; then
-            COMPREPLY=( $(compgen -W "db_path selector auto_tag.basename auto_tag.git" -- "$cur") )
+            COMPREPLY=( $(compgen -W "#{CONFIG_KEYS.join(' ')}" -- "$cur") )
             return
           fi
 
@@ -166,10 +203,10 @@ module Doma::CLI
             run)    COMPREPLY=( $(compgen -W "-t --tag --fail-fast --parallel --jobs --no-header -h --help" -- "$cur") ) ;;
             export) COMPREPLY=( $(compgen -W "--json --yaml -h --help" -- "$cur") ) ;;
             import) COMPREPLY=( $(compgen -W "--merge --replace --yes -h --help" -- "$cur") ) ;;
-            setup)  COMPREPLY=( $(compgen -W "install init completion" -- "$cur") ) ;;
+            setup)  COMPREPLY=( $(compgen -W "#{ACTION_SUBCOMMANDS["setup"].join(' ')}" -- "$cur") ) ;;
             doctor) COMPREPLY=( $(compgen -W "-h --help" -- "$cur") ) ;;
-            config) COMPREPLY=( $(compgen -W "get set unset list edit path -h --help" -- "$cur") ) ;;
-            trash)  COMPREPLY=( $(compgen -W "list restore empty --merge --older -h --help" -- "$cur") ) ;;
+            config) COMPREPLY=( $(compgen -W "#{ACTION_SUBCOMMANDS["config"].join(' ')} -h --help" -- "$cur") ) ;;
+            trash)  COMPREPLY=( $(compgen -W "#{ACTION_SUBCOMMANDS["trash"].join(' ')} --merge --older -h --help" -- "$cur") ) ;;
             *) ;;
           esac
         }
@@ -218,19 +255,19 @@ module Doma::CLI
           }
 
           case $cmd in
-            cd|run|rename)
+            #{TAG_FIRST_ARG.join('|')})
               if (( CURRENT == 3 )); then
                 _doma_tags
                 return
               fi
               ;;
-            add|move|rm|info)
+            #{PATH_FIRST_ARG.join('|')})
               if (( CURRENT == 3 )); then
                 _path_files -/
                 return
               fi
               ;;
-            import)
+            #{FILE_FIRST_ARG.join('|')})
               if (( CURRENT == 3 )); then
                 _files
                 return
@@ -238,19 +275,19 @@ module Doma::CLI
               ;;
             setup)
               if (( CURRENT == 3 )); then
-                _values 'setup action' install init completion
+                _values 'setup action' #{ACTION_SUBCOMMANDS["setup"].join(' ')}
                 return
               fi
               ;;
             config)
               if (( CURRENT == 3 )); then
-                _values 'config action' get set unset list edit path
+                _values 'config action' #{ACTION_SUBCOMMANDS["config"].join(' ')}
                 return
               fi
               if (( CURRENT == 4 )); then
                 case $words[3] in
                   get|set|unset)
-                    _values 'config key' db_path selector auto_tag.basename auto_tag.git
+                    _values 'config key' #{CONFIG_KEYS.join(' ')}
                     return
                     ;;
                 esac
@@ -258,7 +295,7 @@ module Doma::CLI
               ;;
             trash)
               if (( CURRENT == 3 )); then
-                _values 'trash action' list restore empty
+                _values 'trash action' #{ACTION_SUBCOMMANDS["trash"].join(' ')}
                 return
               fi
               ;;
@@ -267,8 +304,8 @@ module Doma::CLI
           # Flag-value completion across commands.
           case $words[CURRENT-1] in
             -t|--tag) _doma_tags; return ;;
-            --by)     _values 'sort key' path recent used recency tag; return ;;
-            --ttl)    _values 'duration' 30m 1h 4h 1d 7d 2w 30d; return ;;
+            --by)     _values 'sort key' #{BY_VALUES.join(' ')}; return ;;
+            --ttl)    _values 'duration' #{TTL_VALUES.join(' ')}; return ;;
           esac
 
           # Per-command flag pool.
@@ -305,6 +342,9 @@ module Doma::CLI
       lines << ""
 
       # Top-level commands appear only when no subcommand is set yet.
+      # The apostrophe in `entry's` would break fish's single-quoted
+      # `-d` value; escape it explicitly here so the emitted script is
+      # parseable.
       cmd_descs = {
         "add"     => "Register a path with tags",
         "mark"    => "Tag cwd with temporary (7d) tags",
@@ -328,7 +368,8 @@ module Doma::CLI
         "help"    => "Show help",
       }
       cmd_descs.each do |cmd, desc|
-        lines << "complete -c doma -n '__fish_use_subcommand' -a '#{cmd}' -d '#{desc}'"
+        escaped = desc.gsub('\'', "\\'")
+        lines << "complete -c doma -n '__fish_use_subcommand' -a '#{cmd}' -d '#{escaped}'"
       end
       lines << ""
 
@@ -341,25 +382,28 @@ module Doma::CLI
 
       # -t/--tag value completion across the suite.
       lines << "complete -c doma -s t -l tag -x -a '(command doma tags --names 2>/dev/null)' -d 'tag'"
-      lines << "complete -c doma -l by -x -a 'path recent used recency tag' -d 'sort key'"
-      lines << "complete -c doma -l ttl -x -a '30m 1h 4h 1d 7d 2w 30d' -d 'duration'"
+      lines << "complete -c doma -l by -x -a '#{BY_VALUES.join(' ')}' -d 'sort key'"
+      lines << "complete -c doma -l ttl -x -a '#{TTL_VALUES.join(' ')}' -d 'duration'"
       lines << ""
 
       # Setup actions.
-      lines << "complete -c doma -n '__fish_seen_subcommand_from setup; and not __fish_seen_subcommand_from install init completion' " \
-               "-a 'install init completion' -d 'setup action'"
+      setup_actions = ACTION_SUBCOMMANDS["setup"].join(' ')
+      lines << "complete -c doma -n '__fish_seen_subcommand_from setup; and not __fish_seen_subcommand_from #{setup_actions}' " \
+               "-a '#{setup_actions}' -d 'setup action'"
       lines << ""
 
       # Config actions and keys.
-      lines << "complete -c doma -n '__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from get set unset list edit path' " \
-               "-a 'get set unset list edit path' -d 'config action'"
+      config_actions = ACTION_SUBCOMMANDS["config"].join(' ')
+      lines << "complete -c doma -n '__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from #{config_actions}' " \
+               "-a '#{config_actions}' -d 'config action'"
       lines << "complete -c doma -n '__fish_seen_subcommand_from get set unset' " \
-               "-a 'db_path selector auto_tag.basename auto_tag.git' -d 'config key'"
+               "-a '#{CONFIG_KEYS.join(' ')}' -d 'config key'"
       lines << ""
 
       # Trash actions.
-      lines << "complete -c doma -n '__fish_seen_subcommand_from trash; and not __fish_seen_subcommand_from list restore empty' " \
-               "-a 'list restore empty' -d 'trash action'"
+      trash_actions = ACTION_SUBCOMMANDS["trash"].join(' ')
+      lines << "complete -c doma -n '__fish_seen_subcommand_from trash; and not __fish_seen_subcommand_from #{trash_actions}' " \
+               "-a '#{trash_actions}' -d 'trash action'"
       lines << ""
 
       # Per-command flag pool. Kept terse — fish handles typing the rest.
