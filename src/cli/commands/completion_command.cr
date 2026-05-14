@@ -55,17 +55,69 @@ module Doma::CLI
     end
 
     # ------------------------------------------------------------------
-    # Shared completion data — single source of truth for values that
-    # appear identically in every shell. The per-shell renderers below
-    # only diverge on idioms (compgen vs _values vs `complete -c`), not
-    # on the values themselves; previously each script carried its own
-    # copy and silent drift was one typo away.
+    # COMMAND_SPEC — single source of truth for every top-level command.
+    # Adding a new subcommand is one row here; the bash/zsh/fish
+    # generators below read this table and emit their respective syntax.
+    #
+    # Fields per row:
+    #   name        the subcommand keyword (matches runner.cr dispatch)
+    #   desc        short description (one canonical line, used by zsh
+    #               top_cmds and fish -d annotations)
+    #   flags       complete flag list (short + long + -h/--help). Used
+    #               verbatim by bash and zsh flag pools; fish filters
+    #               to long-form only, dropping --help.
+    #   actions     sub-action keywords (e.g. `install init completion`
+    #               for setup). Used by bash's flag pool and by zsh /
+    #               fish's separate _values / -a blocks.
     # ------------------------------------------------------------------
 
-    # Top-level commands shared across all three completion scripts.
-    # Keep this in lockstep with the dispatch table in `runner.cr`.
-    private COMMANDS = %w[
-      add mark rm prune move tags rename list info cd stats run export import setup doctor config trash version help
+    private record CmdSpec,
+      name : String,
+      desc : String,
+      flags : Array(String),
+      actions : Array(String)
+
+    private COMMAND_SPEC = [
+      CmdSpec.new("add", "Register a path with tags",
+        %w[-t --tag --ttl --tmp --auto-tag --no-auto-tag --git-tag --no-git-tag --dry-run -h --help], [] of String),
+      CmdSpec.new("mark", "Tag cwd with temporary (7d) tags",
+        %w[-t --tag -p --path -h --help], [] of String),
+      CmdSpec.new("rm", "Remove tag(s) or the path itself",
+        %w[-t --tag --hard -h --help], [] of String),
+      CmdSpec.new("prune", "Bulk-delete missing paths or expired tags",
+        %w[--gone --expired -h --help], [] of String),
+      CmdSpec.new("move", "Move a registered path (tags carry over)",
+        %w[--allow-missing -h --help], [] of String),
+      CmdSpec.new("tags", "List all tags with counts",
+        %w[--names --tree --json -0 -h --help], [] of String),
+      CmdSpec.new("rename", "Rename or merge a tag",
+        [] of String, [] of String),
+      CmdSpec.new("list", "List/search directories",
+        %w[-t --tag --by --check --include-expired --json --paths -0 --pick --query --first --builtin -h --help], [] of String),
+      CmdSpec.new("info", "Show one entry's details (default: cwd)",
+        %w[--json -h --help], [] of String),
+      CmdSpec.new("cd", "Resolve a directory (tag or short_id prefix)",
+        %w[-h --help], [] of String),
+      CmdSpec.new("stats", "Top tags and recent paths",
+        %w[--top --recent --used --json -h --help], [] of String),
+      CmdSpec.new("run", "Run a command in every tagged directory",
+        %w[-t --tag --fail-fast --parallel --jobs --no-header -h --help], [] of String),
+      CmdSpec.new("export", "Dump the database",
+        %w[--json --yaml -h --help], [] of String),
+      CmdSpec.new("import", "Load a snapshot",
+        %w[--merge --replace --yes -h --help], [] of String),
+      CmdSpec.new("setup", "install / init / completion",
+        [] of String, %w[install init completion]),
+      CmdSpec.new("doctor", "Check the install (paths, config, DB)",
+        %w[-h --help], [] of String),
+      CmdSpec.new("config", "get / set / list — settings",
+        %w[-h --help], %w[get set unset list edit path]),
+      CmdSpec.new("trash", "list / restore / empty — recover from rm",
+        %w[--merge --older -h --help], %w[list restore empty]),
+      CmdSpec.new("version", "Print version",
+        [] of String, [] of String),
+      CmdSpec.new("help", "Show help",
+        [] of String, [] of String),
     ]
 
     # Commands whose first positional is a tag — completion shells these
@@ -80,14 +132,6 @@ module Doma::CLI
     # not just registered directories).
     private FILE_FIRST_ARG = %w[import]
 
-    # Subcommand → list of action keywords. Used wherever a shell needs
-    # to know "what comes after `doma setup`/`doma config`/`doma trash`".
-    private ACTION_SUBCOMMANDS = {
-      "setup"  => %w[install init completion],
-      "config" => %w[get set unset list edit path],
-      "trash"  => %w[list restore empty],
-    }
-
     # Known config keys for `config get/set/unset` value completion.
     private CONFIG_KEYS = %w[db_path selector auto_tag.basename auto_tag.git]
 
@@ -96,10 +140,20 @@ module Doma::CLI
     private TTL_VALUES = %w[30m 1h 4h 1d 7d 2w 30d]
 
     # ------------------------------------------------------------------
-    # Per-shell generators. These intentionally keep their native
-    # idioms (compgen / _values / complete -c) — only the *data* is
-    # shared, because the syntax differences are large enough that a
-    # common emitter would obscure more than it would dedupe.
+    # Derivations from COMMAND_SPEC
+    # ------------------------------------------------------------------
+
+    # Filter a flag list down to long-form flags fish should complete:
+    # `-h` and `--help` are handled by fish natively, and short flags
+    # aren't part of fish's per-command flag table.
+    private def fish_long_flags(flags : Array(String)) : Array(String)
+      flags.select { |f| f.starts_with?("--") && f != "--help" }
+    end
+
+    # ------------------------------------------------------------------
+    # Per-shell generators. Native idioms (compgen / _values /
+    # `complete -c`) stay distinct — the syntactic distance is large
+    # enough that a unified emitter would obscure more than dedupe.
     # ------------------------------------------------------------------
 
     private def bash_script : String
@@ -118,7 +172,7 @@ module Doma::CLI
             cword=$COMP_CWORD
           fi
 
-          local cmds="#{COMMANDS.join(' ')}"
+          local cmds="#{COMMAND_SPEC.map(&.name).join(' ')}"
 
           # First positional → top-level command.
           if [ "$cword" -eq 1 ]; then
@@ -166,18 +220,7 @@ module Doma::CLI
                 COMPREPLY=( $(compgen -f -- "$cur") )
                 return
                 ;;
-              setup)
-                COMPREPLY=( $(compgen -W "#{ACTION_SUBCOMMANDS["setup"].join(' ')}" -- "$cur") )
-                return
-                ;;
-              config)
-                COMPREPLY=( $(compgen -W "#{ACTION_SUBCOMMANDS["config"].join(' ')}" -- "$cur") )
-                return
-                ;;
-              trash)
-                COMPREPLY=( $(compgen -W "#{ACTION_SUBCOMMANDS["trash"].join(' ')}" -- "$cur") )
-                return
-                ;;
+        #{bash_first_arg_action_cases.chomp}
             esac
           fi
 
@@ -190,28 +233,41 @@ module Doma::CLI
           # Per-command flag completion. Lists are intentionally narrow —
           # the most-used flags first; rare ones still work via tab-twice.
           case "$cmd" in
-            add)    COMPREPLY=( $(compgen -W "-t --tag --ttl --tmp --auto-tag --no-auto-tag --git-tag --no-git-tag --dry-run -h --help" -- "$cur") ) ;;
-            mark)   COMPREPLY=( $(compgen -W "-t --tag -p --path -h --help" -- "$cur") ) ;;
-            rm)     COMPREPLY=( $(compgen -W "-t --tag --hard -h --help" -- "$cur") ) ;;
-            prune)  COMPREPLY=( $(compgen -W "--gone --expired -h --help" -- "$cur") ) ;;
-            move)   COMPREPLY=( $(compgen -W "--allow-missing -h --help" -- "$cur") ) ;;
-            tags)   COMPREPLY=( $(compgen -W "--names --tree --json -0 -h --help" -- "$cur") ) ;;
-            list)   COMPREPLY=( $(compgen -W "-t --tag --by --check --include-expired --json --paths -0 --pick --query --first --builtin -h --help" -- "$cur") ) ;;
-            info)   COMPREPLY=( $(compgen -W "--json -h --help" -- "$cur") ) ;;
-            cd)     COMPREPLY=( $(compgen -W "-h --help" -- "$cur") ) ;;
-            stats)  COMPREPLY=( $(compgen -W "--top --recent --used --json -h --help" -- "$cur") ) ;;
-            run)    COMPREPLY=( $(compgen -W "-t --tag --fail-fast --parallel --jobs --no-header -h --help" -- "$cur") ) ;;
-            export) COMPREPLY=( $(compgen -W "--json --yaml -h --help" -- "$cur") ) ;;
-            import) COMPREPLY=( $(compgen -W "--merge --replace --yes -h --help" -- "$cur") ) ;;
-            setup)  COMPREPLY=( $(compgen -W "#{ACTION_SUBCOMMANDS["setup"].join(' ')}" -- "$cur") ) ;;
-            doctor) COMPREPLY=( $(compgen -W "-h --help" -- "$cur") ) ;;
-            config) COMPREPLY=( $(compgen -W "#{ACTION_SUBCOMMANDS["config"].join(' ')} -h --help" -- "$cur") ) ;;
-            trash)  COMPREPLY=( $(compgen -W "#{ACTION_SUBCOMMANDS["trash"].join(' ')} --merge --older -h --help" -- "$cur") ) ;;
+        #{bash_flag_pool_body.chomp}
             *) ;;
           esac
         }
         complete -F _doma doma
         BASH
+    end
+
+    # Builds the inner `setup) config) trash)` arms of the bash
+    # first-positional `case "$cmd"` block — one arm per command whose
+    # second word is an action keyword (setup install / config get / …).
+    private def bash_first_arg_action_cases : String
+      String.build do |sb|
+        COMMAND_SPEC.each do |spec|
+          next if spec.actions.empty?
+          sb << "      #{spec.name})\n"
+          sb << "        COMPREPLY=( $(compgen -W \"#{spec.actions.join(' ')}\" -- \"$cur\") )\n"
+          sb << "        return\n"
+          sb << "        ;;\n"
+        end
+      end
+    end
+
+    # Builds the per-command `cmd) COMPREPLY=...` arms of the bash flag
+    # pool. Commands with neither flags nor actions are omitted — the
+    # `*) ;;` default catches them.
+    private def bash_flag_pool_body : String
+      String.build do |sb|
+        COMMAND_SPEC.each do |spec|
+          words = spec.actions + spec.flags
+          next if words.empty?
+          label = "#{spec.name})".ljust(8)
+          sb << "    #{label}COMPREPLY=( $(compgen -W \"#{words.join(' ')}\" -- \"$cur\") ) ;;\n"
+        end
+      end
     end
 
     private def zsh_script : String
@@ -223,23 +279,7 @@ module Doma::CLI
         _doma() {
           local -a top_cmds
           top_cmds=(
-            'add:Register a path with tags'
-            'mark:Tag cwd with temporary (7d) tags'
-            'rm:Remove tag(s) or the path itself'
-            'move:Move a registered path (tags carry over)'
-            'tags:List all tags with counts'
-            'rename:Rename or merge a tag'
-            'list:List/search directories'
-            'cd:Resolve a directory (tag or short_id prefix)'
-            'stats:Top tags and recent paths'
-            'run:Run a command in every tagged directory'
-            'export:Dump the database'
-            'import:Load a snapshot'
-            'setup:install / init / doctor / completion'
-            'config:get / set / list — settings'
-            'trash:list / restore / empty — recover from rm'
-            'version:Print version'
-            'help:Show help'
+        #{zsh_top_cmds_body.chomp}
           )
 
           if (( CURRENT == 2 )); then
@@ -273,32 +313,7 @@ module Doma::CLI
                 return
               fi
               ;;
-            setup)
-              if (( CURRENT == 3 )); then
-                _values 'setup action' #{ACTION_SUBCOMMANDS["setup"].join(' ')}
-                return
-              fi
-              ;;
-            config)
-              if (( CURRENT == 3 )); then
-                _values 'config action' #{ACTION_SUBCOMMANDS["config"].join(' ')}
-                return
-              fi
-              if (( CURRENT == 4 )); then
-                case $words[3] in
-                  get|set|unset)
-                    _values 'config key' #{CONFIG_KEYS.join(' ')}
-                    return
-                    ;;
-                esac
-              fi
-              ;;
-            trash)
-              if (( CURRENT == 3 )); then
-                _values 'trash action' #{ACTION_SUBCOMMANDS["trash"].join(' ')}
-                return
-              fi
-              ;;
+        #{zsh_action_cases.chomp}
           esac
 
           # Flag-value completion across commands.
@@ -311,26 +326,62 @@ module Doma::CLI
           # Per-command flag pool.
           local -a flags
           case $cmd in
-            add)    flags=(-t --tag --ttl --tmp --auto-tag --no-auto-tag --git-tag --no-git-tag --dry-run -h --help) ;;
-            mark)   flags=(-t --tag -p --path -h --help) ;;
-            rm)     flags=(-t --tag --hard -h --help) ;;
-            prune)  flags=(--gone --expired -h --help) ;;
-            move)   flags=(--allow-missing -h --help) ;;
-            tags)   flags=(--names --tree --json -0 -h --help) ;;
-            list)   flags=(-t --tag --by --check --include-expired --json --paths -0 --pick --query --first --builtin -h --help) ;;
-            info)   flags=(--json -h --help) ;;
-            cd)     flags=(-h --help) ;;
-            stats)  flags=(--top --recent --used --json -h --help) ;;
-            run)    flags=(-t --tag --fail-fast --parallel --jobs --no-header -h --help) ;;
-            export) flags=(--json --yaml -h --help) ;;
-            import) flags=(--merge --replace --yes -h --help) ;;
-            doctor) flags=(-h --help) ;;
+        #{zsh_flag_pool_body.chomp}
           esac
           (( ${#flags} )) && compadd -a flags
         }
 
         compdef _doma doma
         ZSH
+    end
+
+    # zsh `top_cmds` entries — one `'name:desc'` per command. Quotes are
+    # the zsh single-quote form; descriptions don't contain `'` today.
+    private def zsh_top_cmds_body : String
+      String.build do |sb|
+        COMMAND_SPEC.each do |spec|
+          sb << "    '#{spec.name}:#{spec.desc}'\n"
+        end
+      end
+    end
+
+    # zsh action-dispatch arms (setup/config/trash). config also drops
+    # into a CURRENT==4 sub-case for the config key list.
+    private def zsh_action_cases : String
+      String.build do |sb|
+        COMMAND_SPEC.each do |spec|
+          next if spec.actions.empty?
+          sb << "    #{spec.name})\n"
+          sb << "      if (( CURRENT == 3 )); then\n"
+          sb << "        _values '#{spec.name} action' #{spec.actions.join(' ')}\n"
+          sb << "        return\n"
+          sb << "      fi\n"
+          if spec.name == "config"
+            sb << "      if (( CURRENT == 4 )); then\n"
+            sb << "        case $words[3] in\n"
+            sb << "          get|set|unset)\n"
+            sb << "            _values 'config key' #{CONFIG_KEYS.join(' ')}\n"
+            sb << "            return\n"
+            sb << "            ;;\n"
+            sb << "        esac\n"
+            sb << "      fi\n"
+          end
+          sb << "      ;;\n"
+        end
+      end
+    end
+
+    # zsh flag pool arms — emitted only for commands with flags AND no
+    # actions. Action commands are handled by the dispatcher arms above.
+    private def zsh_flag_pool_body : String
+      String.build do |sb|
+        COMMAND_SPEC.each do |spec|
+          next if spec.flags.empty?
+          next unless spec.actions.empty?
+          label = "#{spec.name})".ljust(8)
+          sb << "    #{label}flags=(#{spec.flags.join(' ')}) ;;\n"
+        end
+      end
     end
 
     private def fish_script : String
@@ -342,34 +393,11 @@ module Doma::CLI
       lines << ""
 
       # Top-level commands appear only when no subcommand is set yet.
-      # The apostrophe in `entry's` would break fish's single-quoted
-      # `-d` value; escape it explicitly here so the emitted script is
-      # parseable.
-      cmd_descs = {
-        "add"     => "Register a path with tags",
-        "mark"    => "Tag cwd with temporary (7d) tags",
-        "rm"      => "Remove tag(s) or the path itself",
-        "prune"   => "Bulk-delete missing paths or expired tags",
-        "move"    => "Move a registered path",
-        "tags"    => "List all tags with counts",
-        "rename"  => "Rename or merge a tag",
-        "list"    => "List/search directories",
-        "info"    => "Show one entry's details (default: cwd)",
-        "cd"      => "Resolve a directory (via shell wrapper)",
-        "stats"   => "Top tags and recent paths",
-        "run"     => "Run a command in every tagged directory",
-        "export"  => "Dump the database",
-        "import"  => "Load a snapshot",
-        "setup"   => "install / init / completion",
-        "doctor"  => "Check the install (paths, config, DB)",
-        "config"  => "get / set / list — settings",
-        "trash"   => "list / restore / empty — recover from rm",
-        "version" => "Print version",
-        "help"    => "Show help",
-      }
-      cmd_descs.each do |cmd, desc|
-        escaped = desc.gsub('\'', "\\'")
-        lines << "complete -c doma -n '__fish_use_subcommand' -a '#{cmd}' -d '#{escaped}'"
+      # Apostrophes in descriptions (e.g. `entry's`) need escaping —
+      # fish's `-d` value is a single-quoted string.
+      COMMAND_SPEC.each do |spec|
+        escaped = spec.desc.gsub('\'', "\\'")
+        lines << "complete -c doma -n '__fish_use_subcommand' -a '#{spec.name}' -d '#{escaped}'"
       end
       lines << ""
 
@@ -386,45 +414,26 @@ module Doma::CLI
       lines << "complete -c doma -l ttl -x -a '#{TTL_VALUES.join(' ')}' -d 'duration'"
       lines << ""
 
-      # Setup actions.
-      setup_actions = ACTION_SUBCOMMANDS["setup"].join(' ')
-      lines << "complete -c doma -n '__fish_seen_subcommand_from setup; and not __fish_seen_subcommand_from #{setup_actions}' " \
-               "-a '#{setup_actions}' -d 'setup action'"
-      lines << ""
-
-      # Config actions and keys.
-      config_actions = ACTION_SUBCOMMANDS["config"].join(' ')
-      lines << "complete -c doma -n '__fish_seen_subcommand_from config; and not __fish_seen_subcommand_from #{config_actions}' " \
-               "-a '#{config_actions}' -d 'config action'"
+      # Action dispatchers (setup, config, trash). Plus the secondary
+      # `config get/set/unset` → key dispatcher.
+      COMMAND_SPEC.each do |spec|
+        next if spec.actions.empty?
+        actions_str = spec.actions.join(' ')
+        lines << "complete -c doma -n '__fish_seen_subcommand_from #{spec.name}; and not __fish_seen_subcommand_from #{actions_str}' " \
+                 "-a '#{actions_str}' -d '#{spec.name} action'"
+      end
       lines << "complete -c doma -n '__fish_seen_subcommand_from get set unset' " \
                "-a '#{CONFIG_KEYS.join(' ')}' -d 'config key'"
       lines << ""
 
-      # Trash actions.
-      trash_actions = ACTION_SUBCOMMANDS["trash"].join(' ')
-      lines << "complete -c doma -n '__fish_seen_subcommand_from trash; and not __fish_seen_subcommand_from #{trash_actions}' " \
-               "-a '#{trash_actions}' -d 'trash action'"
-      lines << ""
-
-      # Per-command flag pool. Kept terse — fish handles typing the rest.
-      flag_table = {
-        "add"    => %w[--tag --ttl --tmp --auto-tag --no-auto-tag --git-tag --no-git-tag --dry-run],
-        "rm"     => %w[--tag --hard],
-        "prune"  => %w[--gone --expired],
-        "move"   => %w[--allow-missing],
-        "tags"   => %w[--names --tree --json],
-        "list"   => %w[--tag --by --check --include-expired --json --paths --pick --query --first --builtin],
-        "info"   => %w[--json],
-        "stats"  => %w[--top --recent --used --json],
-        "mark"   => %w[--tag --path],
-        "run"    => %w[--tag --fail-fast --parallel --jobs --no-header],
-        "export" => %w[--json --yaml],
-        "import" => %w[--merge --replace --yes],
-      }
-      flag_table.each do |sub, flags|
-        flags.each do |f|
-          long = f.lstrip('-')
-          lines << "complete -c doma -n '__fish_seen_subcommand_from #{sub}' -l #{long}"
+      # Per-command long-flag pool. Commands with no long flags (besides
+      # --help, which fish handles natively) are silently skipped.
+      COMMAND_SPEC.each do |spec|
+        long = fish_long_flags(spec.flags)
+        next if long.empty?
+        long.each do |f|
+          name = f.lstrip('-')
+          lines << "complete -c doma -n '__fish_seen_subcommand_from #{spec.name}' -l #{name}"
         end
       end
 

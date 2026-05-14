@@ -1187,6 +1187,25 @@ describe "doma setup completion" do
     r[:out].should contain("compdef _doma doma")
   end
 
+  it "[zsh] lists every top-level command in top_cmds (regression: prune/info/doctor missed)" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    r = run(["setup", "completion", "zsh"])
+    r[:status].exit_code.should eq(0)
+    %w[prune info doctor].each do |cmd|
+      r[:out].should contain("'#{cmd}:")
+    end
+  end
+
+  it "[zsh] setup description does not falsely list doctor as a sub-action" do
+    # Regression: pre-COMMAND_SPEC, zsh's setup description was
+    # "install / init / doctor / completion" — doctor is its own
+    # top-level command, not a setup action.
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    r = run(["setup", "completion", "zsh"])
+    r[:status].exit_code.should eq(0)
+    r[:out].should_not contain("setup:install / init / doctor / completion")
+  end
+
   it "[fish] emits subcommand completions and tag value completion" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     r = run(["setup", "completion", "fish"])
@@ -1203,6 +1222,14 @@ describe "doma setup completion" do
     r[:status].exit_code.should eq(0)
     r[:out].should contain("entry\\'s")
     r[:out].should_not match(/'Show one entry's/)
+  end
+
+  it "[fish] emits trash long-flag completions (regression: --merge/--older missed)" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    r = run(["setup", "completion", "fish"])
+    r[:status].exit_code.should eq(0)
+    r[:out].should contain("__fish_seen_subcommand_from trash' -l merge")
+    r[:out].should contain("__fish_seen_subcommand_from trash' -l older")
   end
 
   it "[unsupported shell] errors with 2" do
