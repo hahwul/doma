@@ -1195,6 +1195,16 @@ describe "doma setup completion" do
     r[:out].should contain("doma tags --names")
   end
 
+  it "[fish] escapes apostrophes in command descriptions" do
+    # Regression: `'Show one entry's details ...'` was emitted with an
+    # unescaped apostrophe, breaking fish's single-quoted -d value.
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    r = run(["setup", "completion", "fish"])
+    r[:status].exit_code.should eq(0)
+    r[:out].should contain("entry\\'s")
+    r[:out].should_not match(/'Show one entry's/)
+  end
+
   it "[unsupported shell] errors with 2" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     r = run(["setup", "completion", "xonsh"])
