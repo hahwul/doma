@@ -191,8 +191,7 @@ module Doma::CLI
     # `<cwd>/<id>` and failing with "not a directory". Pure no-op for
     # everyday path inputs.
     private def short_id_redirect_hint(db : Doma::Database, raw : String)
-      return if raw.includes?('/') || raw.includes?('.') || raw.includes?('~')
-      return unless raw.matches?(/\A[0-9a-fA-F]{4,16}\z/)
+      return unless Doma::ShortIdResolver.looks_like?(raw)
 
       if active = Doma::ShortIdResolver.resolve(db, raw)
         raise Doma::ValidationError.new(

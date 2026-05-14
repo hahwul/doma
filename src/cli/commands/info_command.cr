@@ -52,7 +52,7 @@ module Doma::CLI
         canonical, info = resolve_target(db, raw)
 
         unless info
-          if !short_id_shaped?(raw)
+          if !Doma::ShortIdResolver.looks_like?(raw)
             # Bare-name fallback: when the user types `doma info doma`,
             # they almost certainly mean "show me the entry whose path
             # or tag contains `doma`", not "look up `<cwd>/doma` as a
@@ -111,7 +111,7 @@ module Doma::CLI
     # registered; canonical_path is set in both cases (used by the
     # trash fallback and the not-found message).
     private def resolve_target(db : Doma::Database, raw : String) : {String, Doma::Database::PathInfo?}
-      if short_id_shaped?(raw)
+      if Doma::ShortIdResolver.looks_like?(raw)
         if path = Doma::ShortIdResolver.resolve(db, raw)
           return {path, db.find_path_info(path)}
         end
@@ -123,14 +123,6 @@ module Doma::CLI
 
       canonical = Doma::Validator.canonicalize(raw)
       {canonical, db.find_path_info(canonical)}
-    end
-
-    # Hex-only, 4-16 chars, no slashes/dots/tildes. Same shape gate as
-    # `rm_command#resolve_target` — keeps a directory literally named
-    # `abc1234` from being misread as a short_id.
-    private def short_id_shaped?(raw : String) : Bool
-      return false if raw.includes?('/') || raw.includes?('.') || raw.includes?('~')
-      raw.matches?(/\A[0-9a-fA-F]{4,16}\z/)
     end
 
     # True for inputs the user clearly didn't mean as a filesystem
