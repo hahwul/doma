@@ -302,15 +302,14 @@ module Doma
             FROM directory_tags dt
             INNER JOIN directories d ON d.id = dt.directory_id
             INNER JOIN tags t ON t.id = dt.tag_id
-            WHERE dt.expires_at IS NOT NULL AND dt.expires_at <= strftime('%s','now')
+            WHERE #{IS_EXPIRED_DT}
             ORDER BY d.path, t.name
             SQL
         )
         rows.each { |row| removed << ExpiredAssoc.new(row[0], row[1]) }
 
         cnn.exec(
-          "DELETE FROM directory_tags " \
-          "WHERE expires_at IS NOT NULL AND expires_at <= strftime('%s','now')"
+          "DELETE FROM directory_tags WHERE #{IS_EXPIRED}"
         )
         cleanup_orphans_tx(cnn)
       end
@@ -390,7 +389,7 @@ module Doma
                # paths whose `crystal` tag has expired. With
                # include_expired=true we drop it so an operator can
                # audit the full set.
-               expired_pred = include_expired ? "1=1" : NOT_EXPIRED
+               expired_pred = include_expired ? "1=1" : NOT_EXPIRED_DT
                @db.query_all(
                  <<-SQL, tag, as: {Int64, String, String, String, String?}
                    SELECT DISTINCT d.id, d.short_id, d.path, d.basename, #{tag_select}
@@ -417,9 +416,34 @@ module Doma
 
     # Tags are joined with the unit-separator (0x1f) rather than a comma
     # so that a tag containing a comma — which our validator rejects
-    # today, but might allow in a future schema bump — wouldn't tear the
-    # split apart. See `build_entry` for the matching split.
-    # Two variants:
+    # ------------------------------------------------------------------
+    # Shared SQL fragments. Centralized so a future schema change to
+    # the TTL representation (precision shift, NULL semantics, column
+    # rename) lands in one place. Each predicate is parenthesized so it
+    # composes safely after `AND`/`OR` in a longer WHERE.
+    # ------------------------------------------------------------------
+
+    # Server-side "now" in seconds since epoch. Used by every TTL
+    # predicate; named so the bare `strftime('%s','now')` literal stops
+    # appearing scattered across queries.
+    NOW_EPOCH = "strftime('%s','now')"
+
+    # "tag row is still active" — used by reads that should hide
+    # already-expired tag associations. `dt` here refers to the
+    # `directory_tags` alias used consistently across the joined
+    # queries below.
+    NOT_EXPIRED_DT = "(dt.expires_at IS NULL OR dt.expires_at > #{NOW_EPOCH})"
+
+    # "tag row has lapsed" — used by writes that sweep expired rows and
+    # by the count surfaced to users. _DT variant is for queries that
+    # have already aliased `directory_tags` as `dt`; the unqualified
+    # form is for `WHERE` on the table directly.
+    IS_EXPIRED_DT = "(dt.expires_at IS NOT NULL AND dt.expires_at <= #{NOW_EPOCH})"
+    IS_EXPIRED    = "(expires_at IS NOT NULL AND expires_at <= #{NOW_EPOCH})"
+
+    # GROUP_CONCAT subquery that hydrates the per-directory tag list in
+    # one shot. Uses the `dt2` alias so it can be embedded inside an
+    # outer query that already uses `dt`. Two variants:
     #   ACTIVE — only tags whose row is not expired (the default)
     #   ALL    — every tag, expired or not (for `--include-expired`)
     TAGS_GROUP_CONCAT_ACTIVE = <<-SQL
@@ -428,7 +452,7 @@ module Doma
              FROM tags t2
              INNER JOIN directory_tags dt2 ON dt2.tag_id = t2.id
              WHERE dt2.directory_id = d.id
-               AND (dt2.expires_at IS NULL OR dt2.expires_at > strftime('%s','now'))
+               AND (dt2.expires_at IS NULL OR dt2.expires_at > #{NOW_EPOCH})
              ORDER BY t2.name)) AS joined_tags
       SQL
 
@@ -541,16 +565,11 @@ module Doma
           INNER JOIN directory_tags dt ON dt.directory_id = d.id
           INNER JOIN tags t ON t.id = dt.tag_id
           WHERE t.name #{op} ?
-            AND #{NOT_EXPIRED}
+            AND #{NOT_EXPIRED_DT}
           ORDER BY d.last_used_at DESC, d.path ASC
           SQL
       )
     end
-
-    # Predicate fragment shared by every read that should hide expired
-    # tag rows. `dt` here refers to the directory_tags alias used
-    # consistently across the queries below.
-    NOT_EXPIRED = "(dt.expires_at IS NULL OR dt.expires_at > strftime('%s','now'))"
 
     # id-only narrow filter for multi-tag AND. The list command anchors
     # on the first tag (which needs full Entry hydration to render)
@@ -560,7 +579,7 @@ module Doma
     # work `directories()` would otherwise do for each rest tag.
     def directory_ids_for_tag(tag : String, *, include_expired : Bool = false) : Array(Int64)
       op = tag_match_clause(tag)
-      expired_pred = include_expired ? "1=1" : NOT_EXPIRED
+      expired_pred = include_expired ? "1=1" : NOT_EXPIRED_DT
       @db.query_all(
         <<-SQL, tag, as: Int64
           SELECT DISTINCT d.id
@@ -578,8 +597,7 @@ module Doma
     # users notice when --include-expired would change the picture.
     def expired_tag_count : Int64
       @db.scalar(
-        "SELECT COUNT(*) FROM directory_tags " \
-        "WHERE expires_at IS NOT NULL AND expires_at <= strftime('%s','now')"
+        "SELECT COUNT(*) FROM directory_tags WHERE #{IS_EXPIRED}"
       ).as(Int64)
     end
 
@@ -657,7 +675,7 @@ module Doma
     def search(query : String, *, include_expired : Bool = false) : Array(Entry)
       term = "%#{escape_like(query)}%"
       tag_select = include_expired ? TAGS_GROUP_CONCAT_ALL : TAGS_GROUP_CONCAT_ACTIVE
-      tag_expired_pred = include_expired ? "" : " AND (dt.expires_at IS NULL OR dt.expires_at > strftime('%s','now'))"
+      tag_expired_pred = include_expired ? "" : " AND #{NOT_EXPIRED_DT}"
       # Two match strategies join via UNION:
       #   1. Path / basename hit — works regardless of tag expiry
       #      (a directory with all its tags expired but a matching path
@@ -691,7 +709,7 @@ module Doma
       # that want already-lapsed TTLs included so they can display
       # them. The default keeps the old export-time behavior of only
       # surfacing future expirations.
-      future_only = include_past ? "" : " AND dt.expires_at > strftime('%s','now')"
+      future_only = include_past ? "" : " AND dt.expires_at > #{NOW_EPOCH}"
       rows = @db.query_all(
         "SELECT t.name, dt.expires_at FROM directory_tags dt " \
         "INNER JOIN tags t ON t.id = dt.tag_id " \
@@ -721,7 +739,7 @@ module Doma
 
       uniq_ids = ids.uniq
       placeholders = Doma::Sql.placeholders_for(uniq_ids.size)
-      future_only = include_past ? "" : " AND dt.expires_at > strftime('%s','now')"
+      future_only = include_past ? "" : " AND dt.expires_at > #{NOW_EPOCH}"
 
       # `Array(DB::Any)` is the type the driver wants for splatted
       # parameters; we widen the Int64 ids into it before passing.
