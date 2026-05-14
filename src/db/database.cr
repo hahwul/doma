@@ -414,8 +414,6 @@ module Doma
       rows.map { |row| build_entry(row) }
     end
 
-    # Tags are joined with the unit-separator (0x1f) rather than a comma
-    # so that a tag containing a comma — which our validator rejects
     # ------------------------------------------------------------------
     # Shared SQL fragments. Centralized so a future schema change to
     # the TTL representation (precision shift, NULL semantics, column
@@ -441,6 +439,11 @@ module Doma
     IS_EXPIRED_DT = "(dt.expires_at IS NOT NULL AND dt.expires_at <= #{NOW_EPOCH})"
     IS_EXPIRED    = "(expires_at IS NOT NULL AND expires_at <= #{NOW_EPOCH})"
 
+    # Tags are joined with the unit-separator (0x1f) rather than a comma
+    # so that a tag containing a comma — which our validator rejects
+    # today, but might allow in a future schema bump — wouldn't tear the
+    # split apart. See `build_entry` for the matching split.
+    #
     # GROUP_CONCAT subquery that hydrates the per-directory tag list in
     # one shot. Uses the `dt2` alias so it can be embedded inside an
     # outer query that already uses `dt`. Two variants:
