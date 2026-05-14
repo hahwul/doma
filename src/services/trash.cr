@@ -152,16 +152,7 @@ module Doma
         #           statement so we hit SQLite once for the whole tag
         #           set instead of N times
         unless entry.tags.empty?
-          existing_ids = if entry.tags.size > 0
-                           name_args = entry.tags.map { |t| t.as(DB::Any) }
-                           ph = Array.new(entry.tags.size, "?").join(",")
-                           cnn.query_all(
-                             "SELECT name, id FROM tags WHERE name IN (#{ph})",
-                             args: name_args, as: {String, Int64}
-                           ).to_h
-                         else
-                           {} of String => Int64
-                         end
+          existing_ids = fetch_tag_ids(cnn, entry.tags)
 
           missing = entry.tags.reject { |t| existing_ids.has_key?(t) }
           unless missing.empty?
@@ -169,22 +160,17 @@ module Doma
             # with N tags pays one SQL call rather than N. ON CONFLICT
             # on `tags.name` (UNIQUE) means concurrent restores remain
             # safe.
-            values = Array.new(missing.size, "(?, ?)").join(",")
             args = [] of DB::Any
             missing.each do |t|
               args << t.as(DB::Any)
               args << now.as(DB::Any)
             end
             cnn.exec(
-              "INSERT OR IGNORE INTO tags (name, created_at) VALUES #{values}",
+              "INSERT OR IGNORE INTO tags (name, created_at) VALUES " \
+              "#{placeholders_for(missing.size, "(?, ?)")}",
               args: args
             )
-            ph = Array.new(missing.size, "?").join(",")
-            name_args = missing.map { |t| t.as(DB::Any) }
-            cnn.query_all(
-              "SELECT name, id FROM tags WHERE name IN (#{ph})",
-              args: name_args, as: {String, Int64}
-            ).each { |row| existing_ids[row[0]] = row[1] }
+            existing_ids.merge!(fetch_tag_ids(cnn, missing))
           end
 
           # Multi-row INSERT for the join table. `expirations` only
@@ -193,7 +179,6 @@ module Doma
           # original value — the user opted in to that deadline once,
           # and `prune_expired` will lift any that are now past as soon
           # as it runs.
-          dt_values = Array.new(entry.tags.size, "(?, ?, ?)").join(",")
           dt_args = [] of DB::Any
           entry.tags.each do |tag|
             tag_id = existing_ids[tag]
@@ -203,7 +188,8 @@ module Doma
             dt_args << (exp.nil? ? nil.as(DB::Any) : exp.as(DB::Any))
           end
           cnn.exec(
-            "INSERT INTO directory_tags (directory_id, tag_id, expires_at) VALUES #{dt_values} " \
+            "INSERT INTO directory_tags (directory_id, tag_id, expires_at) VALUES " \
+            "#{placeholders_for(entry.tags.size, "(?, ?, ?)")} " \
             "ON CONFLICT(directory_id, tag_id) DO UPDATE SET expires_at = excluded.expires_at",
             args: dt_args
           )
@@ -235,6 +221,25 @@ module Doma
     # ------------------------------------------------------------------
     # Internals
     # ------------------------------------------------------------------
+
+    # Build the `?,?,?` (or `(?, ?),(?, ?),...`) chunk for a multi-row
+    # statement. Centralized so the per-call-site `Array.new(n, …).join`
+    # boilerplate stops drifting in shape between sibling SQL calls.
+    private def placeholders_for(n : Int, group : String = "?") : String
+      Array.new(n, group).join(",")
+    end
+
+    # Resolve a batch of tag names to their ids in one round-trip.
+    # Returns the names that already exist; callers compare against the
+    # input to decide which need an INSERT OR IGNORE first.
+    private def fetch_tag_ids(cnn : DB::Connection, names : Array(String)) : Hash(String, Int64)
+      return {} of String => Int64 if names.empty?
+      args = names.map { |t| t.as(DB::Any) }
+      cnn.query_all(
+        "SELECT name, id FROM tags WHERE name IN (#{placeholders_for(names.size)})",
+        args: args, as: {String, Int64}
+      ).to_h
+    end
 
     private def read_all : Array(Entry)
       path = file_path
