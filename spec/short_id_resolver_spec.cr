@@ -116,4 +116,30 @@ describe Doma::ShortIdResolver do
       end
     end
   end
+
+  describe ".looks_like?" do
+    it "accepts hex strings in the 4..16 char band" do
+      Doma::ShortIdResolver.looks_like?("abcd").should be_true
+      Doma::ShortIdResolver.looks_like?("0dc0db9").should be_true
+      Doma::ShortIdResolver.looks_like?("0123456789abcdef").should be_true # 16 chars
+    end
+
+    it "rejects strings outside the length band" do
+      Doma::ShortIdResolver.looks_like?("").should be_false
+      Doma::ShortIdResolver.looks_like?("abc").should be_false               # 3
+      Doma::ShortIdResolver.looks_like?("0123456789abcdef0").should be_false # 17
+    end
+
+    it "rejects non-hex content (the path-or-tag inputs that share these surfaces)" do
+      Doma::ShortIdResolver.looks_like?("crystal").should be_false
+      Doma::ShortIdResolver.looks_like?("abc-123").should be_false
+      Doma::ShortIdResolver.looks_like?("12g4").should be_false
+    end
+
+    it "rejects path-shaped input without explicit char guards (regex covers it)" do
+      Doma::ShortIdResolver.looks_like?("./abc1234").should be_false
+      Doma::ShortIdResolver.looks_like?("~/projects").should be_false
+      Doma::ShortIdResolver.looks_like?("abc/1234").should be_false
+    end
+  end
 end

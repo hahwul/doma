@@ -3,6 +3,7 @@ require "sqlite3"
 require "../models/entry"
 require "../utils/config"
 require "../utils/errors"
+require "../utils/sql"
 require "../utils/suggester"
 require "../utils/validator"
 require "./migrations"
@@ -335,7 +336,7 @@ module Doma
         dead_ids = rows.compact_map { |row| Dir.exists?(row[1]) ? nil : row[0] }
 
         unless dead_ids.empty?
-          placeholders = Array.new(dead_ids.size, "?").join(",")
+          placeholders = Doma::Sql.placeholders_for(dead_ids.size)
           args = dead_ids.map { |id| id.as(DB::Any) }
           result = cnn.exec("DELETE FROM directories WHERE id IN (#{placeholders})", args: args)
           removed = result.rows_affected.to_i
@@ -719,7 +720,7 @@ module Doma
       return result if ids.empty?
 
       uniq_ids = ids.uniq
-      placeholders = Array.new(uniq_ids.size, "?").join(",")
+      placeholders = Doma::Sql.placeholders_for(uniq_ids.size)
       future_only = include_past ? "" : " AND dt.expires_at > strftime('%s','now')"
 
       # `Array(DB::Any)` is the type the driver wants for splatted

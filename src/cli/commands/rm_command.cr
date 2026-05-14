@@ -101,8 +101,7 @@ module Doma::CLI
     end
 
     private def resolve_target(db : Doma::Database, raw : String) : String
-      return raw if raw.includes?('/') || raw.includes?('.') || raw.includes?('~')
-      return raw unless raw.matches?(/\A[0-9a-fA-F]{4,16}\z/)
+      return raw unless Doma::ShortIdResolver.looks_like?(raw)
       Doma::ShortIdResolver.resolve(db, raw) || raw
     end
 
@@ -116,7 +115,7 @@ module Doma::CLI
     #     staring at "to register it, run: doma add alpha", which is
     #     the opposite of what they wanted.
     private def not_registered_hint(db : Doma::Database, raw : String) : String
-      if raw.matches?(/\A[0-9a-fA-F]{4,16}\z/) && !raw.includes?('/')
+      if Doma::ShortIdResolver.looks_like?(raw)
         if entry = Doma::Trash.find_by_short_id(raw.downcase)
           return "in trash (#{entry.path}). " \
                  "Restore: doma trash restore #{entry.short_id[0..6]}"

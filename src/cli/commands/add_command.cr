@@ -7,6 +7,7 @@ require "../../utils/duration"
 require "../../utils/errors"
 require "../../utils/logger"
 require "../../utils/short_id_resolver"
+require "../../utils/time_formatter"
 require "../../utils/validator"
 
 module Doma::CLI
@@ -69,7 +70,7 @@ module Doma::CLI
       use_basename : Bool = auto_basename.nil? ? cfg.auto_tag.basename : !!auto_basename
       use_git : Bool = auto_git.nil? ? cfg.auto_tag.git : !!auto_git
 
-      ttl_label = expires_at.try { |e| "expires #{Time.unix(e).to_local.to_s("%Y-%m-%d %H:%M")}" }
+      ttl_label = expires_at.try { |e| "expires #{Doma::TimeFormatter.absolute(e)}" }
 
       # `auto_git == true` only when the user passed `--git-tag` explicitly;
       # config-driven on stays nil → !!auto_git just collapses to a Bool.
@@ -190,8 +191,7 @@ module Doma::CLI
     # `<cwd>/<id>` and failing with "not a directory". Pure no-op for
     # everyday path inputs.
     private def short_id_redirect_hint(db : Doma::Database, raw : String)
-      return if raw.includes?('/') || raw.includes?('.') || raw.includes?('~')
-      return unless raw.matches?(/\A[0-9a-fA-F]{4,16}\z/)
+      return unless Doma::ShortIdResolver.looks_like?(raw)
 
       if active = Doma::ShortIdResolver.resolve(db, raw)
         raise Doma::ValidationError.new(

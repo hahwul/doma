@@ -8,6 +8,7 @@ require "../../utils/errors"
 require "../../utils/logger"
 require "../../utils/short_id_resolver"
 require "../../utils/tag_renderer"
+require "../../utils/time_formatter"
 require "../../utils/validator"
 
 module Doma::CLI
@@ -51,7 +52,7 @@ module Doma::CLI
         canonical, info = resolve_target(db, raw)
 
         unless info
-          if !short_id_shaped?(raw)
+          if !Doma::ShortIdResolver.looks_like?(raw)
             # Bare-name fallback: when the user types `doma info doma`,
             # they almost certainly mean "show me the entry whose path
             # or tag contains `doma`", not "look up `<cwd>/doma` as a
@@ -110,7 +111,7 @@ module Doma::CLI
     # registered; canonical_path is set in both cases (used by the
     # trash fallback and the not-found message).
     private def resolve_target(db : Doma::Database, raw : String) : {String, Doma::Database::PathInfo?}
-      if short_id_shaped?(raw)
+      if Doma::ShortIdResolver.looks_like?(raw)
         if path = Doma::ShortIdResolver.resolve(db, raw)
           return {path, db.find_path_info(path)}
         end
@@ -122,14 +123,6 @@ module Doma::CLI
 
       canonical = Doma::Validator.canonicalize(raw)
       {canonical, db.find_path_info(canonical)}
-    end
-
-    # Hex-only, 4-16 chars, no slashes/dots/tildes. Same shape gate as
-    # `rm_command#resolve_target` — keeps a directory literally named
-    # `abc1234` from being misread as a short_id.
-    private def short_id_shaped?(raw : String) : Bool
-      return false if raw.includes?('/') || raw.includes?('.') || raw.includes?('~')
-      raw.matches?(/\A[0-9a-fA-F]{4,16}\z/)
     end
 
     # True for inputs the user clearly didn't mean as a filesystem
@@ -206,11 +199,11 @@ module Doma::CLI
       # for "how stale is this entry?" — the question users actually
       # ask. Same compact `Nu` form `Duration.humanize_remaining` uses,
       # for symmetry across the suite.
-      kv "added", "#{format_time(info.created_at)}  (#{relative_past(info.created_at, color)})"
+      kv "added", "#{Doma::TimeFormatter.absolute(info.created_at)}  (#{Doma::TimeFormatter.relative_past(info.created_at, color)})"
       if info.last_used_at == 0
         kv "last used", "never"
       else
-        kv "last used", "#{format_time(info.last_used_at)}  (#{relative_past(info.last_used_at, color)})"
+        kv "last used", "#{Doma::TimeFormatter.absolute(info.last_used_at)}  (#{Doma::TimeFormatter.relative_past(info.last_used_at, color)})"
       end
 
       # If the user typed a non-canonical form (relative path, symlink,
@@ -225,35 +218,6 @@ module Doma::CLI
 
     private def kv(key : String, value : String)
       puts "  #{key.ljust(11)} #{value}"
-    end
-
-    # ISO-ish local-time format. Stable, sortable, and unambiguous —
-    # which `Time#to_s` default isn't (locale-dependent on some libcs).
-    private def format_time(epoch : Int64) : String
-      Time.unix(epoch).to_local.to_s("%Y-%m-%d %H:%M")
-    end
-
-    # Compact "how long ago" using the same `Nu` units the duration
-    # parser accepts (`5m`, `3h`, `7d`, `2w`). Past anything ≥ 1 year
-    # falls back to `Ny` for readability — the parser doesn't accept
-    # `y` but this is display-only. Rendered dim so the absolute
-    # timestamp stays the visual anchor.
-    private def relative_past(epoch : Int64, color : Bool) : String
-      delta = Time.utc.to_unix - epoch
-      text = if delta < 60
-               "#{delta}s ago"
-             elsif delta < 3600
-               "#{delta // 60}m ago"
-             elsif delta < 86_400
-               "#{delta // 3600}h ago"
-             elsif delta < 604_800
-               "#{delta // 86_400}d ago"
-             elsif delta < 31_557_600 # ~365.25d
-               "#{delta // 604_800}w ago"
-             else
-               "#{delta // 31_557_600}y ago"
-             end
-      color ? text.colorize(:dark_gray).to_s : text
     end
   end
 end

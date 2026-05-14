@@ -4,6 +4,7 @@ require "colorize"
 require "../../db/database"
 require "../../utils/errors"
 require "../../utils/logger"
+require "../../utils/time_formatter"
 
 module Doma::CLI
   # Quick "what's on the cutting board" summary: total counts, hottest tags,
@@ -124,7 +125,7 @@ module Doma::CLI
       else
         puts label.call("Recent:")
         stats.recent.each do |entry|
-          ts = Time.unix(entry[:created_at]).to_local.to_s("%Y-%m-%d %H:%M")
+          ts = Doma::TimeFormatter.absolute(entry[:created_at])
           path_str = color ? entry[:path].colorize(:cyan).to_s : entry[:path]
           puts "  #{ts}  #{path_str}"
         end
@@ -136,7 +137,7 @@ module Doma::CLI
       else
         puts label.call("Most used:")
         stats.most_used.each do |entry|
-          ts = Time.unix(entry[:last_used_at]).to_local.to_s("%Y-%m-%d %H:%M")
+          ts = Doma::TimeFormatter.absolute(entry[:last_used_at])
           path_str = color ? entry[:path].colorize(:cyan).to_s : entry[:path]
           puts "  #{ts}  #{path_str}"
         end
