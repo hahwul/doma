@@ -82,11 +82,20 @@ module Doma
     # Detect a prior install by either the bookend marker or the bare
     # `doma setup init` line. Checking just the marker meant a user who
     # stripped the markers but kept the eval would get a duplicate block
-    # appended on the next `doma setup install`.
+    # appended on the next `doma setup install`. For the eval-line
+    # fallback we skip commented lines (`# TODO: doma setup init`) so
+    # recovery notes or pasted instructions don't false-positive — the
+    # MARKER itself IS a comment though, so we test it before the
+    # comment skip.
     private def installed?(rc : String) : Bool
       return false unless File.exists?(rc)
-      contents = File.read(rc)
-      contents.includes?(MARKER) || contents.includes?(INSTALL_SIGNATURE)
+      File.each_line(rc) do |line|
+        stripped = line.lstrip
+        return true if stripped.includes?(MARKER)
+        next if stripped.empty? || stripped.starts_with?('#')
+        return true if stripped.includes?(INSTALL_SIGNATURE)
+      end
+      false
     end
 
     # Performs the rc-file append. Caller is expected to have prompted

@@ -120,6 +120,26 @@ describe Doma::Installer do
       end
     end
 
+    it "does not treat a commented mention of the signature as installed" do
+      # A user pasting recovery notes ("# to install, run: doma setup init bash")
+      # into their rc shouldn't be mistaken for an actual install — the
+      # commented line would otherwise short-circuit detection and
+      # quietly skip the real wiring.
+      prev_home = ENV["HOME"]?
+      dir = File.tempname("doma-installer-commented")
+      FileUtils.mkdir_p(dir)
+      rc = File.join(dir, ".zshrc")
+      File.write(rc, "# TODO: try `doma setup init zsh` someday\n")
+      ENV["HOME"] = dir
+      begin
+        plan = Doma::Installer.plan("zsh")
+        plan.already_installed.should be_false
+      ensure
+        prev_home ? (ENV["HOME"] = prev_home) : ENV.delete("HOME")
+        FileUtils.rm_rf(dir)
+      end
+    end
+
     it "treats the bare eval line as already installed when markers were stripped" do
       # Simulate a user who hand-removed the marker comments but kept
       # the working `eval "$(doma setup init zsh)"` line. Prior to the
