@@ -399,3 +399,31 @@ describe "Runner.apply_globals!" do
     end
   end
 end
+
+describe "doma rm -t TAG exit code" do
+  bin = File.expand_path("../bin/doma", __DIR__)
+
+  it "[bug] exits non-zero when no requested tag matches a registered path" do
+    pending! "binary not built" unless File.exists?(bin)
+    home = File.tempname("doma-rm-nomatch")
+    target = File.tempname("doma-rm-nomatch-dir")
+    FileUtils.mkdir_p(home)
+    FileUtils.mkdir_p(target)
+
+    Process.run(bin, ["add", target, "-t", "kept"], env: {"DOMA_HOME" => home}, output: IO::Memory.new, error: IO::Memory.new)
+
+    err_buf = IO::Memory.new
+    status = Process.run(
+      bin, ["rm", target, "-t", "absent"],
+      env: {"DOMA_HOME" => home}, output: IO::Memory.new, error: err_buf,
+    )
+    # Pre-fix: this exited 0 with only a warning, so a script doing
+    # `doma rm path -t absent && next` would proceed even though nothing
+    # was removed. NotRegistered already exits 3; NoMatch now matches.
+    status.exit_code.should eq(3)
+    err_buf.to_s.should contain("no matching tag(s)")
+  ensure
+    FileUtils.rm_rf(home) if home
+    FileUtils.rm_rf(target) if target
+  end
+end
