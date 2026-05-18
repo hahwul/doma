@@ -121,18 +121,23 @@ module Doma
     # already exists and `merge` is false; with `merge: true` it folds
     # the trashed tags into the live row (like `move`'s collision path).
     def restore!(db : Doma::Database, entry : Entry, *, merge : Bool = false) : Entry
-      existing = db.db.query_one?(
-        "SELECT id FROM directories WHERE path = ?", entry.path, as: Int64
-      )
-
-      if existing && !merge
-        raise Doma::ConflictError.new(
-          "path already registered: #{entry.path} (use --merge to combine tags)"
-        )
-      end
-
       now = Time.utc.to_unix
       db.transaction do |cnn|
+        # Resolve `existing` inside the transaction so the check and the
+        # subsequent INSERT see the same snapshot. Doing the SELECT first
+        # on `db.db` lets a concurrent `rm`/`add` race in between, leaving
+        # `existing` stale — either ConflictError on a row that no longer
+        # exists, or a UNIQUE violation on the INSERT branch.
+        existing = cnn.query_one?(
+          "SELECT id FROM directories WHERE path = ?", entry.path, as: Int64
+        )
+
+        if existing && !merge
+          raise Doma::ConflictError.new(
+            "path already registered: #{entry.path} (use --merge to combine tags)"
+          )
+        end
+
         directory_id : Int64 = existing || begin
           cnn.exec(
             "INSERT INTO directories (path, basename, short_id, created_at, last_used_at) " \
