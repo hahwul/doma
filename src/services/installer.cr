@@ -66,11 +66,27 @@ module Doma
         RC
     end
 
+    # Substring that uniquely identifies our installed line across all
+    # supported shells — bash/zsh eval into it, fish pipes into `source`.
+    # Used as a fallback to detect prior installs when the markers have
+    # been hand-removed but the working line is still there.
+    INSTALL_SIGNATURE = "doma setup init"
+
     def plan(shell : String) : Plan
       rc = rc_path_for(shell)
       block = block_for(shell)
-      installed = File.exists?(rc) && File.read(rc).includes?(MARKER)
+      installed = installed?(rc)
       Plan.new(shell: shell, rc_path: rc, block: block, already_installed: installed)
+    end
+
+    # Detect a prior install by either the bookend marker or the bare
+    # `doma setup init` line. Checking just the marker meant a user who
+    # stripped the markers but kept the eval would get a duplicate block
+    # appended on the next `doma setup install`.
+    private def installed?(rc : String) : Bool
+      return false unless File.exists?(rc)
+      contents = File.read(rc)
+      contents.includes?(MARKER) || contents.includes?(INSTALL_SIGNATURE)
     end
 
     # Performs the rc-file append. Caller is expected to have prompted

@@ -119,6 +119,28 @@ describe Doma::Installer do
         contents.should match(/alias ll[^\n]*\n+#{Regex.escape(Doma::Installer::MARKER)}/)
       end
     end
+
+    it "treats the bare eval line as already installed when markers were stripped" do
+      # Simulate a user who hand-removed the marker comments but kept
+      # the working `eval "$(doma setup init zsh)"` line. Prior to the
+      # fix, plan(...).already_installed only checked for MARKER, so
+      # re-running install duplicated the block.
+      prev_home = ENV["HOME"]?
+      dir = File.tempname("doma-installer-stripped")
+      FileUtils.mkdir_p(dir)
+      rc = File.join(dir, ".zshrc")
+      File.write(rc, %(eval "$(doma setup init zsh)"\n))
+      ENV["HOME"] = dir
+      begin
+        plan = Doma::Installer.plan("zsh")
+        plan.rc_path.should eq(rc)
+        plan.already_installed.should be_true
+        Doma::Installer.install!(plan).should eq(:already_installed)
+      ensure
+        prev_home ? (ENV["HOME"] = prev_home) : ENV.delete("HOME")
+        FileUtils.rm_rf(dir)
+      end
+    end
   end
 end
 
