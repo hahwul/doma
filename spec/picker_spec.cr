@@ -92,4 +92,23 @@ describe Doma::Picker do
       Doma::Picker.filter(items, "match").map(&.value).should eq(["1", "2", "3"])
     end
   end
+
+  describe ".sanitize" do
+    it "passes plain ASCII and unicode through unchanged" do
+      Doma::Picker.sanitize("/Users/me/projects/한국어").should eq("/Users/me/projects/한국어")
+      Doma::Picker.sanitize("").should eq("")
+    end
+
+    it "replaces ESC and other control bytes with '?'" do
+      # `\e[31mRED\e[0m` would otherwise render as a red label and could
+      # be used to spoof which picker row is highlighted.
+      Doma::Picker.sanitize("foo\e[31mbar").should eq("foo?[31mbar")
+      Doma::Picker.sanitize("ab").should eq("a?b") # BEL
+      Doma::Picker.sanitize("ab").should eq("a?b") # DEL
+    end
+
+    it "preserves tab — terminals render it as a column gap, not an injection" do
+      Doma::Picker.sanitize("a\tb").should eq("a\tb")
+    end
+  end
 end

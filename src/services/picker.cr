@@ -54,6 +54,27 @@ module Doma
       end
     end
 
+    # Strip ANSI control bytes from label/hint text before it reaches the
+    # terminal. Paths come from anywhere on disk and aren't validated
+    # against control characters, so a path containing `\e` could
+    # otherwise inject color/cursor sequences into the picker UI and
+    # spoof which entry is selected. Replace each control byte with `?`
+    # so the row is still recognizable. Tab (0x09) passes through —
+    # terminals render it as a column-aligned gap, not an injection.
+    def sanitize(text : String) : String
+      return text unless text.each_char.any? { |c| control_byte?(c) }
+      String.build(text.size) do |io|
+        text.each_char do |c|
+          io << (control_byte?(c) ? '?' : c)
+        end
+      end
+    end
+
+    private def control_byte?(c : Char) : Bool
+      ord = c.ord
+      (ord < 0x20 && ord != 0x09) || ord == 0x7f
+    end
+
     private def open_tty : IO::FileDescriptor?
       File.open("/dev/tty", "r+")
     rescue
@@ -163,8 +184,8 @@ module Doma
       # path-style label on the left, optional gray hint on the right,
       # truncated to fit terminal width.
       private def render_line(item : Item) : String
-        label = item.label
-        hint = item.hint
+        label = Picker.sanitize(item.label)
+        hint = item.hint.try { |h| Picker.sanitize(h) }
         if hint.nil? || hint.empty?
           truncate(label, @width - 4)
         else

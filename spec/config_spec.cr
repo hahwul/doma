@@ -86,4 +86,29 @@ describe Doma::Settings do
       end
     end
   end
+
+  it "surfaces unknown-key errors with the offending key and valid keys" do
+    with_temp_config("dbpath: /tmp/x.db\n") do |path|
+      ex = expect_raises(Doma::ConfigError) do
+        Doma::Settings.load(path)
+      end
+      msg = ex.message.not_nil!
+      msg.should contain("unknown key 'dbpath'")
+      msg.should contain("db_path") # one of the suggestions
+      msg.should contain("line 1")
+    end
+  end
+
+  it "surfaces invalid enum values with the allowed set" do
+    with_temp_config("selector: panic\n") do |path|
+      ex = expect_raises(Doma::ConfigError) do
+        Doma::Settings.load(path)
+      end
+      msg = ex.message.not_nil!
+      msg.should contain("invalid value 'panic'")
+      msg.should contain("auto")
+      msg.should contain("builtin")
+      msg.should contain("first")
+    end
+  end
 end

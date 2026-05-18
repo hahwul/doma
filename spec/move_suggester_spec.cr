@@ -30,12 +30,11 @@ describe Doma::Suggester do
   end
 
   it "picks the closer candidate when several would qualify" do
-    # 'crystl' (6) vs 'crystal' (1 edit) vs 'crystan' (1 edit) — the
-    # first hit at the lowest distance wins. Both are at distance 1
-    # from 'crystl'; we accept either as long as it's one of them.
-    pick = Doma::Suggester.suggest("crystl", ["crystan", "crystal"])
-    pick.should_not be_nil
-    pick.try(&.in?({"crystal", "crystan"})).should be_true
+    # 'crystl' vs 'crystan' vs 'crystal' — both distance 1. Ties resolve
+    # lexicographically so the hint stays stable regardless of candidate
+    # order (DB row order used to leak into user-visible output).
+    Doma::Suggester.suggest("crystl", ["crystan", "crystal"]).should eq("crystal")
+    Doma::Suggester.suggest("crystl", ["crystal", "crystan"]).should eq("crystal")
   end
 
   describe "size-based threshold boundaries" do

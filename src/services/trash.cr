@@ -121,18 +121,30 @@ module Doma
     # already exists and `merge` is false; with `merge: true` it folds
     # the trashed tags into the live row (like `move`'s collision path).
     def restore!(db : Doma::Database, entry : Entry, *, merge : Bool = false) : Entry
-      existing = db.db.query_one?(
-        "SELECT id FROM directories WHERE path = ?", entry.path, as: Int64
-      )
-
-      if existing && !merge
-        raise Doma::ConflictError.new(
-          "path already registered: #{entry.path} (use --merge to combine tags)"
-        )
-      end
-
       now = Time.utc.to_unix
       db.transaction do |cnn|
+        # Resolve `existing` inside the transaction to collapse the
+        # check/write window. `db.transaction` uses SQLite's default
+        # `BEGIN DEFERRED`, so this doesn't strictly atomicize with the
+        # INSERT below — a concurrent writer can still slip in. What
+        # makes the path correct is the `UNIQUE(path)` constraint on
+        # `directories`: if a racer wins the INSERT after our SELECT,
+        # our INSERT fails cleanly with SQLITE_CONSTRAINT (rolled back
+        # with the rest of the transaction) instead of producing a
+        # phantom duplicate or a misleading ConflictError on a path that
+        # no longer exists. Before this change the SELECT was on
+        # `db.db`, opening a much wider race window across pool
+        # connections.
+        existing = cnn.query_one?(
+          "SELECT id FROM directories WHERE path = ?", entry.path, as: Int64
+        )
+
+        if existing && !merge
+          raise Doma::ConflictError.new(
+            "path already registered: #{entry.path} (use --merge to combine tags)"
+          )
+        end
+
         directory_id : Int64 = existing || begin
           cnn.exec(
             "INSERT INTO directories (path, basename, short_id, created_at, last_used_at) " \

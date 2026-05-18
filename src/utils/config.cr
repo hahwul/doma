@@ -104,7 +104,43 @@ module Doma
       return new if content.strip.empty?
       from_yaml(content)
     rescue ex : YAML::ParseException
-      raise ConfigError.new("invalid config (#{path}): #{ex.message}")
+      raise ConfigError.new(format_parse_error(path, ex))
     end
+
+    # Wrap the raw YAML parser message in something a user can act on.
+    # The library message already includes `at line N, column M`, but
+    # "Unknown yaml attribute" reads as jargon — translate to plain
+    # English and append the list of valid keys so the user can self-fix.
+    private def self.format_parse_error(path : String, ex : YAML::ParseException) : String
+      raw = ex.message || ex.class.name
+      location = "line #{ex.line_number}"
+      location += ", column #{ex.column_number}" if ex.column_number > 0
+
+      detail =
+        case raw
+        when /Unknown yaml attribute: (\S+)/
+          key = $1
+          "unknown key '#{key}' (known: #{VALID_KEYS.join(", ")})"
+        when /Unknown enum (?:[\w:]+::)?(\w+) value: "([^"]+)"/
+          short_name = $1
+          value = $2
+          allowed = ENUM_VALUES[short_name]?
+          allowed ? "invalid value '#{value}' (allowed: #{allowed.join(", ")})" : "invalid enum value '#{value}'"
+        when /Expected (\w+), not (\w+)/
+          "expected #{$1}, got #{$2}"
+        else
+          raw
+        end
+
+      "invalid config (#{path}, #{location}): #{detail}"
+    end
+
+    # Keep these aligned with the @[YAML::Field] declarations above —
+    # surfaced in error messages so users can self-correct typos in their
+    # config without grepping source.
+    VALID_KEYS = %w[db_path selector auto_tag]
+    ENUM_VALUES = {
+      "SelectorMode" => %w[auto builtin first],
+    }
   end
 end

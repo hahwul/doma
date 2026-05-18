@@ -15,11 +15,16 @@ module Doma
                      else           3
                      end
 
+      # Tie-break lexicographically so the same input + candidate set
+      # produces the same hint regardless of iteration order. Previously
+      # ties resolved to "whichever came first" — the DB row order leaked
+      # into user-visible output and made hints feel arbitrary.
       best : String? = nil
       best_distance = max_distance + 1
       candidates.each do |c|
         d = Levenshtein.distance(input, c)
-        if d < best_distance
+        next if d > best_distance
+        if d < best_distance || (b = best).nil? || c < b
           best_distance = d
           best = c
         end

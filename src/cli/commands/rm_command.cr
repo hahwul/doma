@@ -82,7 +82,12 @@ module Doma::CLI
             in Doma::Database::RemoveTagsResult::Removed
               Doma::Logger.success "untagged #{Doma::Validator.canonicalize(path)} (#{cleaned_tags.join(", ")})"
             in Doma::Database::RemoveTagsResult::NoMatch
-              Doma::Logger.warn "no matching tag(s) on #{Doma::Validator.canonicalize(path)} (#{cleaned_tags.join(", ")})"
+              # None of the requested tags were on this path. Treat like
+              # `not registered`: nothing was actually changed, so exit
+              # non-zero (matches `&& next` script semantics). Partial
+              # success — at least one tag removed — still returns Removed.
+              missing += 1
+              Doma::Logger.error "no matching tag(s) on #{Doma::Validator.canonicalize(path)} (#{cleaned_tags.join(", ")})"
             in Doma::Database::RemoveTagsResult::NotRegistered
               missing += 1
               Doma::Logger.error "not registered: #{raw}"
