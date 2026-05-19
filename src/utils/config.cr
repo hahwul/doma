@@ -24,7 +24,12 @@ module Doma
     end
 
     def db_path : String
-      explicit = ENV["DOMA_DB"]? || Settings.current.db_path
+      # A blank value on either source (`DOMA_DB=""`, `db_path: ""` in
+      # config.yml, or `config set db_path ""`) used to be truthy and
+      # resolve to the cwd via `File.expand_path("")`, breaking every
+      # subsequent command with "DOMA_DB points at a directory". Treat
+      # blanks as unset on both sources.
+      explicit = ENV["DOMA_DB"]?.presence || Settings.current.db_path.try(&.presence)
       return File.expand_path(explicit, home: true) if explicit
       File.join(home, "doma.db")
     end
@@ -138,7 +143,7 @@ module Doma
     # Keep these aligned with the @[YAML::Field] declarations above —
     # surfaced in error messages so users can self-correct typos in their
     # config without grepping source.
-    VALID_KEYS = %w[db_path selector auto_tag]
+    VALID_KEYS  = %w[db_path selector auto_tag]
     ENUM_VALUES = {
       "SelectorMode" => %w[auto builtin first],
     }

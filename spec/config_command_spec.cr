@@ -82,6 +82,17 @@ describe "doma config" do
     end
   end
 
+  it "[set] rejects empty db_path with hint to unset" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      r = run(["config", "set", "db_path", ""], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(2)
+      r[:err].should contain("db_path cannot be empty")
+      r[:err].should contain("doma config unset db_path")
+      File.exists?(File.join(home, "config.yml")).should be_false
+    end
+  end
+
   it "[set] rejects unknown key with did-you-mean" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     with_home do |home|

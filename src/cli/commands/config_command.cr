@@ -192,6 +192,12 @@ module Doma::CLI
     private def coerce(key : String, raw : String) : YAML::Any
       case key
       when "db_path"
+        if raw.blank?
+          raise Doma::ValidationError.new(
+            "db_path cannot be empty",
+            "use `doma config unset db_path` to revert to the default"
+          )
+        end
         YAML::Any.new(raw)
       when "selector"
         v = raw.downcase
