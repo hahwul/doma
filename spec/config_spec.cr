@@ -33,6 +33,45 @@ describe Doma::Config do
       prev ? (ENV["DOMA_DB"] = prev) : ENV.delete("DOMA_DB")
     end
   end
+
+  it "falls back to the default when DOMA_DB is blank" do
+    prev_db = ENV["DOMA_DB"]?
+    prev_home = ENV["DOMA_HOME"]?
+    home = File.tempname("doma-cfg-home")
+    FileUtils.mkdir_p(home)
+    ENV["DOMA_HOME"] = home
+    ENV["DOMA_DB"] = ""
+    Doma::Settings.current = nil
+    begin
+      Doma::Config.db_path.should eq(File.join(home, "doma.db"))
+    ensure
+      ENV.delete("DOMA_DB")
+      ENV["DOMA_DB"] = prev_db if prev_db
+      prev_home ? (ENV["DOMA_HOME"] = prev_home) : ENV.delete("DOMA_HOME")
+      Doma::Settings.current = nil
+      FileUtils.rm_rf(home)
+    end
+  end
+
+  it "falls back to the default when Settings.db_path is blank" do
+    prev_home = ENV["DOMA_HOME"]?
+    prev_db = ENV["DOMA_DB"]?
+    ENV.delete("DOMA_DB")
+    home = File.tempname("doma-cfg-home")
+    FileUtils.mkdir_p(home)
+    ENV["DOMA_HOME"] = home
+    settings = Doma::Settings.new
+    settings.db_path = ""
+    Doma::Settings.current = settings
+    begin
+      Doma::Config.db_path.should eq(File.join(home, "doma.db"))
+    ensure
+      Doma::Settings.current = nil
+      prev_home ? (ENV["DOMA_HOME"] = prev_home) : ENV.delete("DOMA_HOME")
+      ENV["DOMA_DB"] = prev_db if prev_db
+      FileUtils.rm_rf(home)
+    end
+  end
 end
 
 describe Doma::Settings do
