@@ -131,7 +131,7 @@ describe Doma::Settings do
       ex = expect_raises(Doma::ConfigError) do
         Doma::Settings.load(path)
       end
-      msg = ex.message.not_nil!
+      msg = ex.message || ""
       msg.should contain("unknown key 'dbpath'")
       msg.should contain("db_path") # one of the suggestions
       msg.should contain("line 1")
@@ -143,7 +143,7 @@ describe Doma::Settings do
       ex = expect_raises(Doma::ConfigError) do
         Doma::Settings.load(path)
       end
-      msg = ex.message.not_nil!
+      msg = ex.message || ""
       msg.should contain("invalid value 'panic'")
       msg.should contain("auto")
       msg.should contain("builtin")

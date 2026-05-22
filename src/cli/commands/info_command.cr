@@ -185,7 +185,14 @@ module Doma::CLI
       puts "#{short_str}  #{path_str}"
 
       kv "basename", info.basename
-      kv "exists", exists ? "yes" : color ? "NO".colorize(:red).to_s : "NO"
+      exists_label = if exists
+                       "yes"
+                     elsif color
+                       "NO".colorize(:red).to_s
+                     else
+                       "NO"
+                     end
+      kv "exists", exists_label
 
       if tags.empty?
         kv "tags", "(none)"
