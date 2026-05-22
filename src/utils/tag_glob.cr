@@ -31,12 +31,12 @@ module Doma
       io = IO::Memory.new
       io << "\\A"
       i = 0
-      bytes = pattern.size
-      while i < bytes
+      len = pattern.size
+      while i < len
         ch = pattern[i]
         case ch
         when '*'
-          if i + 1 < bytes && pattern[i + 1] == '*'
+          if i + 1 < len && pattern[i + 1] == '*'
             io << ".*"
             i += 2
           else

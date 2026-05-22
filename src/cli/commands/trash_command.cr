@@ -73,7 +73,10 @@ module Doma::CLI
       entries.each do |e|
         id = e.short_id[0..6].ljust(7)
         age = humanize_age(now - e.deleted_at).rjust(5)
-        path = e.path.size > 50 ? "…#{e.path[-49..-1]}" : e.path.ljust(51)
+        # Truncate from the left with an ellipsis so the *end* of the
+        # path (the part that disambiguates similar entries) stays
+        # visible. Final ljust pads short paths to the same column width.
+        path = e.path.size > 50 ? "…#{e.path[-49..-1]}" : e.path
         tags = e.tags.empty? ? "-" : e.tags.join(",")
         puts "#{id}  #{age}  #{path.ljust(51)} #{tags}"
       end
