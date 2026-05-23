@@ -1,3 +1,5 @@
+require "../utils/errors"
+
 module Doma
   # Schema migrations keyed off SQLite's built-in `PRAGMA user_version`.
   # New databases run every step from 0 → CURRENT in order; existing
@@ -29,6 +31,17 @@ module Doma
         cnn.exec("BEGIN IMMEDIATE")
         begin
           version = cnn.scalar("PRAGMA user_version").as(Int64).to_i
+          # A user_version higher than what this binary knows about means
+          # the DB was last opened by a newer doma. Silently continuing
+          # would let stale queries hit columns/constraints we don't know
+          # about and fail with a confusing SQLite error. Surface a clear
+          # message instead; the outer `rescue` handles the ROLLBACK.
+          if version > CURRENT_VERSION
+            raise Doma::Error.new(
+              "database schema is v#{version}, but this doma binary only " \
+              "understands up to v#{CURRENT_VERSION}. Upgrade doma."
+            )
+          end
           if version < CURRENT_VERSION
             apply_v1(cnn) if version < 1
             apply_v2(cnn) if version < 2
