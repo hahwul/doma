@@ -231,6 +231,24 @@ describe Doma::Migrations do
     end
   end
 
+  describe "future schema guard" do
+    it "raises a clear error when user_version > CURRENT_VERSION" do
+      # Simulates an older binary running against a database written by
+      # a newer doma. Without the guard, this would silently continue
+      # and surface as a confusing SQLite error on the first query that
+      # touched a column the binary doesn't know about.
+      with_temp_path do |path|
+        raw = DB.open("sqlite3://#{path}")
+        raw.exec("PRAGMA user_version = #{Doma::Migrations::CURRENT_VERSION + 5}")
+        raw.close
+
+        expect_raises(Doma::Error, /schema is v.*Upgrade doma/m) do
+          Doma::Database.open(path).close
+        end
+      end
+    end
+  end
+
   describe "idempotency" do
     it "running migrations twice is a no-op" do
       with_temp_path do |path|

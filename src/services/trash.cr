@@ -268,7 +268,9 @@ module Doma
     private def rewrite!(entries : Array(Entry))
       path = file_path
       if entries.empty?
-        File.delete(path) if File.exists?(path)
+        # `File.delete?` returns false (no raise) when another concurrent
+        # prune already cleared the trash file out from under us.
+        File.delete?(path)
         return
       end
       Doma::Config.ensure_home!
