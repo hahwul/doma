@@ -35,10 +35,8 @@ module Doma
           # the DB was last opened by a newer doma. Silently continuing
           # would let stale queries hit columns/constraints we don't know
           # about and fail with a confusing SQLite error. Surface a clear
-          # message instead — and abort the transaction so we don't leave
-          # `BEGIN IMMEDIATE` lingering.
+          # message instead; the outer `rescue` handles the ROLLBACK.
           if version > CURRENT_VERSION
-            cnn.exec("ROLLBACK")
             raise Doma::Error.new(
               "database schema is v#{version}, but this doma binary only " \
               "understands up to v#{CURRENT_VERSION}. Upgrade doma."

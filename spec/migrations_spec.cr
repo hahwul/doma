@@ -242,7 +242,7 @@ describe Doma::Migrations do
         raw.exec("PRAGMA user_version = #{Doma::Migrations::CURRENT_VERSION + 5}")
         raw.close
 
-        expect_raises(Doma::Error, /schema is v.*Upgrade doma/m) do
+        expect_raises(Doma::Error, /schema is v.*Upgrade doma/) do
           Doma::Database.open(path).close
         end
       end
