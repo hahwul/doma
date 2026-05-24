@@ -111,6 +111,11 @@ module Doma::CLI
     # registered; canonical_path is set in both cases (used by the
     # trash fallback and the not-found message).
     private def resolve_target(db : Doma::Database, raw : String) : {String, Doma::Database::PathInfo?}
+      if File.exists?(raw) || Dir.exists?(raw)
+        canonical = Doma::Validator.canonicalize(raw)
+        return {canonical, db.find_path_info(canonical)}
+      end
+
       if Doma::ShortIdResolver.looks_like?(raw)
         if path = Doma::ShortIdResolver.resolve(db, raw)
           return {path, db.find_path_info(path)}

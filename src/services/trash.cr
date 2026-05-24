@@ -71,10 +71,13 @@ module Doma
 
     # Append a snapshot to the trash file. Lazy mkdir so callers that
     # never trash anything don't pay for a directory creation.
+    # Append a snapshot to the trash file. Lazy mkdir so callers that
+    # never trash anything don't pay for a directory creation.
     def add!(entry : Entry)
-      Doma::Config.ensure_home!
-      File.open(file_path, "a") do |io|
-        io.puts entry.to_json
+      with_lock do
+        File.open(file_path, "a") do |io|
+          io.puts entry.to_json
+        end
       end
     end
 
@@ -83,12 +86,14 @@ module Doma
     # unbounded — done here, on `empty`, and on `add!` so housekeeping
     # is never a separate user step.
     def entries(*, retention_seconds : Int64 = DEFAULT_RETENTION_SECONDS, prune : Bool = true) : Array(Entry)
-      raw = read_all
-      now = Time.utc.to_unix
-      cutoff = now - retention_seconds
-      kept, pruned = raw.partition { |e| e.deleted_at >= cutoff }
-      rewrite!(kept) if prune && !pruned.empty?
-      kept.sort_by { |e| -e.deleted_at }
+      with_lock do
+        raw = read_all
+        now = Time.utc.to_unix
+        cutoff = now - retention_seconds
+        kept, pruned = raw.partition { |e| e.deleted_at >= cutoff }
+        rewrite!(kept) if prune && !pruned.empty?
+        kept.sort_by { |e| -e.deleted_at }
+      end
     end
 
     # Most-recent trash entry for a canonical path, or nil if there
@@ -121,114 +126,131 @@ module Doma
     # already exists and `merge` is false; with `merge: true` it folds
     # the trashed tags into the live row (like `move`'s collision path).
     def restore!(db : Doma::Database, entry : Entry, *, merge : Bool = false) : Entry
-      now = Time.utc.to_unix
-      db.transaction do |cnn|
-        # Resolve `existing` inside the transaction to collapse the
-        # check/write window. `db.transaction` uses SQLite's default
-        # `BEGIN DEFERRED`, so this doesn't strictly atomicize with the
-        # INSERT below — a concurrent writer can still slip in. What
-        # makes the path correct is the `UNIQUE(path)` constraint on
-        # `directories`: if a racer wins the INSERT after our SELECT,
-        # our INSERT fails cleanly with SQLITE_CONSTRAINT (rolled back
-        # with the rest of the transaction) instead of producing a
-        # phantom duplicate or a misleading ConflictError on a path that
-        # no longer exists. Before this change the SELECT was on
-        # `db.db`, opening a much wider race window across pool
-        # connections.
-        existing = cnn.query_one?(
-          "SELECT id FROM directories WHERE path = ?", entry.path, as: Int64
-        )
-
-        if existing && !merge
-          raise Doma::ConflictError.new(
-            "path already registered: #{entry.path} (use --merge to combine tags)"
+      with_lock do
+        now = Time.utc.to_unix
+        db.transaction do |cnn|
+          # Resolve `existing` inside the transaction to collapse the
+          # check/write window. `db.transaction` uses SQLite's default
+          # `BEGIN DEFERRED`, so this doesn't strictly atomicize with the
+          # INSERT below — a concurrent writer can still slip in. What
+          # makes the path correct is the `UNIQUE(path)` constraint on
+          # `directories`: if a racer wins the INSERT after our SELECT,
+          # our INSERT fails cleanly with SQLITE_CONSTRAINT (rolled back
+          # with the rest of the transaction) instead of producing a
+          # phantom duplicate or a misleading ConflictError on a path that
+          # no longer exists. Before this change the SELECT was on
+          # `db.db`, opening a much wider race window across pool
+          # connections.
+          existing = cnn.query_one?(
+            "SELECT id FROM directories WHERE path = ?", entry.path, as: Int64
           )
-        end
 
-        directory_id : Int64 = existing || begin
-          cnn.exec(
-            "INSERT INTO directories (path, basename, short_id, created_at, last_used_at) " \
-            "VALUES (?, ?, ?, ?, ?)",
-            entry.path, entry.basename, entry.short_id, now, entry.last_used_at
-          )
-          cnn.scalar("SELECT id FROM directories WHERE path = ?", entry.path).as(Int64)
-        end
+          if existing && !merge
+            raise Doma::ConflictError.new(
+              "path already registered: #{entry.path} (use --merge to combine tags)"
+            )
+          end
 
-        # Two-pass tag write to cut the per-tag round-trip cost from 3
-        # statements (INSERT OR IGNORE INTO tags + SELECT id + INSERT
-        # INTO directory_tags) down to ~2 amortized:
-        #   pass 1) prefetch every existing tag id with one IN-list
-        #           lookup; INSERT OR IGNORE only the names that
-        #           actually need a new row, then re-resolve those ids
-        #           in a second IN-list query
-        #   pass 2) INSERT INTO directory_tags as one multi-row VALUES
-        #           statement so we hit SQLite once for the whole tag
-        #           set instead of N times
-        unless entry.tags.empty?
-          existing_ids = fetch_tag_ids(cnn, entry.tags)
+          directory_id : Int64 = existing || begin
+            cnn.exec(
+              "INSERT INTO directories (path, basename, short_id, created_at, last_used_at) " \
+              "VALUES (?, ?, ?, ?, ?)",
+              entry.path, entry.basename, entry.short_id, now, entry.last_used_at
+            )
+            cnn.scalar("SELECT id FROM directories WHERE path = ?", entry.path).as(Int64)
+          end
 
-          missing = entry.tags.reject { |t| existing_ids.has_key?(t) }
-          unless missing.empty?
-            # Single multi-row INSERT OR IGNORE so a brand-new restore
-            # with N tags pays one SQL call rather than N. ON CONFLICT
-            # on `tags.name` (UNIQUE) means concurrent restores remain
-            # safe.
-            args = [] of DB::Any
-            missing.each do |t|
-              args << t.as(DB::Any)
-              args << now.as(DB::Any)
+          # Two-pass tag write to cut the per-tag round-trip cost from 3
+          # statements (INSERT OR IGNORE INTO tags + SELECT id + INSERT
+          # INTO directory_tags) down to ~2 amortized:
+          #   pass 1) prefetch every existing tag id with one IN-list
+          #           lookup; INSERT OR IGNORE only the names that
+          #           actually need a new row, then re-resolve those ids
+          #           in a second IN-list query
+          #   pass 2) INSERT INTO directory_tags as one multi-row VALUES
+          #           statement so we hit SQLite once for the whole tag
+          #           set instead of N times
+          unless entry.tags.empty?
+            existing_ids = fetch_tag_ids(cnn, entry.tags)
+
+            missing = entry.tags.reject { |t| existing_ids.has_key?(t) }
+            unless missing.empty?
+              # Single multi-row INSERT OR IGNORE so a brand-new restore
+              # with N tags pays one SQL call rather than N. ON CONFLICT
+              # on `tags.name` (UNIQUE) means concurrent restores remain
+              # safe.
+              args = [] of DB::Any
+              missing.each do |t|
+                args << t.as(DB::Any)
+                args << now.as(DB::Any)
+              end
+              cnn.exec(
+                "INSERT OR IGNORE INTO tags (name, created_at) VALUES " \
+                "#{Doma::Sql.placeholders_for(missing.size, "(?, ?)")}",
+                args: args
+              )
+              existing_ids.merge!(fetch_tag_ids(cnn, missing))
+            end
+
+            # Multi-row INSERT for the join table. `expirations` only
+            # carries already-future TTLs from snapshot time, but a long
+            # stay in the trash may have lapsed them. We still write the
+            # original value — the user opted in to that deadline once,
+            # and `prune_expired` will lift any that are now past as soon
+            # as it runs.
+            dt_args = [] of DB::Any
+            entry.tags.each do |tag|
+              tag_id = existing_ids[tag]
+              dt_args << directory_id.as(DB::Any)
+              dt_args << tag_id.as(DB::Any)
+              exp = entry.expirations[tag]?
+              dt_args << (exp.nil? ? nil.as(DB::Any) : exp.as(DB::Any))
             end
             cnn.exec(
-              "INSERT OR IGNORE INTO tags (name, created_at) VALUES " \
-              "#{Doma::Sql.placeholders_for(missing.size, "(?, ?)")}",
-              args: args
+              "INSERT INTO directory_tags (directory_id, tag_id, expires_at) VALUES " \
+              "#{Doma::Sql.placeholders_for(entry.tags.size, "(?, ?, ?)")} " \
+              "ON CONFLICT(directory_id, tag_id) DO UPDATE SET expires_at = excluded.expires_at",
+              args: dt_args
             )
-            existing_ids.merge!(fetch_tag_ids(cnn, missing))
           end
-
-          # Multi-row INSERT for the join table. `expirations` only
-          # carries already-future TTLs from snapshot time, but a long
-          # stay in the trash may have lapsed them. We still write the
-          # original value — the user opted in to that deadline once,
-          # and `prune_expired` will lift any that are now past as soon
-          # as it runs.
-          dt_args = [] of DB::Any
-          entry.tags.each do |tag|
-            tag_id = existing_ids[tag]
-            dt_args << directory_id.as(DB::Any)
-            dt_args << tag_id.as(DB::Any)
-            exp = entry.expirations[tag]?
-            dt_args << (exp.nil? ? nil.as(DB::Any) : exp.as(DB::Any))
-          end
-          cnn.exec(
-            "INSERT INTO directory_tags (directory_id, tag_id, expires_at) VALUES " \
-            "#{Doma::Sql.placeholders_for(entry.tags.size, "(?, ?, ?)")} " \
-            "ON CONFLICT(directory_id, tag_id) DO UPDATE SET expires_at = excluded.expires_at",
-            args: dt_args
-          )
         end
-      end
 
-      remove_from_file!(entry)
-      entry
+        remove_from_file!(entry)
+        entry
+      end
     end
 
     # Permanently drop trashed entries, optionally only those older than
     # `older_seconds`. Returns the count purged.
     def empty!(*, older_seconds : Int64? = nil) : Int32
-      raw = read_all
-      return 0 if raw.empty?
+      with_lock do
+        raw = read_all
+        return 0 if raw.empty?
 
-      kept, pruned =
-        if cutoff_age = older_seconds
-          cutoff = Time.utc.to_unix - cutoff_age
-          raw.partition { |e| e.deleted_at >= cutoff }
-        else
-          {[] of Entry, raw}
+        kept, pruned =
+          if cutoff_age = older_seconds
+            cutoff = Time.utc.to_unix - cutoff_age
+            raw.partition { |e| e.deleted_at >= cutoff }
+          else
+            {[] of Entry, raw}
+          end
+
+        rewrite!(kept)
+        pruned.size
+      end
+    end
+
+    private def with_lock(&)
+      Doma::Config.ensure_home!
+      lock_path = File.join(Doma::Config.home, "trash.lock")
+      File.open(lock_path, "w") do |lock_file|
+        lock_file.flock_exclusive
+        begin
+          yield
+        ensure
+          lock_file.flock_unlock
         end
-
-      rewrite!(kept)
-      pruned.size
+      end
     end
 
     # ------------------------------------------------------------------

@@ -106,6 +106,7 @@ module Doma::CLI
     end
 
     private def resolve_target(db : Doma::Database, raw : String) : String
+      return raw if File.exists?(raw) || Dir.exists?(raw)
       return raw unless Doma::ShortIdResolver.looks_like?(raw)
       Doma::ShortIdResolver.resolve(db, raw) || raw
     end

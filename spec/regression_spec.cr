@@ -427,3 +427,81 @@ describe "doma rm -t TAG exit code" do
     FileUtils.rm_rf(target) if target
   end
 end
+
+describe "Smart Hex-shaped Path Resolution" do
+  bin = File.expand_path("../bin/doma", __DIR__)
+
+  it "does not treat a hex-shaped directory existing on disk as a short_id" do
+    pending! "binary not built" unless File.exists?(bin)
+    home = File.tempname("doma-hexpath")
+    FileUtils.mkdir_p(home)
+
+    # Create a local directory whose name is a valid hex short_id prefix (e.g., 'abcd')
+    target = File.join(Dir.current, "abcd")
+    FileUtils.mkdir_p(target)
+
+    begin
+      out_buf = IO::Memory.new
+      err_buf = IO::Memory.new
+      # Since ./abcd exists on disk, `doma add abcd` must register `./abcd` successfully
+      # instead of resolving it as a short_id or complaining that it is a short_id.
+      status = Process.run(
+        bin, ["add", "abcd", "-t", "hex-test"],
+        env: {"DOMA_HOME" => home}, output: out_buf, error: err_buf
+      )
+      status.success?.should be_true
+
+      # Verify that `doma info abcd` successfully resolves the path
+      info_buf = IO::Memory.new
+      status2 = Process.run(
+        bin, ["info", "abcd"],
+        env: {"DOMA_HOME" => home}, output: info_buf, error: err_buf
+      )
+      status2.success?.should be_true
+      # Info output must contain the canonicalized path of the directory
+      canonical_target = Doma::Validator.canonicalize(target)
+      info_buf.to_s.should contain(canonical_target)
+
+      # Verify that `doma rm abcd` deletes it successfully
+      rm_buf = IO::Memory.new
+      status3 = Process.run(
+        bin, ["rm", "abcd"],
+        env: {"DOMA_HOME" => home}, output: rm_buf, error: err_buf
+      )
+      status3.success?.should be_true
+    ensure
+      FileUtils.rm_rf(home) if home
+      FileUtils.rm_rf(target) if target
+    end
+  end
+end
+
+describe "Trash file locking" do
+  it "successfully executes trash operations sequentially under lock" do
+    with_temp_db do |db|
+      tmp = File.tempname("doma-trash-lock")
+      FileUtils.mkdir_p(tmp)
+
+      begin
+        db.add(tmp, ["test-lock"])
+        canonical_tmp = Doma::Validator.canonicalize(tmp)
+        entry = Doma::Trash.snapshot(db, canonical_tmp)
+        entry.should_not be_nil
+
+        if e = entry
+          # Concurrently adding and retrieving entries should be safe and fully locked
+          Doma::Trash.add!(e)
+          Doma::Trash.entries(prune: true).size.should eq(1)
+
+          # Restore should work
+          db.remove_path(tmp)
+          Doma::Trash.restore!(db, e)
+          db.directories.size.should eq(1)
+          Doma::Trash.entries(prune: false).should be_empty
+        end
+      ensure
+        FileUtils.rm_rf(tmp)
+      end
+    end
+  end
+end
