@@ -99,7 +99,7 @@ describe "doma trash" do
       entry = json.as_a.first.as_h
       entry["short_id"].as_s.should_not be_empty
       entry["path"].as_s.should contain("tmp")
-      entry["tags"].as_a.map(&.as_s).sort.should eq(["demo", "scratch"])
+      entry["tags"].as_a.map(&.as_s).sort!.should eq(["demo", "scratch"])
       entry.has_key?("deleted_at").should be_true
       entry.has_key?("expirations").should be_true
     end
