@@ -44,7 +44,7 @@ weight = 1
 
 ```
 doma add [<path> ...] [-t TAG ...] [--ttl DUR | --tmp]
-                                   [--auto-tag] [--git-tag] [--dry-run]
+                                   [--auto-tag] [--git-tag] [--dry-run] [--json]
 ```
 
 - `-t TAG`: add a tag. Repeatable; comma-separated also works (`-t a,b`).
@@ -53,6 +53,7 @@ doma add [<path> ...] [-t TAG ...] [--ttl DUR | --tmp]
 - `--auto-tag` / `--no-auto-tag`: include the basename as a tag.
 - `--git-tag` / `--no-git-tag`: derive host and repo tags from `.git/config`.
 - `-n`, `--dry-run`: resolve and print without writing.
+- `--json`: structured output (array of results including `short_id` per path). `mark` forwards this flag. Useful for agents that want the stable ID immediately.
 
 ## `mark`
 
@@ -137,12 +138,12 @@ doma import <file> [--merge | --replace] [-y | --yes]
 ## `trash`
 
 ```
-doma trash list
+doma trash list [--json]
 doma trash restore <short_id> [--merge]
-doma trash empty [--older DUR]
+doma trash empty [--older DUR] [--json]
 ```
 
-`rm <path>` writes to the trash by default — `trash list` shows what's recoverable (newest first), `trash restore` brings an entry back. Use `--merge` if the path is already re-registered with different tags. `empty` purges everything; `empty --older 7d` purges only old entries.
+`rm <path>` writes to the trash by default — `trash list` shows what's recoverable (newest first). Use `--json` for machine-readable output (array of entries with `short_id`, `path`, `tags`, `deleted_at`, `expirations`, etc.). `trash restore` brings an entry back. Use `--merge` if the path is already re-registered with different tags. `empty` purges everything (optionally `--json` for `{"purged": N}`); `empty --older 7d` purges only old entries.
 
 Anything older than 7 days is auto-pruned on the next trash op.
 

@@ -47,7 +47,7 @@ unrelated work.
 
 | User says... | Command | Notes |
 |---|---|---|
-| "Track this project" / "I'll be working on it" | `doma add <path> -t <category>` | Permanent (no TTL) |
+| "Track this project" / "I'll be working on it" | `doma add <path> -t <category>` (or `--json` for structured result incl. short_id) | Permanent (no TTL) |
 | "Track all of these as `<name>`" | `doma add <path1> <path2> ... -t <name>` | Multi-path is one command |
 | "Bookmark this for review" / "Remember this for later" | `doma mark <bookmark-name>` | cwd + 7-day TTL — equivalent to `add . -t NAME --tmp`, just shorter |
 | "Mark these for the auth review session" | `doma mark -p <each-path> auth-review` | One call per path; tags accumulate. `-p` skips the cd dance |
@@ -81,7 +81,7 @@ auto-pruned on the next trash op. `--hard` on either `rm` or
 
 | User says... | Command | Notes |
 |---|---|---|
-| "What can I recover?" | `doma trash list` | One row per trashed entry: `short_id  age  path  tags` |
+| "What can I recover?" | `doma trash list` or `doma trash list --json` | Human table (newest first) or structured JSON array with `short_id`, `path`, `tags`, `deleted_at`, `expirations`, etc. Prefer `--json` in agents. |
 | "Bring it back" | `doma trash restore <short_id>` | 7-char prefix from `trash list`. Add `--merge` if the path was re-registered in the meantime |
 | "Empty the trash" | `doma trash empty` | Confirmation prompt unless `-y` / `--yes` / `DOMA_YES=1` |
 | "Just clean up old trash" | `doma trash empty --older 7d` | Same duration grammar as `--ttl` |
@@ -179,12 +179,12 @@ files or making decisions, Pattern A keeps the work in your hands.
 | "What was I working on last?" | `doma list --by recent` (top entries are most-recent cd targets) |
 | "Is this directory registered? with what tags?" | `doma info` (cwd), `doma info <path>`, `doma info <short_id>`, or `doma info <name>` (substring fallback). Surfaces last-used + relative time; exits 3 if not registered (with a trash hint when applicable) |
 | "Run specs across all the Crystal projects in parallel" | `doma run crystal --parallel -- crystal spec` (cap concurrency with `--jobs N`; suppress per-dir headers with `--no-header`) |
-| "I'll be working on this project for a while" | `doma add . -t <category>` |
+| "I'll be working on this project for a while" | `doma add . -t <category>` (use `--json` to capture the new short_id immediately) |
 | "Bookmark this so I come back later" | `doma mark <name>` |
 | "Mark these dirs for the auth review" | `doma mark -p <each-path> auth-review` (no need to cd around) |
 | "Forget the bookmark" | `doma rm <path> -t bookmark` (or wait for the TTL) |
 | "Show me what's expiring soon" | `doma list --include-expired` (then filter by `expires_at` in `--json`) |
-| "I deleted the wrong directory, get it back" | `doma trash list` → `doma trash restore <short_id>` (within 7d) |
+| "I deleted the wrong directory, get it back" | `doma trash list --json` (or human table) → `doma trash restore <short_id>` (within 7d) |
 | "Sweep dead paths" / "Sweep expired tags" | `doma prune --gone` / `doma prune --expired` (both reversible from trash unless `--hard`) |
 
 ## Stable identifiers

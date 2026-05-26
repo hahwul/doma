@@ -175,7 +175,7 @@ module Doma
         {"setup <action>", "install / init / completion — see `doma setup --help`"},
         {"doctor", "Check the install (paths, config, DB)"},
         {"config <action>", "get / set / list — see `doma config --help`"},
-        {"trash <action>", "list / restore / empty — recover from `rm`"},
+        {"trash <action>", "list [--json] / restore / empty [--json] — recover from `rm`"},
         {"version | help", "Show version / this help"},
       ]
 
