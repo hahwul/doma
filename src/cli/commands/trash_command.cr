@@ -39,9 +39,9 @@ module Doma::CLI
       puts "Usage: doma trash <action> [args]"
       puts ""
       puts "Actions:"
-      puts "  list                   What's recoverable (newest first)"
+      puts "  list [--json]          What's recoverable (newest first); --json for machine-readable"
       puts "  restore <short_id>     Bring an entry back (use --merge for collisions)"
-      puts "  empty                  Purge everything in the trash"
+      puts "  empty [--json]         Purge everything in the trash"
       puts "  empty --older DUR      Purge only entries deleted before DUR ago"
       puts ""
       puts "Notes:"
@@ -54,8 +54,10 @@ module Doma::CLI
     # ------------------------------------------------------------------
 
     private def cmd_list(args : Array(String))
+      json_mode = false
       OptionParser.parse(args) do |p|
-        p.banner = "Usage: doma trash list"
+        p.banner = "Usage: doma trash list [--json]"
+        p.on("--json", "Output as JSON") { json_mode = true }
         p.on("-h", "--help", "Show help") do
           puts p
           exit 0
@@ -64,7 +66,16 @@ module Doma::CLI
 
       entries = Doma::Trash.entries
       if entries.empty?
-        Doma::Logger.info "trash is empty"
+        if json_mode
+          puts "[]"
+        else
+          Doma::Logger.info "trash is empty"
+        end
+        return
+      end
+
+      if json_mode
+        puts entries.to_json
         return
       end
 
@@ -125,11 +136,13 @@ module Doma::CLI
 
     private def cmd_empty(args : Array(String))
       older : Int64? = nil
+      json_mode = false
       OptionParser.parse(args) do |p|
-        p.banner = "Usage: doma trash empty [--older DUR]"
+        p.banner = "Usage: doma trash empty [--older DUR] [--json]"
         p.on("--older=DUR", "Only purge entries older than DUR (e.g. 7d, 24h)") do |v|
           older = Doma::Duration.parse_seconds!(v)
         end
+        p.on("--json", "Output as JSON") { json_mode = true }
         p.on("-h", "--help", "Show help") do
           puts p
           exit 0
@@ -147,7 +160,11 @@ module Doma::CLI
                 end
 
       if pending == 0
-        Doma::Logger.info "nothing to purge"
+        if json_mode
+          puts %({"purged":0})
+        else
+          Doma::Logger.info "nothing to purge"
+        end
         return
       end
 
@@ -158,16 +175,24 @@ module Doma::CLI
       noun = pending == 1 ? "entry" : "entries"
       scope_phrase = older.nil? ? "" : " (older than threshold)"
       unless confirm?("Purge #{pending} trash #{noun}#{scope_phrase}? This cannot be undone.")
-        Doma::Logger.info "aborted"
+        if json_mode
+          puts %({"aborted":true,"pending":#{pending}})
+        else
+          Doma::Logger.info "aborted"
+        end
         return
       end
 
       removed = Doma::Trash.empty!(older_seconds: older)
-      if removed == 0
-        Doma::Logger.info "nothing to purge"
+      if json_mode
+        puts %({"purged":#{removed}})
       else
-        scope = older.nil? ? "" : " (older than threshold)"
-        Doma::Logger.success "purged #{removed} trash entr#{removed == 1 ? "y" : "ies"}#{scope}"
+        if removed == 0
+          Doma::Logger.info "nothing to purge"
+        else
+          scope = older.nil? ? "" : " (older than threshold)"
+          Doma::Logger.success "purged #{removed} trash entr#{removed == 1 ? "y" : "ies"}#{scope}"
+        end
       end
     end
 

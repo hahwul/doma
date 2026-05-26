@@ -1,4 +1,5 @@
 require "./spec_helper"
+require "json"
 
 # Coverage for the soft-delete recovery path: `rm <path>` writes a
 # snapshot, `doma trash list/restore/empty` reads it back. Each spec
@@ -83,6 +84,33 @@ describe "doma trash" do
       r[:out].should contain("/private/tmp")
       r[:out].should contain("scratch")
       r[:out].should contain("demo")
+    end
+  end
+
+  it "[list --json] emits a parseable JSON array with short_id, path, and tags" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      run(["add", "/tmp", "-t", "scratch", "-t", "demo"], {"DOMA_HOME" => home})
+      run(["rm", "/tmp"], {"DOMA_HOME" => home})
+      r = run(["trash", "list", "--json"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(0)
+      json = JSON.parse(r[:out])
+      json.as_a.size.should eq(1)
+      entry = json.as_a.first.as_h
+      entry["short_id"].as_s.should_not be_empty
+      entry["path"].as_s.should contain("tmp")
+      entry["tags"].as_a.map(&.as_s).sort.should eq(["demo", "scratch"])
+      entry.has_key?("deleted_at").should be_true
+      entry.has_key?("expirations").should be_true
+    end
+  end
+
+  it "[list --json] on empty trash emits an empty JSON array" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      r = run(["trash", "list", "--json"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(0)
+      JSON.parse(r[:out]).as_a.size.should eq(0)
     end
   end
 

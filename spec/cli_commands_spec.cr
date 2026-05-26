@@ -1,4 +1,5 @@
 require "./spec_helper"
+require "json"
 
 # CLI-level coverage for commands whose specs to date were
 # DB-layer-only or missing entirely. Each block spawns the binary so
@@ -913,6 +914,35 @@ describe "doma add flags" do
 
       list = run(["list", "--paths"], {"DOMA_HOME" => home})
       list[:out].should be_empty
+    end
+  end
+
+  it "[--json] on successful add returns short_id and tags" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      r = run(["add", "/tmp", "-t", "json-test", "--json"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(0)
+      json = JSON.parse(r[:out])
+      json.as_a.size.should eq(1)
+      row = json.as_a.first.as_h
+      row["short_id"].as_s.size.should eq(7)
+      row["path"].as_s.should contain("tmp")
+      row["tags"].as_a.map(&.as_s).should eq(["json-test"])
+      row["unchanged"].as_bool.should be_false
+      row["dry_run"].as_bool.should be_false
+    end
+  end
+
+  it "[--json] on no-change add sets unchanged: true and still returns short_id" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      run(["add", "/tmp", "-t", "once"], {"DOMA_HOME" => home})
+      r = run(["add", "/tmp", "-t", "once", "--json"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(0)
+      json = JSON.parse(r[:out])
+      row = json.as_a.first.as_h
+      row["unchanged"].as_bool.should be_true
+      row["short_id"].as_s.size.should eq(7)
     end
   end
 

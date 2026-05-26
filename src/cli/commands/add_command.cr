@@ -17,11 +17,12 @@ module Doma::CLI
       auto_basename : Bool? = nil
       auto_git : Bool? = nil
       dry_run = false
+      json_mode = false
       expires_at : Int64? = nil
       positional = [] of String
 
       parser = OptionParser.new do |p|
-        p.banner = "Usage: doma add [<path> ...] [-t TAG ...] [--ttl DUR | --tmp] [--auto-tag] [--git-tag] [--dry-run]"
+        p.banner = "Usage: doma add [<path> ...] [-t TAG ...] [--ttl DUR | --tmp] [--auto-tag] [--git-tag] [--dry-run] [--json]"
         p.on("-t TAG", "--tag=TAG", "Add a tag (repeatable, comma-separated allowed)") do |t|
           # Reject `-t ''` outright instead of letting it slide through
           # the empty-string filter in `Validator.tags!`. Silent acceptance
@@ -46,6 +47,7 @@ module Doma::CLI
         p.on("--git-tag", "Detect a git remote and add host/repo tags") { auto_git = true }
         p.on("--no-git-tag", "Disable git auto-tag (override config)") { auto_git = false }
         p.on("-n", "--dry-run", "Show what would happen without writing") { dry_run = true }
+        p.on("--json", "Output as JSON (one object per path)") { json_mode = true }
         p.on("-h", "--help", "Show help") do
           puts p
           exit 0
@@ -86,7 +88,8 @@ module Doma::CLI
         # Read-only DB just to check for short_id collisions in the
         # pre-validation hint. Same rationale as the non-dry-run branch.
         preview_db = Doma::Database.open
-        failures = process_each(positional) do |path|
+        results = [] of Hash(String, JSON::Any)
+        failures = process_each(positional, json_mode ? results : nil) do |path|
           short_id_redirect_hint(preview_db, path)
           abs = Doma::Validator.path!(path)
           applied = Doma::Validator.tags!(raw_tags).dup
@@ -94,16 +97,30 @@ module Doma::CLI
           applied.uniq!
           summary = applied.empty? ? "(no tags)" : "tags: #{applied.join(", ")}"
           summary += "  (#{ttl_label})" if ttl_label
-          Doma::Logger.info "[dry-run] would add #{abs} #{summary}"
+          if json_mode
+            results << {
+              "input"     => JSON::Any.new(path),
+              "path"      => JSON::Any.new(abs),
+              "tags"      => JSON::Any.new(applied.map { |t| JSON::Any.new(t) }),
+              "dry_run"   => JSON::Any.new(true),
+              "unchanged" => JSON::Any.new(false),
+            }
+          else
+            Doma::Logger.info "[dry-run] would add #{abs} #{summary}"
+          end
         end
         preview_db.close
+        if json_mode
+          puts results.to_json
+        end
         exit 2 if failures > 0
         return
       end
 
       db = Doma::Database.open
       begin
-        failures = process_each(positional) do |path|
+        results = [] of Hash(String, JSON::Any)
+        failures = process_each(positional, json_mode ? results : nil) do |path|
           # Catch the common "user pasted a `list` short_id into `add`"
           # mistake before path validation. Without this, `add c6b7d5d`
           # tries to canonicalize `<cwd>/c6b7d5d` and fails with a "not
@@ -146,11 +163,32 @@ module Doma::CLI
           summary = applied.empty? ? "(no tags)" : "tags: #{applied.join(", ")}"
           summary += "  (#{ttl_label})" if ttl_label
 
-          if unchanged
-            Doma::Logger.info "· no change: #{abs} #{summary}"
+          if json_mode
+            short_id = db.find_path_info(abs).try(&.short_id) || ""
+            row = {
+              "input"     => JSON::Any.new(path),
+              "path"      => JSON::Any.new(abs),
+              "short_id"  => JSON::Any.new(short_id),
+              "tags"      => JSON::Any.new(applied.map { |t| JSON::Any.new(t) }),
+              "unchanged" => JSON::Any.new(unchanged),
+              "dry_run"   => JSON::Any.new(false),
+            }
+            if expires_at
+              row["expires_at"] = JSON::Any.new(expires_at)
+            end
+            results << row
           else
-            Doma::Logger.success "added #{abs} #{summary}"
+            if unchanged
+              Doma::Logger.info "· no change: #{abs} #{summary}"
+            else
+              short_id = db.find_path_info(abs).try(&.short_id) || ""
+              id_suffix = short_id.empty? ? "" : " (id: #{short_id})"
+              Doma::Logger.success "added #{abs} #{summary}#{id_suffix}"
+            end
           end
+        end
+        if json_mode
+          puts results.to_json
         end
         # Non-zero exit when at least one path failed, so scripts can tell.
         # Successful paths are still committed — partial success is the
@@ -167,16 +205,32 @@ module Doma::CLI
     # Hints attached to the error are surfaced on a follow-up line so
     # pre-validation redirects (e.g. short_id paste → trash restore) can
     # steer the user to the right command.
-    private def process_each(paths : Array(String), &)
+    #
+    # When `json_results` is provided (non-nil), ValidationErrors are
+    # recorded as structured rows instead of (or in addition to) human
+    # error logging. This enables `add --json` to produce a complete
+    # array even on partial failure.
+    private def process_each(paths : Array(String), json_results : Array(Hash(String, JSON::Any))? = nil, &)
       failures = 0
       paths.each do |path|
         begin
           yield path
         rescue ex : Doma::ValidationError
           failures += 1
-          Doma::Logger.error format_failure(path, ex, paths.size)
-          if hint = ex.hint
-            STDERR.puts "  #{hint}"
+          if json_results
+            row = {
+              "input" => JSON::Any.new(path),
+              "error" => JSON::Any.new(format_failure(path, ex, paths.size)),
+            }
+            if hint = ex.hint
+              row["hint"] = JSON::Any.new(hint)
+            end
+            json_results << row
+          else
+            Doma::Logger.error format_failure(path, ex, paths.size)
+            if hint = ex.hint
+              STDERR.puts "  #{hint}"
+            end
           end
         end
       end
