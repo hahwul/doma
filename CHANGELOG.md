@@ -1,5 +1,27 @@
 # Changelog
 
+## v0.2.0
+
+### Added
+- `trash` command (`list`, `restore <short_id>`, `empty [--older DUR]`) with 7-day soft-delete recovery for `rm` and `prune --gone` (supports `--json`, `--merge` on restore)
+- `list --by tag` groups output under per-tag headers (works with `--json`, `--paths`, `-0`)
+- `--json` output for `add`, `trash list/add/empty` plus `short_id` in `add` result (agent/script friendly)
+- `info` accepts short_id (full or prefix); surfaces trash status when relevant
+- `list --check`, `--include-expired`, `--pick [--first | --builtin --query Q]`
+
+### Changed
+- `rm` snapshots to trash by default (`--hard` for permanent delete)
+- Shell completion for bash/zsh/fish driven from a single `COMMAND_SPEC` table
+- Numerous internal refactors (TTL SQL centralization, `TimeFormatter`, `TagRenderer`, `ShortIdResolver`, trash helpers, SQL utils)
+
+### Fixed
+- Trash restore races, `File.delete` races, existence checks inside transactions, concurrency lock
+- Installer robustness (eval-line detection, comment skipping)
+- Config blank `db_path` handling, humanized YAML parse errors
+- Picker ANSI sanitization, suggester Levenshtein tie-breaking
+- `rm -t TAG` now exits non-zero when no registered path matches
+- Multiple early trash scaffolding and restore safety fixes
+
 ## v0.1.1
 
 ### Added
