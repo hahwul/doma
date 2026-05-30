@@ -72,6 +72,35 @@ describe Doma::Config do
       FileUtils.rm_rf(home)
     end
   end
+
+  it "treats a blank DOMA_HOME as unset (not the cwd)" do
+    prev_home = ENV["DOMA_HOME"]?
+    ENV["DOMA_HOME"] = ""
+    begin
+      # A set-but-empty value used to be truthy and resolve to the cwd via
+      # `File.expand_path("")`; it must fall back to the default instead.
+      Doma::Config.home.should eq(File.expand_path(Doma::Config::DEFAULT_DIR, home: true))
+      Doma::Config.home.should_not eq(Dir.current)
+    ensure
+      prev_home ? (ENV["DOMA_HOME"] = prev_home) : ENV.delete("DOMA_HOME")
+    end
+  end
+
+  it "treats a blank DOMA_CONFIG as unset (falls back to home/config.yml)" do
+    prev_cfg = ENV["DOMA_CONFIG"]?
+    prev_home = ENV["DOMA_HOME"]?
+    home = File.tempname("doma-cfg-home2")
+    FileUtils.mkdir_p(home)
+    ENV["DOMA_HOME"] = home
+    ENV["DOMA_CONFIG"] = ""
+    begin
+      Doma::Config.config_path.should eq(File.join(home, "config.yml"))
+    ensure
+      prev_cfg ? (ENV["DOMA_CONFIG"] = prev_cfg) : ENV.delete("DOMA_CONFIG")
+      prev_home ? (ENV["DOMA_HOME"] = prev_home) : ENV.delete("DOMA_HOME")
+      FileUtils.rm_rf(home)
+    end
+  end
 end
 
 describe Doma::Settings do

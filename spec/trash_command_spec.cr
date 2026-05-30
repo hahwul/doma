@@ -232,3 +232,79 @@ describe "doma trash" do
     end
   end
 end
+
+# Unit-level coverage for `Trash.restore!`'s TTL handling. Exercises the
+# SQL conflict resolution directly (the binary path can only set future
+# TTLs, which can't surface the stale-deadline clobber). `DOMA_HOME` is
+# pointed at a temp dir so the trash lock/file stay isolated.
+private def with_trash_env(&)
+  prev_home = ENV["DOMA_HOME"]?
+  home = File.tempname("doma-trash-unit")
+  FileUtils.mkdir_p(home)
+  ENV["DOMA_HOME"] = home
+  dir = File.tempname("doma-trash-unit-dir")
+  FileUtils.mkdir_p(dir)
+  begin
+    with_temp_db do |db|
+      yield db, Doma::Validator.canonicalize(dir)
+    end
+  ensure
+    prev_home ? (ENV["DOMA_HOME"] = prev_home) : ENV.delete("DOMA_HOME")
+    FileUtils.rm_rf(home)
+    FileUtils.rm_rf(dir)
+  end
+end
+
+private def trash_entry(path : String, tags : Array(String), expirations : Hash(String, Int64))
+  now = Time.utc.to_unix
+  Doma::Trash::Entry.new(
+    deleted_at: now,
+    short_id: "uni1234",
+    path: path,
+    basename: File.basename(path),
+    last_used_at: now,
+    tags: tags,
+    expirations: expirations,
+  )
+end
+
+describe "Doma::Trash.restore! TTL handling" do
+  it "[--merge] does not clobber a live tag's TTL with a stale snapshot deadline" do
+    with_trash_env do |db, path|
+      # Live row: `keep` is permanent (no expiry).
+      db.add(path, ["keep"])
+      id = db.directories.first.id
+
+      # Snapshot carries a long-lapsed deadline for the same tag.
+      stale = Time.utc.to_unix - 3600
+      Doma::Trash.restore!(db, trash_entry(path, ["keep"], {"keep" => stale}), merge: true)
+
+      # DO NOTHING keeps the live binding: `keep` stays permanent, so it
+      # has no expiry. The pre-fix DO UPDATE would have stamped it with
+      # `stale`, silently expiring a tag the user made permanent.
+      db.tag_expirations(id, include_past: true).has_key?("keep").should be_false
+    end
+  end
+
+  it "[--merge] still folds in a brand-new tag with its snapshot TTL" do
+    with_trash_env do |db, path|
+      db.add(path, ["keep"])
+      id = db.directories.first.id
+
+      future = Time.utc.to_unix + 86_400
+      Doma::Trash.restore!(db, trash_entry(path, ["temp"], {"temp" => future}), merge: true)
+
+      db.tag_expirations(id, include_past: true)["temp"]?.should eq(future)
+    end
+  end
+
+  it "[fresh restore] re-applies the snapshot's TTL on a not-yet-registered path" do
+    with_trash_env do |db, path|
+      future = Time.utc.to_unix + 86_400
+      Doma::Trash.restore!(db, trash_entry(path, ["temp"], {"temp" => future}))
+
+      id = db.directories.first.id
+      db.tag_expirations(id, include_past: true)["temp"]?.should eq(future)
+    end
+  end
+end

@@ -13,12 +13,19 @@ module Doma
     # `home: true` is what teaches `File.expand_path` to actually substitute
     # `~` for `$HOME`. Without it, `~/.config/doma` is taken literally and
     # creates a `~` directory inside the cwd — a real bug we shipped earlier.
+    #
+    # `.presence` treats a set-but-blank `DOMA_HOME=""` as unset: without it
+    # the empty string is truthy and `File.expand_path("")` resolves to the
+    # cwd, silently scattering the db/config into whatever directory the
+    # command happened to run from. Same guard `db_path` already carries.
     def home : String
-      File.expand_path(ENV["DOMA_HOME"]? || DEFAULT_DIR, home: true)
+      File.expand_path(ENV["DOMA_HOME"]?.presence || DEFAULT_DIR, home: true)
     end
 
     def config_path : String
-      explicit = ENV["DOMA_CONFIG"]?
+      # Blank `DOMA_CONFIG=""` is treated as unset (see `home`); otherwise it
+      # would resolve to the cwd and be used as the config *file* path.
+      explicit = ENV["DOMA_CONFIG"]?.presence
       return File.expand_path(explicit, home: true) if explicit
       File.join(home, "config.yml")
     end

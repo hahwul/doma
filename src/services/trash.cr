@@ -192,12 +192,17 @@ module Doma
               existing_ids.merge!(fetch_tag_ids(cnn, missing))
             end
 
-            # Multi-row INSERT for the join table. `expirations` only
-            # carries already-future TTLs from snapshot time, but a long
-            # stay in the trash may have lapsed them. We still write the
-            # original value — the user opted in to that deadline once,
-            # and `prune_expired` will lift any that are now past as soon
-            # as it runs.
+            # Multi-row INSERT for the join table. For a fresh restore
+            # (no live row) this simply re-applies the snapshot's TTLs —
+            # the user opted in to that deadline once, and `prune_expired`
+            # lifts any now lapsed. For a `--merge` restore onto an
+            # existing live row the tag may already be present, so the
+            # conflict resolves to DO NOTHING: the *live* binding's TTL
+            # wins. Clobbering it with `excluded.expires_at` could replay
+            # a long-stale snapshot deadline onto a live tag — e.g. expire
+            # a tag the user has since made permanent. This matches
+            # `move_path`'s merge, which likewise keeps the destination's
+            # existing binding.
             dt_args = [] of DB::Any
             entry.tags.each do |tag|
               tag_id = existing_ids[tag]
@@ -209,7 +214,7 @@ module Doma
             cnn.exec(
               "INSERT INTO directory_tags (directory_id, tag_id, expires_at) VALUES " \
               "#{Doma::Sql.placeholders_for(entry.tags.size, "(?, ?, ?)")} " \
-              "ON CONFLICT(directory_id, tag_id) DO UPDATE SET expires_at = excluded.expires_at",
+              "ON CONFLICT(directory_id, tag_id) DO NOTHING",
               args: dt_args
             )
           end

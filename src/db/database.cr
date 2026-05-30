@@ -345,6 +345,28 @@ module Doma
       removed
     end
 
+    # Deletes an explicit set of directory rows by id, in one transaction,
+    # and reports how many were actually removed. Unlike `prune_dead!`
+    # (which re-stats the filesystem to decide what is missing), this
+    # trusts the caller's set verbatim. `prune --gone`'s recoverable path
+    # uses it so the rows it deletes are exactly the ones it snapshotted
+    # to the trash: a second independent stat pass could diverge from the
+    # first (e.g. a path reappearing on a remounted disk between the two),
+    # leaving a trash entry for a row that was never removed.
+    def remove_ids!(ids : Array(Int64)) : Int32
+      return 0 if ids.empty?
+      removed = 0
+      @db.transaction do |tx|
+        cnn = tx.connection
+        placeholders = Doma::Sql.placeholders_for(ids.size)
+        args = ids.map(&.as(DB::Any))
+        result = cnn.exec("DELETE FROM directories WHERE id IN (#{placeholders})", args: args)
+        removed = result.rows_affected.to_i
+        cleanup_orphans_tx(cnn)
+      end
+      removed
+    end
+
     # Wipes every row. Used by `import --replace`.
     def clear!
       @db.transaction do |tx|

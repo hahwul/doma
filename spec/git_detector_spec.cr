@@ -146,4 +146,43 @@ describe Doma::GitDetector do
       tags.should eq(tags.uniq!)
     end
   end
+
+  it "resolves the remote from a worktree's common dir (.git file + commondir)" do
+    # A linked worktree's `.git` is a *file* pointing at a gitdir that
+    # holds no `config` of its own — the shared config lives in the
+    # common dir (`commondir`). Before the fix, `read_origin_url` looked
+    # only inside the worktree gitdir and silently produced no git tags.
+    root = File.tempname("doma-git-wt")
+    begin
+      # Primary repo: real .git/ with the remote config.
+      main_git = File.join(root, "main", ".git")
+      FileUtils.mkdir_p(main_git)
+      File.write(
+        File.join(main_git, "config"),
+        <<-CFG
+          [remote "origin"]
+            url = https://github.com/hahwul/doma.git
+          CFG
+      )
+
+      # Linked worktree gitdir under the primary repo, with a `commondir`
+      # pointing back up to the shared .git (../..), mirroring git's layout.
+      wt_gitdir = File.join(main_git, "worktrees", "feature")
+      FileUtils.mkdir_p(wt_gitdir)
+      File.write(File.join(wt_gitdir, "commondir"), "../..\n")
+
+      # The worktree checkout: a `.git` *file* pointing at the gitdir.
+      worktree = File.join(root, "feature")
+      FileUtils.mkdir_p(worktree)
+      File.write(File.join(worktree, ".git"), "gitdir: #{wt_gitdir}\n")
+
+      info = Doma::GitDetector.detect(worktree)
+      info.git.should be_true
+      info.host.should eq("github")
+      info.repo.should eq("doma")
+      info.to_tags.should eq(["github", "doma"])
+    ensure
+      FileUtils.rm_rf(root)
+    end
+  end
 end

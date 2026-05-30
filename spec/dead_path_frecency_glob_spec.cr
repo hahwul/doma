@@ -50,6 +50,45 @@ describe "Dead path detection (#2)" do
       end
     end
   end
+
+  it "remove_ids! deletes exactly the given rows and GCs orphan tags" do
+    with_temp_db do |db|
+      a = File.tempname("doma-rid-a")
+      b = File.tempname("doma-rid-b")
+      [a, b].each { |d| FileUtils.mkdir_p(d) }
+      begin
+        # Both paths still exist on disk: unlike prune_dead!, remove_ids!
+        # trusts the caller's set rather than re-stating the filesystem.
+        # This is what lets `prune --gone` delete exactly what it
+        # snapshotted to the trash, with no second stat pass to diverge.
+        db.add(a, ["keep"])
+        db.add(b, ["drop"])
+        target = db.directories.find! { |e| e.path == Doma::Validator.canonicalize(b) }
+
+        db.remove_ids!([target.id]).should eq(1)
+
+        db.directories.map(&.path).should eq([Doma::Validator.canonicalize(a)])
+        # `drop` had only the removed host, so it's garbage-collected.
+        db.all_tags.map(&.name).should eq(["keep"])
+      ensure
+        [a, b].each { |d| FileUtils.rm_rf(d) }
+      end
+    end
+  end
+
+  it "remove_ids! is a no-op (returns 0) for an empty id list" do
+    with_temp_db do |db|
+      tmp = File.tempname("doma-rid-empty")
+      FileUtils.mkdir_p(tmp)
+      begin
+        db.add(tmp, ["x"])
+        db.remove_ids!([] of Int64).should eq(0)
+        db.directories.size.should eq(1)
+      ensure
+        FileUtils.rm_rf(tmp)
+      end
+    end
+  end
 end
 
 describe "Frecency (#3)" do

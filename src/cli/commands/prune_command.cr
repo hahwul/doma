@@ -75,11 +75,21 @@ module Doma::CLI
         # for good. With trash on by default the same sweep is fully
         # reversible for 7 days; --hard preserves the old behavior
         # for users who actually want it.
-        snapshots = dead.compact_map { |e| Doma::Trash.snapshot(db, e.path) }
-        removed = db.prune_dead!
-        snapshots.each { |snap| Doma::Trash.add!(snap) }
-        sample_ids = snapshots.first(3).map { |s| s.short_id[0..6] }.join(", ")
-        more = snapshots.size > 3 ? ", ..." : ""
+        #
+        # Snapshot and delete the *same* set: pair each snapshot with the
+        # row id it came from and delete exactly those ids. Calling
+        # `prune_dead!` here instead would re-stat every row, and a path
+        # that reappeared between `dead_paths` above and that second pass
+        # would be snapshotted into the trash yet never deleted — a
+        # phantom, un-restorable trash entry for a row that's still live.
+        pending = dead.compact_map do |e|
+          snap = Doma::Trash.snapshot(db, e.path)
+          snap ? {e.id, snap} : nil
+        end
+        removed = db.remove_ids!(pending.map { |(id, _)| id })
+        pending.each { |(_, snap)| Doma::Trash.add!(snap) }
+        sample_ids = pending.first(3).map { |(_, snap)| snap.short_id[0..6] }.join(", ")
+        more = pending.size > 3 ? ", ..." : ""
         Doma::Logger.success(
           "trashed #{removed} missing path(s) " \
           "(restore with `doma trash restore #{sample_ids}#{more}`)"
