@@ -64,9 +64,34 @@ module Doma
       end
     end
 
+    # Resolve the `config` file that holds the remote URL. A primary
+    # checkout keeps it right inside `.git/`, but a linked worktree's
+    # gitdir (`.git/worktrees/<name>`) and a submodule's gitdir hold no
+    # `config` of their own — the shared one lives in the common dir,
+    # pointed at by a `commondir` file (typically `../..`). Without
+    # following it, `--git-tag` silently produced no host/repo tags for
+    # every worktree and submodule. Returns nil when no readable config
+    # is found on either path.
+    private def config_path_for(git_dir : String) : String?
+      direct = File.join(git_dir, "config")
+      return direct if File.file?(direct)
+
+      commondir_file = File.join(git_dir, "commondir")
+      if File.file?(commondir_file)
+        ref = File.read(commondir_file).strip
+        unless ref.empty?
+          common = ref.starts_with?('/') ? ref : File.expand_path(ref, git_dir)
+          shared = File.join(common, "config")
+          return shared if File.file?(shared)
+        end
+      end
+
+      nil
+    end
+
     private def read_origin_url(git_dir : String) : String?
-      cfg = File.join(git_dir, "config")
-      return unless File.file?(cfg)
+      cfg = config_path_for(git_dir)
+      return unless cfg
       in_origin = false
       File.each_line(cfg) do |line|
         stripped = line.strip

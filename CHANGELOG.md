@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- Blank `DOMA_HOME` / `DOMA_CONFIG` env vars no longer resolve to the current directory — treated as unset (same guard `db_path` already had)
+- `--git-tag` now detects the remote inside git worktrees and submodules (shared `config` resolved via `commondir`), instead of silently producing no host/repo tags
+- `info` / `list` / `stats` no longer crash on out-of-range timestamps; relative times render `just now` instead of a negative `-Ns ago` for future timestamps (clock skew / cross-machine import)
+- `trash restore --merge` keeps the live tag's TTL instead of overwriting it with a stale snapshot deadline (could silently expire a tag the user had made permanent)
+- `prune --gone` deletes exactly the set it snapshots to the trash, so a path reappearing mid-sweep (e.g. a remounted disk) can no longer leave an un-restorable phantom trash entry
+
 ## v0.2.0
 
 ### Added
