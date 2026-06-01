@@ -145,98 +145,124 @@ module Doma::CLI
         ttl_by_id = db.tag_expirations_bulk(entries.map(&.id), include_past: include_expired)
 
         if json_mode
-          if group_by_tag
-            # Object keyed by tag name; untagged entries land under "".
-            grouped = {} of String => Array(Hash(String, JSON::Any))
-            group_entries_by_tag(entries).each do |(tag_key, group)|
-              grouped[tag_key] = group.map { |e| json_row(e, ttl_by_id, check_existence) }
-            end
-            puts grouped.to_json
-          else
-            payload = entries.map { |e| json_row(e, ttl_by_id, check_existence) }
-            puts payload.to_json
-          end
+          emit_json(entries, ttl_by_id, group_by_tag, check_existence)
           return
         end
 
         if entries.empty?
-          STDERR.puts(empty_message(tags, query))
-          # Only suggest for literal (non-glob) tag names that aren't in
-          # the catalog at all. An empty AND intersection between two
-          # known tags is a legitimate result, not a typo.
-          if hint = typo_hint(db, tags)
-            STDERR.puts "  #{hint}"
-          end
-          # First-run cue: an unfiltered, empty DB is almost always a
-          # newcomer who just installed and ran `list` to see what doma
-          # does. Point them at the obvious next step.
-          if tags.empty? && query.nil? && db.directories.empty?
-            STDERR.puts "  hint: try `doma add .` to register the current directory"
-          end
+          report_empty(db, tags, query)
           return
         end
 
         if paths_only
-          # Each value is *terminated* (not just separated) by the chosen
-          # delimiter, matching `find -print0` semantics so xargs -0 sees
-          # a clean N-record stream.
-          sep = null_sep ? '\0' : '\n'
-          if group_by_tag
-            # Walk groups in display order so paths come out tag-sorted,
-            # but dedup so an entry with N tags doesn't break xargs by
-            # showing up N times.
-            seen = Set(String).new
-            group_entries_by_tag(entries).each do |(_, group)|
-              group.each do |e|
-                next unless seen.add?(e.path)
-                STDOUT.print(e.path); STDOUT.print(sep)
-              end
-            end
-          else
-            entries.each { |e| STDOUT.print(e.path); STDOUT.print(sep) }
-          end
+          emit_paths(entries, group_by_tag, null_sep)
           return
         end
 
-        color = Doma::Logger.color_enabled?
-        if group_by_tag
-          group_entries_by_tag(entries).each do |(tag_key, group)|
-            header = tag_key.empty? ? "(no tags)" : "##{tag_key}"
-            header = header.colorize(:yellow).bold.to_s if color
-            puts header
-            group.each { |e| puts "  #{render_row(e, ttl_by_id, check_existence, color)}" }
-          end
-        else
-          entries.each { |e| puts render_row(e, ttl_by_id, check_existence, color) }
-        end
-
-        # Footer: when expired rows were filtered out, surface the count
-        # and the flag that would reveal them. Symmetrical with the
-        # `[gone]` story for missing paths — silent suppression is a UX
-        # trap if the user is wondering why they don't see something.
-        unless include_expired
-          hidden = db.expired_tag_count
-          if hidden > 0
-            noun = hidden == 1 ? "tag" : "tags"
-            STDERR.puts "  #{hidden} #{noun} hidden by TTL — pass --include-expired to show"
-          end
-        end
-
-        # Mirror the TTL footer for missing paths: when --check wasn't
-        # passed, count entries whose path is gone and surface the flag
-        # that would mark them. Without this, dead paths look identical
-        # to live ones in the default listing — the user only finds out
-        # after `cd` fails. Counting walks `entries` we already have, so
-        # no extra DB round trip.
-        unless check_existence
-          gone = entries.count { |e| !Dir.exists?(e.path) }
-          if gone > 0
-            noun = gone == 1 ? "path is" : "paths are"
-            STDERR.puts "  #{gone} #{noun} missing — pass --check to mark, or `doma prune --gone` to drop"
-          end
-        end
+        emit_text(db, entries, ttl_by_id, group_by_tag, check_existence, include_expired)
       ensure
         db.close
+      end
+    end
+
+    # Emit entries as JSON — a flat array, or an object keyed by tag name
+    # when grouping. Matches the export/import row schema via `json_row`.
+    private def emit_json(entries : Array(Doma::Entry), ttl_by_id : Hash(Int64, Hash(String, Int64)), group_by_tag : Bool, check_existence : Bool)
+      if group_by_tag
+        # Object keyed by tag name; untagged entries land under "".
+        grouped = {} of String => Array(Hash(String, JSON::Any))
+        group_entries_by_tag(entries).each do |(tag_key, group)|
+          grouped[tag_key] = group.map { |e| json_row(e, ttl_by_id, check_existence) }
+        end
+        puts grouped.to_json
+      else
+        payload = entries.map { |e| json_row(e, ttl_by_id, check_existence) }
+        puts payload.to_json
+      end
+    end
+
+    # Nothing matched: explain why (the empty_message), then layer on the
+    # most useful next step — a typo/parent hint for a bogus tag, or the
+    # first-run "add ." cue when the database is simply empty.
+    private def report_empty(db : Doma::Database, tags : Array(String), query : String?)
+      STDERR.puts(empty_message(tags, query))
+      # Only suggest for literal (non-glob) tag names that aren't in
+      # the catalog at all. An empty AND intersection between two
+      # known tags is a legitimate result, not a typo.
+      if hint = typo_hint(db, tags)
+        STDERR.puts "  #{hint}"
+      end
+      # First-run cue: an unfiltered, empty DB is almost always a
+      # newcomer who just installed and ran `list` to see what doma
+      # does. Point them at the obvious next step.
+      if tags.empty? && query.nil? && db.directories.empty?
+        STDERR.puts "  hint: try `doma add .` to register the current directory"
+      end
+    end
+
+    # Print paths only, one per line (or NUL-terminated for `-0`). Each
+    # value is *terminated* (not just separated) by the chosen delimiter,
+    # matching `find -print0` semantics so xargs -0 sees a clean N-record
+    # stream.
+    private def emit_paths(entries : Array(Doma::Entry), group_by_tag : Bool, null_sep : Bool)
+      sep = null_sep ? '\0' : '\n'
+      if group_by_tag
+        # Walk groups in display order so paths come out tag-sorted,
+        # but dedup so an entry with N tags doesn't break xargs by
+        # showing up N times.
+        seen = Set(String).new
+        group_entries_by_tag(entries).each do |(_, group)|
+          group.each do |e|
+            next unless seen.add?(e.path)
+            STDOUT.print(e.path); STDOUT.print(sep)
+          end
+        end
+      else
+        entries.each { |e| STDOUT.print(e.path); STDOUT.print(sep) }
+      end
+    end
+
+    # Default human-facing listing: the short_id / path / tags columns
+    # (optionally grouped under tag headers), then the two footers that
+    # surface what the default view hides — TTL-expired tags and missing
+    # paths — alongside the flag that would reveal each.
+    private def emit_text(db : Doma::Database, entries : Array(Doma::Entry), ttl_by_id : Hash(Int64, Hash(String, Int64)), group_by_tag : Bool, check_existence : Bool, include_expired : Bool)
+      color = Doma::Logger.color_enabled?
+      if group_by_tag
+        group_entries_by_tag(entries).each do |(tag_key, group)|
+          header = tag_key.empty? ? "(no tags)" : "##{tag_key}"
+          header = header.colorize(:yellow).bold.to_s if color
+          puts header
+          group.each { |e| puts "  #{render_row(e, ttl_by_id, check_existence, color)}" }
+        end
+      else
+        entries.each { |e| puts render_row(e, ttl_by_id, check_existence, color) }
+      end
+
+      # Footer: when expired rows were filtered out, surface the count
+      # and the flag that would reveal them. Symmetrical with the
+      # `[gone]` story for missing paths — silent suppression is a UX
+      # trap if the user is wondering why they don't see something.
+      unless include_expired
+        hidden = db.expired_tag_count
+        if hidden > 0
+          noun = hidden == 1 ? "tag" : "tags"
+          STDERR.puts "  #{hidden} #{noun} hidden by TTL — pass --include-expired to show"
+        end
+      end
+
+      # Mirror the TTL footer for missing paths: when --check wasn't
+      # passed, count entries whose path is gone and surface the flag
+      # that would mark them. Without this, dead paths look identical
+      # to live ones in the default listing — the user only finds out
+      # after `cd` fails. Counting walks `entries` we already have, so
+      # no extra DB round trip.
+      unless check_existence
+        gone = entries.count { |e| !Dir.exists?(e.path) }
+        if gone > 0
+          noun = gone == 1 ? "path is" : "paths are"
+          STDERR.puts "  #{gone} #{noun} missing — pass --check to mark, or `doma prune --gone` to drop"
+        end
       end
     end
 
