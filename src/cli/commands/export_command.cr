@@ -10,11 +10,13 @@ module Doma::CLI
     def run(args : Array(String))
       format = Doma::Exporter::Format::Json
       output : String? = nil
+      json_set = false
+      yaml_set = false
 
       parser = OptionParser.new do |p|
         p.banner = "Usage: doma export [--json | --yaml] [-o FILE]"
-        p.on("--json", "Output as JSON (default)") { format = Doma::Exporter::Format::Json }
-        p.on("--yaml", "Output as YAML") { format = Doma::Exporter::Format::Yaml }
+        p.on("--json", "Output as JSON (default)") { format = Doma::Exporter::Format::Json; json_set = true }
+        p.on("--yaml", "Output as YAML") { format = Doma::Exporter::Format::Yaml; yaml_set = true }
         p.on("-o FILE", "--output=FILE", "Write to FILE instead of stdout") { |f| output = f }
         p.on("-h", "--help", "Show help") do
           puts p
@@ -22,6 +24,16 @@ module Doma::CLI
         end
       end
       parser.parse(args)
+
+      # --json and --yaml are two output formats; with both set the later
+      # flag silently won and the other was dropped. Reject the combination,
+      # mirroring `list` and `tags`'s mutually-exclusive output formats so a
+      # script that expected YAML can't quietly receive JSON instead.
+      if json_set && yaml_set
+        raise Doma::ValidationError.new(
+          "--json and --yaml are mutually exclusive (pick one output format)"
+        )
+      end
 
       db = Doma::Database.open
       begin

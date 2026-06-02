@@ -1,4 +1,5 @@
 require "../utils/errors"
+require "../utils/validator"
 
 module Doma
   # Owns the "wire doma's shell wrapper into the user's rc file" flow,
@@ -40,9 +41,9 @@ module Doma
     # interactive-shell file.
     def rc_path_for(shell : String) : String
       case shell
-      when "zsh"  then File.expand_path("~/.zshrc", home: true)
-      when "bash" then File.expand_path("~/.bashrc", home: true)
-      when "fish" then File.expand_path("~/.config/fish/config.fish", home: true)
+      when "zsh"  then Validator.expand_home("~/.zshrc")
+      when "bash" then Validator.expand_home("~/.bashrc")
+      when "fish" then Validator.expand_home("~/.config/fish/config.fish")
       else
         raise ValidationError.new("unsupported shell '#{shell}' (try bash, zsh, or fish)")
       end

@@ -133,13 +133,25 @@ describe Doma::Validator do
     end
 
     it "accepts every allowed punctuation character" do
-      # Each punctuation char must come *after* an alphanumeric.
+      # Each punctuation char must come *after* an alphanumeric. `/` is a
+      # hierarchy separator, so it's exercised with a following segment
+      # rather than as a trailing slash (which is rejected below).
       Doma::Validator.tag!("a_").should eq("a_")
       Doma::Validator.tag!("a.").should eq("a.")
       Doma::Validator.tag!("a-").should eq("a-")
       Doma::Validator.tag!("a+").should eq("a+")
       Doma::Validator.tag!("a:").should eq("a:")
-      Doma::Validator.tag!("a/").should eq("a/")
+      Doma::Validator.tag!("a/b").should eq("a/b")
+    end
+
+    it "rejects empty path segments (trailing or doubled '/')" do
+      # An empty hierarchy segment renders as a blank/`/` node under
+      # `tags --tree`, so it's rejected at the boundary.
+      ["a/", "a//b", "a/b/", "a///b"].each do |bad|
+        expect_raises(Doma::ValidationError, /empty path segment/) do
+          Doma::Validator.tag!(bad)
+        end
+      end
     end
 
     it "rejects newline / tab / NUL" do
@@ -178,6 +190,14 @@ describe Doma::Validator do
 
     it "tolerates entirely-numeric input" do
       Doma::Validator.sanitize_tag("12345").should eq("12345")
+    end
+
+    it "normalizes empty path segments away rather than producing them" do
+      # Derived tags must satisfy the same no-empty-segment rule `tag!`
+      # enforces: doubled slashes collapse, trailing slashes drop.
+      Doma::Validator.sanitize_tag("a//b").should eq("a/b")
+      Doma::Validator.sanitize_tag("a/").should eq("a")
+      Doma::Validator.sanitize_tag("a/b/").should eq("a/b")
     end
   end
 end

@@ -22,6 +22,16 @@ module Doma
           "tag '#{cleaned}' is invalid (allowed: A-Z a-z 0-9 . _ - + : / starting alphanumeric)"
         )
       end
+      # `/` is a hierarchy separator (see `tags --tree`), so an empty
+      # segment is meaningless and renders as a blank/`/` node in the
+      # tree. The pattern already blocks a leading slash (must start
+      # alphanumeric); reject the trailing-`/` and doubled-`//` cases too
+      # rather than persist a tag the tree view can't display sanely.
+      if cleaned.ends_with?('/') || cleaned.includes?("//")
+        raise ValidationError.new(
+          "tag '#{cleaned}' has an empty path segment (no trailing or doubled '/')"
+        )
+      end
       cleaned
     end
 
@@ -42,9 +52,44 @@ module Doma
       return if raw.empty?
       cleaned = raw.gsub(/[^A-Za-z0-9_.\-+:\/]/, "")
       cleaned = cleaned.lstrip("._-+:/")
+      # Collapse doubled slashes so a derived name never yields an empty
+      # path segment — matching the rule `tag!` now enforces. Trailing
+      # slashes are dropped both here and after the length trim, since the
+      # cut can land on a `/` and re-expose one.
+      cleaned = cleaned.gsub(%r{/{2,}}, "/").rstrip("/")
       return if cleaned.empty?
-      cleaned = cleaned[0, MAX_TAG_LEN]
+      cleaned = cleaned[0, MAX_TAG_LEN].rstrip("/")
+      return if cleaned.empty?
       cleaned.matches?(TAG_PATTERN) ? cleaned : nil
+    end
+
+    # `~`/absolute-aware `File.expand_path` that survives a deleted cwd.
+    #
+    # `File.expand_path(path, home: true)` evaluates its `dir` default
+    # (`Dir.current`) *eagerly*, so it raises "Error getting current
+    # directory" even for absolute or `~`-rooted paths that never needed
+    # the cwd. That turned a removed cwd into an "internal error:" on every
+    # command that opens the DB (`list`, `tags`, `prune`, …) — including the
+    # `prune --gone` you'd reach for precisely because a directory vanished.
+    #
+    # Supply the base explicitly and only touch the cwd when the path is
+    # genuinely relative; absolute/`~` paths then resolve without it. When
+    # the path *is* relative and the cwd is gone, recast the raw
+    # "Error getting current directory" into a ValidationError so `add .`
+    # from a deleted directory reads as an actionable message instead of
+    # an "internal error:".
+    def expand_home(raw : String) : String
+      base = raw.starts_with?('/') || raw.starts_with?('~') ? "/" : current_dir_for(raw)
+      File.expand_path(raw, base, home: true)
+    end
+
+    private def current_dir_for(raw : String) : String
+      Dir.current
+    rescue
+      raise ValidationError.new(
+        "cannot resolve relative path '#{raw}': the current directory is unavailable (was it deleted?)",
+        hint: "cd into an existing directory, or pass an absolute path"
+      )
     end
 
     # Canonicalize a user-supplied path. By default the path must exist; pass
@@ -80,7 +125,7 @@ module Doma
     #
     # Trailing slashes are stripped so `/tmp` and `/tmp/` are the same key.
     def canonicalize(raw : String) : String
-      expanded = File.expand_path(raw, home: true)
+      expanded = expand_home(raw)
       resolved = if File.exists?(expanded)
                    begin
                      File.realpath(expanded)

@@ -1,6 +1,7 @@
 require "file_utils"
 require "yaml"
 require "./errors"
+require "./validator"
 
 module Doma
   # Static path helpers (env-aware). The `Settings` struct below holds the
@@ -19,14 +20,14 @@ module Doma
     # cwd, silently scattering the db/config into whatever directory the
     # command happened to run from. Same guard `db_path` already carries.
     def home : String
-      File.expand_path(ENV["DOMA_HOME"]?.presence || DEFAULT_DIR, home: true)
+      Validator.expand_home(ENV["DOMA_HOME"]?.presence || DEFAULT_DIR)
     end
 
     def config_path : String
       # Blank `DOMA_CONFIG=""` is treated as unset (see `home`); otherwise it
       # would resolve to the cwd and be used as the config *file* path.
       explicit = ENV["DOMA_CONFIG"]?.presence
-      return File.expand_path(explicit, home: true) if explicit
+      return Validator.expand_home(explicit) if explicit
       File.join(home, "config.yml")
     end
 
@@ -37,7 +38,7 @@ module Doma
       # subsequent command with "DOMA_DB points at a directory". Treat
       # blanks as unset on both sources.
       explicit = ENV["DOMA_DB"]?.presence || Settings.current.db_path.try(&.presence)
-      return File.expand_path(explicit, home: true) if explicit
+      return Validator.expand_home(explicit) if explicit
       File.join(home, "doma.db")
     end
 
