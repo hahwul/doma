@@ -117,6 +117,12 @@ module Doma::CLI
       if pick_mode && (json_mode || paths_only)
         raise Doma::ValidationError.new("--pick is incompatible with --json / --paths / -0")
       end
+      # Mirror the check above for the other two output formats: with both
+      # set, JSON silently won and `--paths` was dropped. Fail loudly so a
+      # pipeline that expected plain paths doesn't get JSON instead.
+      if json_mode && paths_only
+        raise Doma::ValidationError.new("--json is incompatible with --paths / -0 (pick one output format)")
+      end
       if group_by_tag && pick_mode
         # --pick resolves to a single path; grouping by tag is purely a
         # display dimension that doesn't fit a single-path result.
