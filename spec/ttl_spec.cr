@@ -153,8 +153,45 @@ describe "TTL: Database.add with expires_at" do
 
         # include_expired surfaces both.
         db.directories(include_expired: true).first.tags.sort!.should eq(["permanent", "temp"])
+
+        # `tags`/`stats` must agree with `list`: the expired `temp` tag is
+        # hidden and never inflates a count. (Regression: it used to leak
+        # into all_tags / stats while `list -t temp` returned nothing.)
+        db.all_tags.map(&.name).should eq(["permanent"])
+        db.all_tags.find!(&.name.== "permanent").count.should eq(1)
+
+        s = db.stats
+        s.total_tags.should eq(1)
+        s.top_tags.map(&.name).should eq(["permanent"])
+        s.top_tags.first.count.should eq(1)
       ensure
         FileUtils.rm_rf(tmp)
+      end
+    end
+  end
+
+  it "excludes expired associations from a tag's count without dropping the tag" do
+    with_temp_db do |db|
+      live = File.tempname("doma-ttl-live")
+      gone = File.tempname("doma-ttl-gone")
+      FileUtils.mkdir_p(live)
+      FileUtils.mkdir_p(gone)
+      past = Time.utc.to_unix - 60
+      begin
+        # Same tag on two dirs: one association active, one expired. The
+        # count should be 1 (active only), and the tag must stay listed.
+        db.add(live, ["shared"])
+        db.add(gone, ["shared"], expires_at: past)
+
+        summary = db.all_tags.find!(&.name.== "shared")
+        summary.count.should eq(1)
+
+        s = db.stats
+        s.total_tags.should eq(1)
+        s.top_tags.find!(&.name.== "shared").count.should eq(1)
+      ensure
+        FileUtils.rm_rf(live)
+        FileUtils.rm_rf(gone)
       end
     end
   end
