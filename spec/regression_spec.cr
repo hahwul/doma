@@ -505,3 +505,54 @@ describe "Trash file locking" do
     end
   end
 end
+
+describe "doma from a deleted current directory" do
+  bin = File.expand_path("../bin/doma", __DIR__)
+
+  # Spawn doma with its cwd removed out from under it: a shell cds into a
+  # scratch dir, deletes it, then execs doma. `File.expand_path(..., home:
+  # true)` used to evaluate its `Dir.current` default eagerly and crash
+  # even for the absolute DOMA_HOME, so every DB-opening command died with
+  # "internal error: Error getting current directory".
+  run_from_deleted_cwd = ->(doma_args : Array(String), home : String) do
+    gone = File.tempname("doma-gonecwd")
+    FileUtils.mkdir_p(gone)
+    out_buf = IO::Memory.new
+    err_buf = IO::Memory.new
+    argline = doma_args.map { |a| "'#{a}'" }.join(" ")
+    script = "cd \"#{gone}\" && rmdir \"#{gone}\" && exec \"#{bin}\" #{argline}"
+    status = Process.run("/bin/sh", ["-c", script], env: {"DOMA_HOME" => home}, output: out_buf, error: err_buf)
+    FileUtils.rm_rf(gone)
+    {status: status, out: out_buf.to_s, err: err_buf.to_s}
+  end
+
+  it "[cwd-gone] cwd-independent commands still succeed (list)" do
+    pending! "binary not built" unless File.exists?(bin)
+    home = File.tempname("doma-cwdgone-home")
+    FileUtils.mkdir_p(home)
+    sink = IO::Memory.new
+    Process.run(bin, ["add", "/tmp", "-t", "scratch"], env: {"DOMA_HOME" => home}, output: sink, error: sink)
+
+    r = run_from_deleted_cwd.call(["list"], home)
+    r[:status].exit_code.should eq(0)
+    (r[:out] + r[:err]).should_not contain("internal error:")
+    r[:out].should contain("scratch")
+  ensure
+    FileUtils.rm_rf(home) if home
+  end
+
+  it "[cwd-gone] `add .` reports a clean error, not an internal one" do
+    pending! "binary not built" unless File.exists?(bin)
+    home = File.tempname("doma-cwdgone-home2")
+    FileUtils.mkdir_p(home)
+
+    r = run_from_deleted_cwd.call(["add", "."], home)
+    # Relative path genuinely needs the cwd; the failure is expected but
+    # should be a ValidationError (exit 2), not "internal error:".
+    r[:status].exit_code.should eq(2)
+    r[:err].should contain("current directory is unavailable")
+    r[:err].should_not contain("internal error:")
+  ensure
+    FileUtils.rm_rf(home) if home
+  end
+end

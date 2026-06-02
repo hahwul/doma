@@ -133,13 +133,25 @@ describe Doma::Validator do
     end
 
     it "accepts every allowed punctuation character" do
-      # Each punctuation char must come *after* an alphanumeric.
+      # Each punctuation char must come *after* an alphanumeric. `/` is a
+      # hierarchy separator, so it's exercised with a following segment
+      # rather than as a trailing slash (which is rejected below).
       Doma::Validator.tag!("a_").should eq("a_")
       Doma::Validator.tag!("a.").should eq("a.")
       Doma::Validator.tag!("a-").should eq("a-")
       Doma::Validator.tag!("a+").should eq("a+")
       Doma::Validator.tag!("a:").should eq("a:")
-      Doma::Validator.tag!("a/").should eq("a/")
+      Doma::Validator.tag!("a/b").should eq("a/b")
+    end
+
+    it "rejects empty path segments (trailing or doubled '/')" do
+      # An empty hierarchy segment renders as a blank/`/` node under
+      # `tags --tree`, so it's rejected at the boundary.
+      ["a/", "a//b", "a/b/", "a///b"].each do |bad|
+        expect_raises(Doma::ValidationError, /empty path segment/) do
+          Doma::Validator.tag!(bad)
+        end
+      end
     end
 
     it "rejects newline / tab / NUL" do
@@ -178,6 +190,40 @@ describe Doma::Validator do
 
     it "tolerates entirely-numeric input" do
       Doma::Validator.sanitize_tag("12345").should eq("12345")
+    end
+
+    it "normalizes empty path segments away rather than producing them" do
+      # Derived tags must satisfy the same no-empty-segment rule `tag!`
+      # enforces: doubled slashes collapse, trailing slashes drop.
+      Doma::Validator.sanitize_tag("a//b").should eq("a/b")
+      Doma::Validator.sanitize_tag("a/").should eq("a")
+      Doma::Validator.sanitize_tag("a/b/").should eq("a/b")
+    end
+  end
+
+  describe ".expand_home" do
+    it "expands a leading ~ and ~/ to HOME without needing the cwd" do
+      Doma::Validator.expand_home("~").should eq(ENV["HOME"])
+      Doma::Validator.expand_home("~/foo").should eq(File.join(ENV["HOME"], "foo"))
+    end
+
+    it "passes absolute paths through untouched" do
+      Doma::Validator.expand_home("/abs/x").should eq("/abs/x")
+    end
+
+    it "still resolves ~user against the cwd (Crystal does no per-user lookup)" do
+      # Regression guard: `~user` is NOT a home form Crystal expands, so it
+      # must stay relative to the cwd rather than being rooted at "/".
+      Dir.cd("/tmp") do
+        Doma::Validator.expand_home("~user/foo").should eq(File.join(Dir.current, "~user/foo"))
+        Doma::Validator.expand_home("~user/foo").should_not start_with("/~user")
+      end
+    end
+
+    it "resolves a plain relative path against the cwd" do
+      Dir.cd("/tmp") do
+        Doma::Validator.expand_home("rel/x").should eq(File.join(Dir.current, "rel/x"))
+      end
     end
   end
 end

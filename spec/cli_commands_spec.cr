@@ -409,6 +409,23 @@ describe "doma run" do
     end
   end
 
+  it "[gone dir] blames the missing directory, not the command" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      gone = File.tempname("doma-run-gone")
+      FileUtils.mkdir_p(gone)
+      run(["add", gone, "-t", "ghost"], {"DOMA_HOME" => home})
+      FileUtils.rm_rf(gone)
+
+      r = run(["run", "ghost", "--", "true"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(1)
+      r[:err].should contain("directory no longer exists")
+      r[:err].should contain("doma prune --gone")
+      # `true` plainly exists — the old message wrongly named it.
+      r[:err].should_not contain("'true'")
+    end
+  end
+
   it "[no command] errors with 2" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     with_home do |home|
@@ -598,6 +615,30 @@ describe "doma list output flags" do
       seed_home(home)
       r = run(["list", "--paths", "-0"], {"DOMA_HOME" => home})
       r[:status].exit_code.should eq(0)
+    end
+  end
+end
+
+# ---------- export output-flag conflicts ----------
+
+describe "doma export output flags" do
+  it "[--json --yaml] rejects conflicting output formats" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      r = run(["export", "--json", "--yaml"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(2)
+      r[:err].should contain("mutually exclusive")
+    end
+  end
+
+  it "[--yaml] alone still selects YAML" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      r = run(["export", "--yaml"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(0)
+      r[:out].should contain("version:")
     end
   end
 end

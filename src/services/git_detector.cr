@@ -1,3 +1,5 @@
+require "../utils/validator"
+
 module Doma
   # Pulls metadata from a `.git/config` file without spawning git itself.
   # Returns an empty result when the path isn't a git working tree, when the
@@ -33,7 +35,7 @@ module Doma
     EMPTY = Info.new(false, nil, nil, nil)
 
     def detect(path : String) : Info
-      git_dir = locate_git_dir(File.expand_path(path, home: true))
+      git_dir = locate_git_dir(Doma::Validator.expand_home(path))
       return EMPTY unless git_dir
       url = read_origin_url(git_dir)
       return Info.new(true, nil, nil, nil) unless url

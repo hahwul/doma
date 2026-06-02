@@ -206,6 +206,16 @@ module Doma::CLI
     # binary, unreadable chdir, etc.) into a sentinel exit code so the
     # parallel reaper never blocks waiting for a fiber that crashed.
     private def run_one(cmd : String, args : Array(String), path : String, *, attach_stdin : Bool) : Int32
+      # A missing `chdir:` target and a missing *command* both surface as
+      # File::NotFoundError, and the runtime's message names the command
+      # ("Error executing process: 'true': No such file or directory") —
+      # so a deleted tagged directory looks like the user mistyped a
+      # binary that plainly exists. Check the directory first and say what
+      # actually went wrong, pointing at the cleanup command for dead paths.
+      unless Dir.exists?(path)
+        STDERR.puts "✗ #{path}: directory no longer exists (run `doma prune --gone` to drop dead paths)"
+        return 127
+      end
       input = attach_stdin ? STDIN : Process::Redirect::Close
       status = Process.run(cmd, args: args, chdir: path, output: STDOUT, error: STDERR, input: input)
       status.exit_code
