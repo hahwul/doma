@@ -63,12 +63,20 @@ class Doma::Database
   record TagSummary, name : String, count : Int64
 
   def all_tags : Array(TagSummary)
+    # Only active (non-expired) associations count toward a tag's total,
+    # and a tag whose associations have all expired drops out entirely —
+    # matching what `list`/`paths_for_tag` already do. Putting
+    # NOT_EXPIRED_DT on the JOIN (not WHERE) keeps the LEFT JOIN shape so
+    # a fully-expired tag yields cnt = 0, which `HAVING` then filters.
+    # Without this, `tags`/`tags --json`/`tags --names` listed phantom
+    # tags that `list -t <tag>` could never resolve to a directory.
     @db.query_all(
       <<-SQL, as: {String, Int64}
         SELECT t.name, COUNT(dt.directory_id) AS cnt
         FROM tags t
-        LEFT JOIN directory_tags dt ON dt.tag_id = t.id
+        LEFT JOIN directory_tags dt ON dt.tag_id = t.id AND #{NOT_EXPIRED_DT}
         GROUP BY t.id
+        HAVING cnt > 0
         ORDER BY t.name
         SQL
     ).map { |row| TagSummary.new(row[0], row[1]) }
@@ -278,14 +286,22 @@ class Doma::Database
 
   def stats(top_n : Int32 = 10, recent_n : Int32 = 5, used_n : Int32 = 5) : Stats
     total_dirs = @db.scalar("SELECT COUNT(*) FROM directories").as(Int64)
-    total_tags = @db.scalar("SELECT COUNT(*) FROM tags").as(Int64)
+    # Count only tags with at least one active association, so the
+    # headline number matches the `Top tags` rows below (and `doma tags`)
+    # rather than including tags whose only association has expired.
+    total_tags = @db.scalar(
+      "SELECT COUNT(DISTINCT dt.tag_id) FROM directory_tags dt WHERE #{NOT_EXPIRED_DT}"
+    ).as(Int64)
 
+    # Same expired-aware counting as `all_tags`: ignore expired
+    # associations and drop tags left with none.
     top = @db.query_all(
       <<-SQL, top_n, as: {String, Int64}
         SELECT t.name, COUNT(dt.directory_id) AS cnt
         FROM tags t
-        LEFT JOIN directory_tags dt ON dt.tag_id = t.id
+        LEFT JOIN directory_tags dt ON dt.tag_id = t.id AND #{NOT_EXPIRED_DT}
         GROUP BY t.id
+        HAVING cnt > 0
         ORDER BY cnt DESC, t.name ASC
         LIMIT ?
         SQL

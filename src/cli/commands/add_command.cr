@@ -96,7 +96,7 @@ module Doma::CLI
           applied.concat(derive_tags(abs, use_basename, use_git, git_explicit))
           applied.uniq!
           summary = applied.empty? ? "(no tags)" : "tags: #{applied.join(", ")}"
-          summary += "  (#{ttl_label})" if ttl_label
+          summary += " (#{ttl_label})" if ttl_label
           if json_mode
             results << {
               "input"     => JSON::Any.new(path),
@@ -161,7 +161,7 @@ module Doma::CLI
           end
 
           summary = applied.empty? ? "(no tags)" : "tags: #{applied.join(", ")}"
-          summary += "  (#{ttl_label})" if ttl_label
+          summary += " (#{ttl_label})" if ttl_label
 
           if json_mode
             short_id = db.find_path_info(abs).try(&.short_id) || ""
