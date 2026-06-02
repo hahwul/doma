@@ -65,6 +65,54 @@ describe "Import/Export" do
     end
   end
 
+  it "splits a merge into added (new) vs updated (already present)" do
+    with_temp_db do |db|
+      # One path already in the db, one brand new in the snapshot.
+      existing = Dir.current
+      db.add(existing, ["here"])
+
+      snapshot = Doma::Snapshot.new([
+        Doma::Snapshot::Entry.new(existing, ["here"]),
+        Doma::Snapshot::Entry.new("/imported/fresh", ["new"]),
+      ])
+      path = File.tempname("doma-snap-split") + ".json"
+      File.write(path, snapshot.to_json)
+      begin
+        result = Doma::Importer.from_file(db, path, mode: Doma::Importer::Mode::Merge)
+        result.imported.should eq(2)
+        result.added.should eq(1)
+        result.updated.should eq(1)
+        result.skipped.should eq(0)
+
+        # A second merge of the same snapshot adds nothing new.
+        again = Doma::Importer.from_file(db, path, mode: Doma::Importer::Mode::Merge)
+        again.added.should eq(0)
+        again.updated.should eq(2)
+        again.imported.should eq(2)
+      ensure
+        File.delete(path) if File.exists?(path)
+      end
+    end
+  end
+
+  it "counts replace-mode entries as added (db was wiped first)" do
+    with_temp_db do |db|
+      db.add(Dir.current, ["old"])
+      snapshot = Doma::Snapshot.new([
+        Doma::Snapshot::Entry.new("/imported/path", ["imported"]),
+      ])
+      path = File.tempname("doma-snap-replace") + ".json"
+      File.write(path, snapshot.to_json)
+      begin
+        result = Doma::Importer.from_file(db, path, mode: Doma::Importer::Mode::Replace)
+        result.added.should eq(1)
+        result.updated.should eq(0)
+      ensure
+        File.delete(path) if File.exists?(path)
+      end
+    end
+  end
+
   it "wipes existing rows in replace mode" do
     with_temp_db do |db|
       db.add(Dir.current, ["existing"])

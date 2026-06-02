@@ -14,7 +14,17 @@ module Doma
   module Importer
     extend self
 
-    record Result, imported : Int32, skipped : Int32, replaced : Bool
+    # `imported` stays the total of successfully-applied entries
+    # (`added + updated`) so existing callers keep working; `added` /
+    # `updated` break that total down so the user can tell a real merge
+    # from a no-op re-import (every entry already present → updated, not
+    # added).
+    record Result,
+      imported : Int32,
+      skipped : Int32,
+      replaced : Bool,
+      added : Int32 = 0,
+      updated : Int32 = 0
 
     # Reused across all v1 entries so we don't allocate a fresh empty
     # hash per row.
@@ -79,7 +89,8 @@ module Doma
         )
       end
 
-      imported = 0
+      added = 0
+      updated = 0
       skipped = 0
       skipped_messages = [] of String
 
@@ -90,6 +101,17 @@ module Doma
 
         snapshot.entries.each do |entry|
           begin
+            # Classify before writing: was this canonical path already a
+            # row? The check runs on the transaction's own connection so a
+            # path that appears twice in one snapshot counts as added once,
+            # then updated. `add_tx` canonicalizes identically (it uses
+            # `Validator.canonicalize` when `validate_path` is false), so
+            # this lookup matches the row add_tx will touch.
+            abs = Doma::Validator.canonicalize(entry.path)
+            existed = !cnn.query_one?(
+              "SELECT 1 FROM directories WHERE path = ?", abs, as: Int32
+            ).nil?
+
             # Skip path validation: importing across machines is normal,
             # and the snapshot may legitimately reference paths that don't
             # exist on this host yet.
@@ -117,7 +139,7 @@ module Doma
                 db.add_tx(cnn, entry.path, tag_group, validate_path: false, expires_at: ttl)
               end
             end
-            imported += 1
+            existed ? (updated += 1) : (added += 1)
           rescue ex : Doma::ValidationError
             skipped += 1
             skipped_messages << "import: skipped #{entry.path} (#{ex.message})"
@@ -129,7 +151,7 @@ module Doma
       # an error from the transaction itself.
       skipped_messages.each { |msg| Doma::Logger.warn msg }
 
-      Result.new(imported, skipped, mode == Mode::Replace)
+      Result.new(added + updated, skipped, mode == Mode::Replace, added, updated)
     end
   end
 end

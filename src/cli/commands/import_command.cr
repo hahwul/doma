@@ -59,8 +59,18 @@ module Doma::CLI
       db = Doma::Database.open
       begin
         result = Doma::Importer.from_file(db, file, mode: mode)
-        kind = result.replaced ? "replaced" : "merged"
-        Doma::Logger.success "import #{kind}: #{result.imported} imported, #{result.skipped} skipped"
+        if result.replaced
+          # After a wipe every applied entry is new, so the breakdown
+          # would just restate the total — keep the terse form.
+          Doma::Logger.success "import replaced: #{result.imported} imported, #{result.skipped} skipped"
+        else
+          # Merge: spell out new vs already-present so a no-op re-import
+          # (every entry already there) doesn't read as "N imported".
+          Doma::Logger.success(
+            "import merged: #{result.imported} imported " \
+            "(#{result.added} new, #{result.updated} existing), #{result.skipped} skipped"
+          )
+        end
       ensure
         db.close
       end
