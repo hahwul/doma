@@ -116,7 +116,14 @@ module Doma
         end
         exit ex.exit_code
       rescue ex : OptionParser::InvalidOption | OptionParser::MissingOption
-        Doma::Logger.error ex.message || "invalid option"
+        # Crystal's OptionParser raises capitalized, terse messages
+        # ("Invalid option: --x" / "Missing option: --x") that clash with
+        # doma's lowercase voice and offer no next step. Recast them and
+        # point at the relevant `--help`.
+        flag = (ex.message || "").split(": ", 2).last
+        msg = ex.is_a?(OptionParser::MissingOption) ? "option '#{flag}' needs a value" : "unknown option '#{flag}'"
+        Doma::Logger.error msg
+        STDERR.puts "  see `doma #{command} --help` for valid options"
         exit 1
       rescue ex : Exception
         # `cmd | head -1` and friends close the pipe after one line —

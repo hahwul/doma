@@ -66,6 +66,32 @@ describe "doma rm" do
   end
 end
 
+# ---------- option-parser error normalization ----------
+
+describe "doma option errors" do
+  it "recasts an unknown flag in doma's voice with a --help pointer" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      r = run(["list", "--frobnicate"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(1)
+      r[:err].should contain("unknown option '--frobnicate'")
+      r[:err].should contain("doma list --help")
+      # No leftover capitalized Crystal default.
+      r[:err].should_not contain("Invalid option")
+    end
+  end
+
+  it "reports a flag that is missing its value" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      r = run(["add", ".", "--ttl"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(1)
+      r[:err].should contain("option '--ttl' needs a value")
+      r[:err].should_not contain("Missing option")
+    end
+  end
+end
+
 # ---------- prune ----------
 
 describe "doma prune" do
