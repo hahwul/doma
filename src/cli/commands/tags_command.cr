@@ -1,6 +1,7 @@
 require "option_parser"
 require "json"
 require "../../db/database"
+require "../../utils/errors"
 require "../../utils/logger"
 
 module Doma::CLI
@@ -28,6 +29,21 @@ module Doma::CLI
         end
       end
       parser.parse(args)
+
+      # --tree / --json / --names are three different output formats; with
+      # more than one set the later check silently won and the others were
+      # dropped (e.g. `tags --tree --json` ignored --tree). Reject the
+      # combination, mirroring `list` and `import`'s mutually-exclusive
+      # flags. `-0` is the NUL variant of --names, not a separate mode.
+      modes = [] of String
+      modes << "--tree" if tree_mode
+      modes << "--json" if json_mode
+      modes << "--names" if names_only
+      if modes.size > 1
+        raise Doma::ValidationError.new(
+          "#{modes.join(" / ")} are mutually exclusive (pick one output format)"
+        )
+      end
 
       db = Doma::Database.open
       begin

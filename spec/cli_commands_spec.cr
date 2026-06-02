@@ -557,6 +557,49 @@ describe "doma tags" do
       parsed.first.as_h.keys.sort!.should eq(["count", "name"])
     end
   end
+
+  it "[--tree --json] rejects conflicting output formats" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      r = run(["tags", "--tree", "--json"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(2)
+      r[:err].should contain("mutually exclusive")
+    end
+  end
+
+  it "[--names -0] are compatible (NUL is just the --names separator)" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      r = run(["tags", "--names", "-0"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(0)
+      r[:out].should_not contain('\n')
+    end
+  end
+end
+
+# ---------- list output-flag conflicts ----------
+
+describe "doma list output flags" do
+  it "[--json --paths] rejects conflicting output formats" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      r = run(["list", "--json", "--paths"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(2)
+      r[:err].should contain("--json is incompatible with --paths")
+    end
+  end
+
+  it "[--paths -0] are compatible (NUL is just the --paths separator)" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      r = run(["list", "--paths", "-0"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(0)
+    end
+  end
 end
 
 # ---------- stats ----------
