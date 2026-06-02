@@ -200,4 +200,30 @@ describe Doma::Validator do
       Doma::Validator.sanitize_tag("a/b/").should eq("a/b")
     end
   end
+
+  describe ".expand_home" do
+    it "expands a leading ~ and ~/ to HOME without needing the cwd" do
+      Doma::Validator.expand_home("~").should eq(ENV["HOME"])
+      Doma::Validator.expand_home("~/foo").should eq(File.join(ENV["HOME"], "foo"))
+    end
+
+    it "passes absolute paths through untouched" do
+      Doma::Validator.expand_home("/abs/x").should eq("/abs/x")
+    end
+
+    it "still resolves ~user against the cwd (Crystal does no per-user lookup)" do
+      # Regression guard: `~user` is NOT a home form Crystal expands, so it
+      # must stay relative to the cwd rather than being rooted at "/".
+      Dir.cd("/tmp") do
+        Doma::Validator.expand_home("~user/foo").should eq(File.join(Dir.current, "~user/foo"))
+        Doma::Validator.expand_home("~user/foo").should_not start_with("/~user")
+      end
+    end
+
+    it "resolves a plain relative path against the cwd" do
+      Dir.cd("/tmp") do
+        Doma::Validator.expand_home("rel/x").should eq(File.join(Dir.current, "rel/x"))
+      end
+    end
+  end
 end

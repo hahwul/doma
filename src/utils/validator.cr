@@ -79,8 +79,17 @@ module Doma
     # from a deleted directory reads as an actionable message instead of
     # an "internal error:".
     def expand_home(raw : String) : String
-      base = raw.starts_with?('/') || raw.starts_with?('~') ? "/" : current_dir_for(raw)
+      base = cwd_independent?(raw) ? "/" : current_dir_for(raw)
       File.expand_path(raw, base, home: true)
+    end
+
+    # True when the cwd plays no part in resolving `raw`: an absolute path,
+    # or the only `~` form Crystal's `home: true` actually expands (`~` or
+    # `~/…`). `~user` is deliberately excluded — Crystal does not do
+    # per-user home lookup, so it stays a *relative* segment that must
+    # resolve against the cwd, exactly as before this helper existed.
+    private def cwd_independent?(raw : String) : Bool
+      raw.starts_with?('/') || raw == "~" || raw.starts_with?("~/")
     end
 
     private def current_dir_for(raw : String) : String
