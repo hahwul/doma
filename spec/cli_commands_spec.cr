@@ -445,11 +445,35 @@ describe "doma run" do
       seed_home(home)
       # Without a leading `--`, `echo`/`hi` would otherwise land in
       # positional_tags and trip the "both forms" rule with a misleading
-      # message. The validator should prefer the actual mistake first.
+      # message. The validator should prefer the actual mistake first,
+      # and — since no `--` was typed — reconstruct the intended command.
       r = run(["run", "-t", "shared", "echo", "hi"], {"DOMA_HOME" => home})
       r[:status].exit_code.should eq(2)
-      r[:err].should contain("command is required after '--'")
+      r[:err].should contain("no command to run")
+      r[:err].should contain("did you mean: doma run -t shared -- echo hi")
       r[:err].should_not contain("both positionally")
+    end
+  end
+
+  it "[TAG cmd...] (forgot --) reconstructs the intended invocation" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      r = run(["run", "shared", "echo", "hi"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(2)
+      r[:err].should contain("did you mean: doma run shared -- echo hi")
+      # Don't blame a separator the user never typed.
+      r[:err].should_not contain("after '--'")
+    end
+  end
+
+  it "[TAG --] (empty after separator) still blames the separator" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      r = run(["run", "shared", "--"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(2)
+      r[:err].should contain("command is required after '--'")
     end
   end
 
