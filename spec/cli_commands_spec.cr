@@ -221,6 +221,32 @@ describe "doma move" do
       FileUtils.rm_rf(target) if target
     end
   end
+
+  it "echoes the canonical stored path, not the raw argument" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      src = File.tempname("doma-move-canon-src")
+      dst = File.tempname("doma-move-canon-dst")
+      FileUtils.mkdir_p(src)
+      FileUtils.mkdir_p(dst)
+      begin
+        run(["add", src, "-t", "mvc"], {"DOMA_HOME" => home})
+        # Trailing slash on the destination is a deterministic,
+        # cross-platform difference between the raw arg and its canonical
+        # form. The success line must show the collapsed canonical path —
+        # the same string `list` stores — not the raw `dst/`.
+        r = run(["move", src, "#{dst}/"], {"DOMA_HOME" => home})
+        r[:status].exit_code.should eq(0)
+        stored = run(["list", "-t", "mvc", "--paths"], {"DOMA_HOME" => home})[:out].strip
+
+        shown = r[:out].match(/moved .+ -> (.+)/).try(&.[1]).try(&.strip)
+        shown.should eq(stored)
+      ensure
+        FileUtils.rm_rf(src)
+        FileUtils.rm_rf(dst)
+      end
+    end
+  end
 end
 
 # ---------- short_id redirects ----------

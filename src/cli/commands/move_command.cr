@@ -62,7 +62,13 @@ module Doma::CLI
         # `db.move_path` re-runs the source lookup inside its transaction,
         # so the (1) check is duplicate work but trivially cheap and worth
         # it for the better error path.
+        # Canonicalize both up front: used for the pre-checks below and,
+        # crucially, for the success message — `add`/`list` always show
+        # the canonical stored path, and echoing the raw args here (e.g.
+        # `/tmp/...` instead of `/private/tmp/...`, or a trailing slash)
+        # made move look like it touched a different path than it stored.
         old_abs = Doma::Validator.canonicalize(old_path)
+        new_abs = Doma::Validator.canonicalize(new_path)
         unless db.find_path_info(old_abs)
           raise Doma::NotFoundError.new(
             "path not registered: #{old_abs}",
@@ -77,7 +83,6 @@ module Doma::CLI
           # the directory on disk yet" and "I'm syncing from another
           # host" — the previous bare error pushed users to make a
           # placeholder dir or hand-edit the database.
-          new_abs = Doma::Validator.canonicalize(new_path)
           unless Dir.exists?(new_abs)
             raise Doma::ValidationError.new(
               "not a directory: #{new_abs}",
@@ -89,11 +94,11 @@ module Doma::CLI
 
         case db.move_path(old_path, new_path, validate_path: !allow_missing)
         when :noop
-          Doma::Logger.info "no change (#{old_path} == #{new_path})"
+          Doma::Logger.info "no change (#{old_abs} == #{new_abs})"
         when :moved
-          Doma::Logger.success "moved #{old_path} -> #{new_path}"
+          Doma::Logger.success "moved #{old_abs} -> #{new_abs}"
         when :merged
-          Doma::Logger.success "merged #{old_path} into existing #{new_path}"
+          Doma::Logger.success "merged #{old_abs} into existing #{new_abs}"
         end
       ensure
         db.close
