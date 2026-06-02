@@ -61,6 +61,9 @@ module Doma::CLI
           cmd_args.concat(after)
         end
       end
+      # Capture before parse: a bare `--` is consumed by the parser, so
+      # we can't tell afterwards whether the user supplied a separator.
+      had_separator = args.includes?("--")
       parser.parse(args)
       if jobs && !parallel
         raise Doma::ValidationError.new("--jobs requires --parallel")
@@ -68,12 +71,22 @@ module Doma::CLI
       # Global -q already implies --no-header — both want a quieter run.
       no_header ||= Doma::Logger.quiet?
 
-      # Check the missing-`--` case first: if the user typed
+      # Check the missing-command case first: if the user typed
       # `run -t shared echo hi` (no separator), `echo`/`hi` land in
       # positional_tags and would trip the "both forms" rule below
       # with a misleading message. Surfacing the real mistake (no `--`)
       # is what the user actually needs.
-      raise Doma::ValidationError.new("command is required after '--'") if cmd_args.empty?
+      if cmd_args.empty?
+        # If they did write `--` but nothing followed, the original
+        # message is exactly right. Otherwise they never used a separator
+        # at all — don't tell them to look "after '--'" for one that isn't
+        # there; teach the syntax and reconstruct their likely intent.
+        raise Doma::ValidationError.new("command is required after '--'") if had_separator
+        raise Doma::ValidationError.new(
+          "no command to run — commands go after a '--' separator",
+          hint: missing_separator_hint(flag_tags, positional_tags)
+        )
+      end
 
       if !flag_tags.empty? && !positional_tags.empty?
         raise Doma::ValidationError.new(
@@ -172,6 +185,21 @@ module Doma::CLI
       end
 
       exit(failures == 0 ? 0 : 1)
+    end
+
+    # Builds a "did you mean" line for the no-`--` mistake by
+    # reconstructing the user's likely intent. With `-t TAG` every
+    # positional is the command; otherwise the first positional is the
+    # tag and the rest is the command. Falls back to the generic form
+    # when there isn't enough to reconstruct.
+    private def missing_separator_hint(flag_tags : Array(String), positional_tags : Array(String)) : String
+      if !flag_tags.empty?
+        cmd = positional_tags.join(" ")
+        return "did you mean: doma run -t #{flag_tags.first} -- #{cmd}".rstrip if !cmd.empty?
+      elsif positional_tags.size >= 2
+        return "did you mean: doma run #{positional_tags.first} -- #{positional_tags[1..].join(" ")}"
+      end
+      "usage: doma run <tag> -- <cmd>"
     end
 
     # Runs a single instance, translating spawn/exec failures (missing
