@@ -1849,6 +1849,27 @@ describe "doma info advanced" do
     end
   end
 
+  it "[trashed short_id] surfaces a restore hint instead of a plain 'no entry'" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      target = File.tempname("doma-info-sid-trash")
+      FileUtils.mkdir_p(target)
+      run(["add", target, "-t", "sid-trash"], {"DOMA_HOME" => home})
+      # Capture the short_id from list --json
+      list_r = run(["list", "--json"], {"DOMA_HOME" => home})
+      sid = JSON.parse(list_r[:out]).as_a.first.as_h["short_id"].as_s
+      run(["rm", sid], {"DOMA_HOME" => home})
+
+      r = run(["info", sid], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(3)
+      r[:err].should contain("no entry with short_id")
+      r[:err].should contain("in trash")
+      r[:err].should contain("doma trash restore")
+    ensure
+      FileUtils.rm_rf(target) if target
+    end
+  end
+
   it "[relative time] shows '<N>s ago' alongside the absolute timestamp" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     with_home do |home|

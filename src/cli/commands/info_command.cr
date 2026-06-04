@@ -43,8 +43,9 @@ module Doma::CLI
       begin
         # Three input shapes, resolution order:
         #   1. short_id-shaped (hex, no path separators) → resolve via
-        #      ShortIdResolver. Mirrors `rm <id>` / `trash restore <id>`
-        #      so the same 7-char id from `list` output works everywhere.
+        #      ShortIdResolver (also checks trash for a restore hint).
+        #      Mirrors `rm <id>` / `trash restore <id>` so the same 7-char
+        #      id from `list` output works everywhere.
         #   2. path-shaped → canonicalize and look up directly.
         #   3. not registered + path-shaped → check trash so a recent
         #      `rm` doesn't leave the user staring at "not registered"
@@ -52,42 +53,50 @@ module Doma::CLI
         canonical, info = resolve_target(db, raw)
 
         unless info
-          if !Doma::ShortIdResolver.looks_like?(raw)
-            # Bare-name fallback: when the user types `doma info doma`,
-            # they almost certainly mean "show me the entry whose path
-            # or tag contains `doma`", not "look up `<cwd>/doma` as a
-            # filesystem path". Mirror `list <query>` here when the
-            # input has no path-like markers (no `/`, `.`, or `~`),
-            # didn't resolve as a short_id, and isn't `.` (which always
-            # means cwd). Exactly one hit → show it. Multiple →
-            # disambiguate with short_ids so the user can re-issue.
-            if name_like?(raw) && (info = resolve_by_search(db, raw))
-              tags = db.tags_for(info.id)
-              ttl_map = db.tag_expirations(info.id, include_past: true)
-              exists = Dir.exists?(info.path)
-              if json_mode
-                render_json(info, tags, ttl_map, exists)
-              else
-                render_text(info, tags, ttl_map, exists, raw)
-              end
-              return
-            end
-
-            if trashed = Doma::Trash.find_by_path(canonical)
+          if Doma::ShortIdResolver.looks_like?(raw)
+            msg = "no entry with short_id '#{raw}'"
+            if trashed = Doma::Trash.find_by_short_id(raw.downcase)
               raise Doma::NotFoundError.new(
-                "not registered: #{canonical}",
-                hint: "in trash (id #{trashed.short_id[0..6]}). " \
-                      "Restore: doma trash restore #{trashed.short_id[0..6]}"
+                msg,
+                hint: "in trash (#{trashed.path}). Restore: doma trash restore #{trashed.short_id[0..6]}"
               )
             end
+            # short_id input that didn't resolve: caller-friendly message
+            # without an `add` hint (the user typed an id, not a path).
+            raise Doma::NotFoundError.new(msg)
+          end
+
+          # Bare-name fallback: when the user types `doma info doma`,
+          # they almost certainly mean "show me the entry whose path
+          # or tag contains `doma`", not "look up `<cwd>/doma` as a
+          # filesystem path". Mirror `list <query>` here when the
+          # input has no path-like markers (no `/`, `.`, or `~`),
+          # didn't resolve as a short_id, and isn't `.` (which always
+          # means cwd). Exactly one hit → show it. Multiple →
+          # disambiguate with short_ids so the user can re-issue.
+          if name_like?(raw) && (info = resolve_by_search(db, raw))
+            tags = db.tags_for(info.id)
+            ttl_map = db.tag_expirations(info.id, include_past: true)
+            exists = Dir.exists?(info.path)
+            if json_mode
+              render_json(info, tags, ttl_map, exists)
+            else
+              render_text(info, tags, ttl_map, exists, raw)
+            end
+            return
+          end
+
+          if trashed = Doma::Trash.find_by_path(canonical)
             raise Doma::NotFoundError.new(
               "not registered: #{canonical}",
-              hint: "to register it, run: doma add #{raw}"
+              hint: "in trash (id #{trashed.short_id[0..6]}). " \
+                    "Restore: doma trash restore #{trashed.short_id[0..6]}"
             )
           end
-          # short_id input that didn't resolve: caller-friendly message
-          # without an `add` hint (the user typed an id, not a path).
-          raise Doma::NotFoundError.new("no entry with short_id '#{raw}'")
+          raise Doma::NotFoundError.new(
+            "not registered: #{canonical}",
+            hint: "to register it, run: doma add #{raw}"
+          )
         end
 
         tags = db.tags_for(info.id)
