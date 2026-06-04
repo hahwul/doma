@@ -39,25 +39,22 @@ describe Doma::TagRenderer do
         end
       end
 
-      it "tints the base tag yellow" do
-        rendered = Doma::TagRenderer.render("work", nil, true)
-        rendered.should contain("\e[33m")
-        rendered.should contain("work")
+      # Colorize is forced on above, so the output is fully deterministic —
+      # assert the exact escape sequence shape rather than just substrings.
+      it "wraps the base tag in yellow (33) with a reset" do
+        Doma::TagRenderer.render("work", nil, true).should eq("\e[33m#work\e[39m")
       end
 
-      it "tints a live TTL suffix dark gray" do
+      it "tints a live TTL suffix dark gray (90), leaving the base yellow" do
         future = Time.utc.to_unix + 7230
-        rendered = Doma::TagRenderer.render("work", future, true)
-        rendered.should contain("~2h")
-        rendered.should contain("\e[90m") # dark_gray for active
-        rendered.should_not contain("\e[31m")
+        Doma::TagRenderer.render("work", future, true)
+          .should eq("\e[33m#work\e[39m\e[90m~2h\e[39m")
       end
 
-      it "tints a lapsed TTL suffix red so it pops" do
+      it "tints a lapsed TTL suffix red (31) so it pops" do
         past = Time.utc.to_unix - 100
-        rendered = Doma::TagRenderer.render("work", past, true)
-        rendered.should contain("~expired")
-        rendered.should contain("\e[31m") # red for expired
+        Doma::TagRenderer.render("work", past, true)
+          .should eq("\e[33m#work\e[39m\e[31m~expired\e[39m")
       end
     end
   end
