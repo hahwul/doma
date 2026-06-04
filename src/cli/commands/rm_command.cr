@@ -20,11 +20,11 @@ module Doma::CLI
           if t.strip.empty?
             raise Doma::ValidationError.new("tag is empty (-t got an empty value)")
           end
-          before = tags.size
-          t.split(',').each { |x| tags << x.strip unless x.strip.empty? }
-          if tags.size == before
+          parts = t.split(',').map(&.strip).reject(&.empty?)
+          if parts.empty?
             raise Doma::ValidationError.new("tag is empty (-t got an empty value)")
           end
+          parts.each { |part| tags << part }
         end
         p.on("--hard", "Skip the trash; delete permanently") { hard = true }
         p.on("-h", "--help", "Show help") do

@@ -30,7 +30,7 @@ module Doma::CLI
           if parts.empty?
             raise Doma::ValidationError.new("tag is empty (-t got an empty value)")
           end
-          parts.each { |p| tags << p }
+          parts.each { |part| tags << part }
         end
         p.on("-h", "--help", "Show help") do
           puts p

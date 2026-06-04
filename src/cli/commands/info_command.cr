@@ -54,15 +54,16 @@ module Doma::CLI
 
         unless info
           if Doma::ShortIdResolver.looks_like?(raw)
+            msg = "no entry with short_id '#{raw}'"
             if trashed = Doma::Trash.find_by_short_id(raw.downcase)
               raise Doma::NotFoundError.new(
-                "no entry with short_id '#{raw}'",
+                msg,
                 hint: "in trash (#{trashed.path}). Restore: doma trash restore #{trashed.short_id[0..6]}"
               )
             end
             # short_id input that didn't resolve: caller-friendly message
             # without an `add` hint (the user typed an id, not a path).
-            raise Doma::NotFoundError.new("no entry with short_id '#{raw}'")
+            raise Doma::NotFoundError.new(msg)
           end
 
           # Bare-name fallback: when the user types `doma info doma`,
