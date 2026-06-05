@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.2.1
 
 ### Changed
 - Homebrew installs a prebuilt binary via tap instead of building from source; macOS x86_64 added (#36)
