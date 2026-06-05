@@ -2,49 +2,59 @@
 
 ## Unreleased
 
+### Changed
+- Homebrew installs a prebuilt binary via tap instead of building from source; macOS x86_64 added (#36)
+- Internal refactor: split `Database` by concern, extract `ListCommand` output modes (no behavior change) (#26)
+
 ### Fixed
-- Blank `DOMA_HOME` / `DOMA_CONFIG` env vars no longer resolve to the current directory — treated as unset (same guard `db_path` already had)
-- `--git-tag` now detects the remote inside git worktrees and submodules (shared `config` resolved via `commondir`), instead of silently producing no host/repo tags
-- `info` / `list` / `stats` no longer crash on out-of-range timestamps; relative times render `just now` instead of a negative `-Ns ago` for future timestamps (clock skew / cross-machine import)
-- `trash restore --merge` keeps the live tag's TTL instead of overwriting it with a stale snapshot deadline (could silently expire a tag the user had made permanent)
-- `prune --gone` deletes exactly the set it snapshots to the trash, so a path reappearing mid-sweep (e.g. a remounted disk) can no longer leave an un-restorable phantom trash entry
+- Blank `DOMA_HOME` / `DOMA_CONFIG` env vars treated as unset (#25)
+- `--git-tag` detects the remote inside git worktrees and submodules (#25)
+- `info` / `list` / `stats` no longer crash on out-of-range timestamps; future times render `just now` (#25)
+- `trash restore --merge` keeps the live tag's TTL instead of a stale snapshot deadline (#25)
+- `prune --gone` trashes exactly the snapshotted set, avoiding phantom trash entries on mid-sweep changes (#25)
+- `tags` / `stats` no longer count expired tag associations; dropped a double space before `(expires …)` (#27)
+- `import --merge` reports `N imported (X new, Y existing), Z skipped` (#28)
+- Unknown flags / missing option values use doma's voice with a `--help` pointer (#29)
+- `move` shows the canonical stored path instead of the raw argument (#30)
+- `run <tag> <cmd>` without `--` explains the missing separator and suggests the fixed form (#31)
+- `list --json --paths` and `tags --tree --json/--names` reject conflicting output formats (#32)
+- Edge cases: `export --json --yaml` rejected, `tags` rejects empty path segments, commands survive a deleted cwd, `run` on a gone dir points at `prune --gone` (#33)
+- `info <short_id>` checks the trash; `-t ','` errors `tag is empty` in `add` / `rm` / `mark` (#34)
 
 ## v0.2.0
 
 ### Added
-- `trash` command (`list`, `restore <short_id>`, `empty [--older DUR]`) with 7-day soft-delete recovery for `rm` and `prune --gone` (supports `--json`, `--merge` on restore)
-- `list --by tag` groups output under per-tag headers (works with `--json`, `--paths`, `-0`)
-- `--json` output for `add`, `trash list/add/empty` plus `short_id` in `add` result (agent/script friendly)
-- `info` accepts short_id (full or prefix); surfaces trash status when relevant
-- `list --check`, `--include-expired`, `--pick [--first | --builtin --query Q]`
+- `trash` command (`list`, `restore <short_id>`, `empty [--older DUR]`) with 7-day soft-delete for `rm` and `prune --gone`
+- `list --by tag` groups output under per-tag headers
+- `--json` output for `add` and `trash`; `short_id` in `add` result
+- `info` accepts short_id (full or prefix); surfaces trash status
+- `list --check`, `--include-expired`, `--pick`
 
 ### Changed
 - `rm` snapshots to trash by default (`--hard` for permanent delete)
-- Shell completion for bash/zsh/fish driven from a single `COMMAND_SPEC` table
-- Numerous internal refactors (TTL SQL centralization, `TimeFormatter`, `TagRenderer`, `ShortIdResolver`, trash helpers, SQL utils)
+- Shell completion driven from a single `COMMAND_SPEC` table
+- Internal refactors (TTL SQL, `TimeFormatter`, `TagRenderer`, `ShortIdResolver`, trash/SQL helpers)
 
 ### Fixed
-- Trash restore races, `File.delete` races, existence checks inside transactions, concurrency lock
-- Installer robustness (eval-line detection, comment skipping)
-- Config blank `db_path` handling, humanized YAML parse errors
-- Picker ANSI sanitization, suggester Levenshtein tie-breaking
-- `rm -t TAG` now exits non-zero when no registered path matches
-- Multiple early trash scaffolding and restore safety fixes
+- Trash/`File.delete` races, in-transaction existence checks, concurrency lock
+- Installer robustness, blank `db_path`, humanized YAML errors
+- Picker ANSI sanitization, suggester tie-breaking
+- `rm -t TAG` exits non-zero when no path matches
 
 ## v0.1.1
 
 ### Added
-- `mark` and `run` accept `-t/--tag` as an alias for positional tag args; both forms can be mixed on `mark` (#7)
-- Installation docs cover AUR and Snap install paths (#6)
+- `mark` and `run` accept `-t/--tag`; both forms can be mixed on `mark` (#7)
+- Install docs cover AUR and Snap (#6)
 
 ### Changed
-- Snap build downloads the prebuilt static binary instead of compiling Crystal in-tree; amd64 + arm64 matrix (#6)
+- Snap build downloads the prebuilt static binary; amd64 + arm64 (#6)
 
 ### Fixed
-- `list -t ''` (and whitespace/comma-only variants) silently matched every path; now rejected (#8)
-- `run -t TAG cmd…` without `--` reported "tag specified both positionally and via -t"; now reports "command is required after '--'" (#8)
-- `mark` no-tag hint advertises both positional and `-t TAG` forms (#8)
-- Homebrew release workflow: skip checksum upload to source release (b2895f6)
+- `list -t ''` (and whitespace/comma-only) now rejected instead of matching every path (#8)
+- `run -t TAG cmd…` without `--` reports the right error (#8)
+- `mark` no-tag hint shows both positional and `-t TAG` forms (#8)
+- Homebrew workflow: skip checksum upload to source release (b2895f6)
 
 ## v0.1.0
 
