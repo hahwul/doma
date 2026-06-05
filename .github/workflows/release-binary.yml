@@ -19,6 +19,8 @@ jobs:
             platform: linux
           - os: macos-latest
             platform: macos
+          - os: macos-15-intel
+            platform: macos
     runs-on: ${{ matrix.os }}
     steps:
       - name: Install Crystal
@@ -57,9 +59,23 @@ jobs:
         name: Build binary (macOS)
         run: |
           mkdir -p build
+          BIN="build/doma-${GITHUB_REF_SLUG}-osx-${ARCH}"
           crystal build src/main.cr \
-            -o build/doma-${GITHUB_REF_SLUG}-osx-${ARCH} \
+            -o "$BIN" \
             --no-debug --release
+          echo "== otool -L $BIN ==" && otool -L "$BIN"
+          # The Homebrew formula (homebrew-doma) declares NO dependencies: doma
+          # links only system libraries (system libsqlite3) plus statically
+          # linked Crystal runtime libs. Fail the release if any Homebrew dylib
+          # sneaks in (e.g. an EOL openssl@1.1) — that would break a
+          # clean-machine `brew install`.
+          EXTRA="$(otool -L "$BIN" \
+            | grep -oE '/(opt/homebrew|usr/local)/(opt|Cellar)/[^/]+' \
+            | sort -u || true)"
+          if [ -n "$EXTRA" ]; then
+            echo "::error::unexpected Homebrew dynamic deps (formula declares none):"
+            echo "$EXTRA"; exit 1
+          fi
       - name: Upload artifacts
         uses: actions/upload-artifact@v6
         with:
