@@ -250,12 +250,17 @@ module Doma::CLI
     private def load_yaml : YamlMap
       path = Doma::Config.config_path
       return YamlMap.new unless File.exists?(path)
+      unless File.file?(path)
+        raise Doma::ConfigError.new("config path is not a file: #{path}")
+      end
       content = File.read(path)
       return YamlMap.new if content.strip.empty?
       parsed = YAML.parse(content)
       to_string_map(parsed)
     rescue ex : YAML::ParseException
       raise Doma::ConfigError.new("invalid config (#{Doma::Config.config_path}): #{ex.message}")
+    rescue ex : IO::Error
+      raise Doma::ConfigError.new("cannot read config (#{Doma::Config.config_path}): #{ex.message}")
     end
 
     private def to_string_map(any : YAML::Any) : YamlMap
@@ -266,9 +271,19 @@ module Doma::CLI
       end
       out = YamlMap.new
       raw.each do |k, v|
-        out[k.as_s] = v
+        out[string_key!(k)] = v
       end
       out
+    end
+
+    # YAML happily parses `1: foo` / `true: bar` — the key comes back as
+    # Int64/Bool and the old `as_s` cast crashed with a TypeCastError
+    # ("internal error"). Recast as the same ConfigError shape every
+    # other malformed-config path uses.
+    private def string_key!(k : YAML::Any) : String
+      k.as_s? || raise Doma::ConfigError.new(
+        "invalid config (#{Doma::Config.config_path}): mapping keys must be strings, got #{k.raw.inspect}"
+      )
     end
 
     private def write_yaml(data : YamlMap)
@@ -335,7 +350,7 @@ module Doma::CLI
       raw = any.raw
       return unless raw.is_a?(Hash)
       m = YamlMap.new
-      raw.each { |k, v| m[k.as_s] = v }
+      raw.each { |k, v| m[string_key!(k)] = v }
       m
     end
 

@@ -29,7 +29,24 @@ module Doma::CLI
       section "Paths"
       kv "home", Doma::Config.home
       kv "config", Doma::Config.config_path, present: File.exists?(Doma::Config.config_path)
-      kv "database", Doma::Config.db_path, present: File.exists?(Doma::Config.db_path)
+      # `db_path` consults config.yml (`db_path:` key), so a malformed
+      # config raises ConfigError here. Doctor is the command users run
+      # *because* something is broken — report and keep going; the
+      # Config section below shows the parse error itself.
+      if db = safe_db_path
+        kv "database", db, present: File.exists?(db)
+      else
+        kv "database", "(unresolved — config.yml is invalid, see Config below)"
+      end
+    end
+
+    # The resolved db path, or nil when config.yml is too broken to
+    # consult. Shared by the Paths and Database sections so both degrade
+    # the same way instead of crashing the whole report.
+    private def safe_db_path : String?
+      Doma::Config.db_path
+    rescue Doma::ConfigError
+      nil
     end
 
     private def report_config
@@ -52,7 +69,11 @@ module Doma::CLI
 
     private def report_database
       section "Database"
-      path = Doma::Config.db_path
+      path = safe_db_path
+      unless path
+        kv "status", "skipped (config.yml is invalid — fix it first)"
+        return
+      end
       unless File.exists?(path)
         kv "status", "not yet created (will appear after first `doma add`)"
         return

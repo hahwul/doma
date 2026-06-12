@@ -136,6 +136,11 @@ module Doma
           end
         end
         result
+      rescue IO::Error
+        # Writes to a hung-up TTY raise mid-render; `with_raw_mode`'s
+        # ensure has already restored the terminal state by the time
+        # this unwinds. Report it as a cancel, not an internal error.
+        Result.new(cancelled: true)
       end
 
       # ---------- Render ----------
@@ -224,6 +229,15 @@ module Doma
         when '\e'               then read_escape_sequence
         else                         c
         end
+      rescue InvalidByteSequenceError
+        # `read_char` decodes UTF-8; pasted binary or stray terminal
+        # report bytes would otherwise crash the picker mid-raw-mode.
+        # Swallow the garbage byte and keep the session alive.
+        nil
+      rescue IO::Error
+        # The TTY went away (hangup, closed terminal) — same outcome as
+        # the user backing out.
+        :cancel
       end
 
       private def read_escape_sequence
@@ -282,8 +296,14 @@ module Doma
         begin
           yield
         ensure
-          @tty.print("\e[?25h") # restore cursor
-          @tty.flush
+          begin
+            @tty.print("\e[?25h") # restore cursor
+            @tty.flush
+          rescue IO::Error
+            # A hung-up TTY makes the cursor write fail; swallowing it
+            # here keeps the tcsetattr below on the exit path — leaving
+            # the terminal in raw mode is the one thing we must not do.
+          end
           LibC.tcsetattr(@tty.fd, LibC::TCSANOW, pointerof(original))
         end
       end

@@ -97,6 +97,11 @@ module Doma
         return true if stripped.includes?(INSTALL_SIGNATURE)
       end
       false
+    rescue IO::Error
+      # Unreadable rc file: treat as not-installed; the append in
+      # `install!` will surface its own (clean) error if the file is
+      # genuinely inaccessible.
+      false
     end
 
     # Performs the rc-file append. Caller is expected to have prompted
@@ -114,6 +119,10 @@ module Doma
         f.puts plan.block
       end
       :installed
+    rescue ex : IO::Error
+      raise Doma::Error.new(
+        "cannot write shell integration to #{plan.rc_path}: #{ex.message}"
+      )
     end
 
     private def needs_separator?(path : String) : Bool

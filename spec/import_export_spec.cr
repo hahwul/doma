@@ -177,6 +177,23 @@ describe "Import/Export" do
     end
   end
 
+  it "rejects an unreadable import file with ImportError (not internal error)" do
+    pending! "permission bits don't bind root" if LibC.getuid == 0
+    with_temp_db do |db|
+      path = File.tempname("doma-noread") + ".json"
+      File.write(path, %({"version":2,"entries":[]}))
+      File.chmod(path, File::Permissions.new(0))
+      begin
+        expect_raises(Doma::ImportError, /cannot read import file/) do
+          Doma::Importer.from_file(db, path)
+        end
+      ensure
+        File.chmod(path, File::Permissions.new(0o600))
+        File.delete(path) if File.exists?(path)
+      end
+    end
+  end
+
   it "imports an empty entries array as a no-op" do
     with_temp_db do |db|
       db.add(Dir.current, ["original"])

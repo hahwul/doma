@@ -54,6 +54,20 @@ describe Doma::GitDetector do
     end
   end
 
+  it "returns an empty result when the git config is unreadable (never raises)" do
+    pending! "permission bits don't bind root" if LibC.getuid == 0
+    with_fake_repo("https://github.com/hahwul/doma.git") do |dir|
+      cfg = File.join(dir, ".git", "config")
+      File.chmod(cfg, File::Permissions.new(0))
+      begin
+        info = Doma::GitDetector.detect(dir)
+        info.to_tags.should be_empty
+      ensure
+        File.chmod(cfg, File::Permissions.new(0o600))
+      end
+    end
+  end
+
   it "parses SCP-style SSH remotes" do
     with_fake_repo("git@github.com:hahwul/doma.git") do |dir|
       info = Doma::GitDetector.detect(dir)

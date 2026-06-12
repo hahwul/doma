@@ -113,11 +113,21 @@ module Doma
 
     def self.load(path : String) : Settings
       return new unless File.exists?(path)
+      # `File.exists?` is true for directories too — `DOMA_CONFIG`
+      # pointing at one would otherwise surface as a raw EISDIR
+      # "internal error" from the read below.
+      unless File.file?(path)
+        raise ConfigError.new("config path is not a file: #{path}")
+      end
       content = File.read(path)
       return new if content.strip.empty?
       from_yaml(content)
     rescue ex : YAML::ParseException
       raise ConfigError.new(format_parse_error(path, ex))
+    rescue ex : IO::Error
+      # Permission denied and friends — same actionable shape as a
+      # parse failure instead of leaking an internal error.
+      raise ConfigError.new("cannot read config (#{path}): #{ex.message}")
     end
 
     # Wrap the raw YAML parser message in something a user can act on.

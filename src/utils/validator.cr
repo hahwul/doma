@@ -81,6 +81,16 @@ module Doma
     def expand_home(raw : String) : String
       base = cwd_independent?(raw) ? "/" : current_dir_for(raw)
       File.expand_path(raw, base, home: true)
+    rescue ex : ValidationError
+      raise ex
+    rescue ex
+      # `home: true` resolves `~` via $HOME; in cron/systemd contexts
+      # without it, expansion raises and every command (the default
+      # DOMA_HOME is `~/.config/doma`) died with an "internal error".
+      raise ValidationError.new(
+        "cannot expand path '#{raw}': #{ex.message}",
+        hint: "set $HOME, or point DOMA_HOME/DOMA_DB at absolute paths"
+      )
     end
 
     # True when the cwd plays no part in resolving `raw`: an absolute path,

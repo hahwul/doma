@@ -41,6 +41,13 @@ module Doma
       return Info.new(true, nil, nil, nil) unless url
       parsed = parse_remote(url)
       Info.new(true, parsed[:host], parsed[:owner], parsed[:repo])
+    rescue IO::Error
+      # An unreadable `.git` file / `config` / `commondir` anywhere along
+      # the walk-up (permission-restricted parent repos included) must not
+      # take down `add` — with `auto_tag.git: true` every add passes
+      # through here. Empty result keeps the documented never-raises
+      # contract.
+      EMPTY
     end
 
     # Walks up from `start` looking for a directory containing a `.git` entry

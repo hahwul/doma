@@ -880,6 +880,21 @@ describe "doma doctor" do
     # `doctor` should be listed as its own row, not buried under `setup`.
     r[:out].should match(/^\s+doctor\s/m)
   end
+
+  it "survives a malformed config.yml and reports it instead of dying" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      # `db_path` consults config.yml, so a parse failure used to abort
+      # doctor with the ConfigError before any section printed — on the
+      # one command users reach for when the config is broken.
+      File.write(File.join(home, "config.yml"), "selector: [broken\n")
+      r = run(["doctor"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(0)
+      r[:out].should contain("INVALID")
+      r[:out].should contain("unresolved")
+      r[:err].should_not contain("internal error")
+    end
+  end
 end
 
 # ---------- list flag combinations ----------

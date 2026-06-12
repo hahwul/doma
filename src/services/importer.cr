@@ -37,7 +37,13 @@ module Doma
 
     def from_file(db : Doma::Database, path : String, *, mode : Mode = Mode::Merge) : Result
       raise ImportError.new("import file not found: #{path}") unless File.file?(path)
-      content = File.read(path)
+      content = begin
+        File.read(path)
+      rescue ex : IO::Error
+        # Permission denied etc. — same actionable shape as the other
+        # import failures instead of an "internal error".
+        raise ImportError.new("cannot read import file (#{path}): #{ex.message}")
+      end
       raise ImportError.new("import file is empty: #{path}") if content.strip.empty?
       snapshot = parse(content, path)
       apply(db, snapshot, mode)

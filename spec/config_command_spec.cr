@@ -135,6 +135,19 @@ describe "doma config" do
     end
   end
 
+  it "[list] reports non-string YAML keys as a ConfigError, not a crash" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      # YAML happily parses `1: foo` with an Int64 key — the old as_s
+      # cast died with "internal error: cast ... failed" (exit 1).
+      File.write(File.join(home, "config.yml"), "1: foo\n")
+      r = run(["config", "list"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(5)
+      r[:err].should contain("mapping keys must be strings")
+      r[:err].should_not contain("internal error")
+    end
+  end
+
   it "[--help] prints usage with action list" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     with_home do |home|

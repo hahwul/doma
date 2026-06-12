@@ -222,8 +222,12 @@ module Doma::CLI
     rescue ex : File::NotFoundError
       STDERR.puts "✗ #{path}: #{ex.message}"
       127
-    rescue ex : File::AccessDeniedError | RuntimeError | IO::Error
-      STDERR.puts "✗ #{path}: #{ex.message}"
+    rescue ex
+      # Catch-all, not just the expected spawn failures: under
+      # --parallel an unrescued exception kills the worker fiber and the
+      # reaper's `results.receive` then blocks forever. A weird failure
+      # must degrade to a failed directory, never a hang.
+      STDERR.puts "✗ #{path}: #{ex.message || ex.class.name}"
       126
     end
 

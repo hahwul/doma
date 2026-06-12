@@ -129,7 +129,9 @@ module Doma
         # `cmd | head -1` and friends close the pipe after one line —
         # our subsequent puts then raises EPIPE. That's a clean
         # consumer-disconnect, not an error worth shouting about.
-        # Convention: 128 + SIGPIPE(13) = 141.
+        # Convention: 128 + SIGPIPE(13) = 141. Check the errno first —
+        # the message text is locale/wording-dependent.
+        exit 141 if ex.is_a?(IO::Error) && ex.os_error == Errno::EPIPE
         exit 141 if ex.message.try(&.includes?("Broken pipe"))
         Doma::Logger.error "internal error: #{ex.message}"
         exit 1

@@ -147,6 +147,32 @@ describe Doma::Settings do
     end
   end
 
+  it "raises ConfigError when the config path is a directory" do
+    dir = File.tempname("doma-cfg-dir")
+    FileUtils.mkdir_p(dir)
+    begin
+      expect_raises(Doma::ConfigError, /not a file/) do
+        Doma::Settings.load(dir)
+      end
+    ensure
+      FileUtils.rm_rf(dir)
+    end
+  end
+
+  it "raises ConfigError when the config file is unreadable" do
+    pending! "permission bits don't bind root" if LibC.getuid == 0
+    with_temp_config("selector: first\n") do |path|
+      File.chmod(path, File::Permissions.new(0))
+      begin
+        expect_raises(Doma::ConfigError, /cannot read config/) do
+          Doma::Settings.load(path)
+        end
+      ensure
+        File.chmod(path, File::Permissions.new(0o600))
+      end
+    end
+  end
+
   it "rejects unknown fields (typo protection via strict)" do
     with_temp_config("dbpath: /tmp/x.db\n") do |path|
       expect_raises(Doma::ConfigError) do
