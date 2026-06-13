@@ -20,13 +20,14 @@ require "./commands/doctor_command"
 require "./commands/move_command"
 require "./commands/config_command"
 require "./commands/trash_command"
+require "./commands/status_command"
 
 module Doma
   module CLI
     class Runner
       KNOWN_COMMANDS = %w[
         add mark rm remove prune list ls info tags rename move mv
-        stats run export import setup doctor config trash
+        stats status run export import setup doctor config trash
         version help -V --version -h --help
       ]
 
@@ -93,6 +94,8 @@ module Doma
           MoveCommand.new.run(args)
         when "stats"
           StatsCommand.new.run(args)
+        when "status"
+          StatusCommand.new.run(args)
         when "setup"
           SetupCommand.new.run(args)
         when "doctor"
@@ -178,6 +181,7 @@ module Doma
         {"list [<query>] [-t TAG]", "List/search directories (--json, --paths, --pick)"},
         {"info [<path>]", "Show one entry's tags / TTLs / last-used (default: cwd)"},
         {"stats", "Top tags + recently added paths"},
+        {"status [<tag>]", "Git status across tagged repos (--dirty, --json)"},
         {"run <tag> -- <cmd>", "Run a command in every tagged directory"},
         {"export", "Dump the database (--json | --yaml)"},
         {"import <file>", "Load a snapshot (--merge | --replace)"},

@@ -24,6 +24,8 @@
       url: /usage/ttl-and-marks/
     - title: Bulk run
       url: /usage/run/
+    - title: Git status
+      url: /usage/status/
     - title: Search & stats
       url: /usage/search-and-stats/
     - title: Pipelines

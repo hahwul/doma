@@ -1897,3 +1897,180 @@ describe "doma info advanced" do
     end
   end
 end
+
+# ---------- status ----------
+
+# Whether real git repos can be built for the spawn-path tests. The
+# parser logic is covered hermetically in git_status_spec; here we need
+# actual repos so the command's probe → render path is exercised end to
+# end. Skipped (not failed) where git is absent.
+private STATUS_GIT_OK = !Process.find_executable("git").nil?
+
+private STATUS_GIT_ENV = {
+  "GIT_AUTHOR_NAME" => "t", "GIT_AUTHOR_EMAIL" => "t@t",
+  "GIT_COMMITTER_NAME" => "t", "GIT_COMMITTER_EMAIL" => "t@t",
+}
+
+private def git_in(dir : String, args : Array(String))
+  Process.run("git", args: ["-C", dir] + args, env: STATUS_GIT_ENV,
+    output: Process::Redirect::Close, error: Process::Redirect::Close)
+end
+
+# One commit on branch `main`; `dirty: true` leaves an untracked file so
+# the working tree is unclean. Caller owns cleanup.
+private def make_git_repo(prefix : String, *, dirty : Bool = false) : String
+  dir = File.tempname(prefix)
+  FileUtils.mkdir_p(dir)
+  git_in(dir, ["init", "-q"])
+  git_in(dir, ["commit", "-q", "--allow-empty", "-m", "init"])
+  git_in(dir, ["branch", "-M", "main"])
+  File.write(File.join(dir, "scratch.txt"), "x") if dirty
+  dir
+end
+
+describe "doma status" do
+  it "renders clean / non-git rows and a summary across a tagged set" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    pending! "git not on PATH" unless STATUS_GIT_OK
+    with_home do |home|
+      repo = make_git_repo("doma-status-clean")
+      plain = File.tempname("doma-status-plain")
+      FileUtils.mkdir_p(plain)
+      begin
+        run(["add", repo, "-t", "proj"], {"DOMA_HOME" => home})
+        run(["add", plain, "-t", "proj"], {"DOMA_HOME" => home})
+
+        r = run(["status", "proj"], {"DOMA_HOME" => home})
+        r[:status].exit_code.should eq(0)
+        r[:out].should contain("✔ clean")
+        r[:out].should contain("main")
+        r[:out].should contain("not a git repo")
+        r[:out].should contain("2 repos")
+      ensure
+        FileUtils.rm_rf(repo)
+        FileUtils.rm_rf(plain)
+      end
+    end
+  end
+
+  it "[--dirty] keeps only repos with uncommitted changes" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    pending! "git not on PATH" unless STATUS_GIT_OK
+    with_home do |home|
+      clean = make_git_repo("doma-status-d-clean")
+      dirty = make_git_repo("doma-status-d-dirty", dirty: true)
+      begin
+        run(["add", clean, "-t", "set"], {"DOMA_HOME" => home})
+        run(["add", dirty, "-t", "set"], {"DOMA_HOME" => home})
+
+        r = run(["status", "set", "--dirty"], {"DOMA_HOME" => home})
+        r[:status].exit_code.should eq(0)
+        r[:out].should contain(File.basename(dirty))
+        r[:out].should_not contain(File.basename(clean))
+        r[:out].should contain("1 dirty")
+      ensure
+        FileUtils.rm_rf(clean)
+        FileUtils.rm_rf(dirty)
+      end
+    end
+  end
+
+  it "[--dirty, all clean] reports everything clean and shows no rows" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    pending! "git not on PATH" unless STATUS_GIT_OK
+    with_home do |home|
+      repo = make_git_repo("doma-status-allclean")
+      begin
+        run(["add", repo, "-t", "tidy"], {"DOMA_HOME" => home})
+        r = run(["status", "tidy", "--dirty"], {"DOMA_HOME" => home})
+        r[:status].exit_code.should eq(0)
+        # The "all clean" note is a Logger.info line (STDOUT); no table row
+        # for the repo itself.
+        r[:out].should contain("clean")
+        r[:out].should_not contain(File.basename(repo))
+      ensure
+        FileUtils.rm_rf(repo)
+      end
+    end
+  end
+
+  it "[--json] emits per-repo git fields" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    pending! "git not on PATH" unless STATUS_GIT_OK
+    with_home do |home|
+      repo = make_git_repo("doma-status-json", dirty: true)
+      begin
+        run(["add", repo, "-t", "j"], {"DOMA_HOME" => home})
+        r = run(["status", "j", "--json"], {"DOMA_HOME" => home})
+        r[:status].exit_code.should eq(0)
+        arr = JSON.parse(r[:out]).as_a
+        arr.size.should eq(1)
+        row = arr.first.as_h
+        row["git"].as_bool.should be_true
+        row["exists"].as_bool.should be_true
+        row["clean"].as_bool.should be_false
+        row["branch"].as_s.should eq("main")
+        row["dirty"].as_i.should be >= 1
+        row["untracked"].as_i.should eq(1)
+      ensure
+        FileUtils.rm_rf(repo)
+      end
+    end
+  end
+
+  it "[gone path] surfaces ✗ gone and counts it in the summary" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    pending! "git not on PATH" unless STATUS_GIT_OK
+    with_home do |home|
+      repo = make_git_repo("doma-status-gone")
+      run(["add", repo, "-t", "ghost"], {"DOMA_HOME" => home})
+      FileUtils.rm_rf(repo)
+
+      r = run(["status", "ghost"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(0)
+      r[:out].should contain("✗ gone")
+      r[:out].should contain("1 gone")
+    end
+  end
+
+  it "[no tag, empty DB] hints at `doma add` and exits 0" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    pending! "git not on PATH" unless STATUS_GIT_OK
+    with_home do |home|
+      r = run(["status"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(0)
+      # First-run hint is a Logger.info line on STDOUT.
+      r[:out].should contain("nothing tracked")
+      r[:out].should contain("doma add")
+    end
+  end
+
+  it "[unknown tag] errors with 3 and a suggester hint" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    pending! "git not on PATH" unless STATUS_GIT_OK
+    with_home do |home|
+      run(["add", "/tmp", "-t", "demo"], {"DOMA_HOME" => home})
+      r = run(["status", "no-such-tag"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(3)
+      r[:err].should contain("no directories tagged")
+    end
+  end
+
+  it "[positional + -t] is rejected before any git work (exit 2)" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      r = run(["status", "a", "-t", "b"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(2)
+      r[:err].should contain("both positionally and via -t")
+    end
+  end
+
+  it "[--jobs 0] rejects a non-positive job count (exit 2)" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      r = run(["status", "--jobs", "0"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(2)
+      r[:err].should contain("--jobs must be a positive integer")
+    end
+  end
+end

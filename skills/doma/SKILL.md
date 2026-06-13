@@ -38,6 +38,7 @@ tag, and silent emptiness is worse than asking.
 | Sorted by recency | `doma list --by recent` | Most-recently-used first; aliases: `used`, `recency`. Useful when "the project I was just working on" is in scope |
 | Mark missing paths inline | `doma list --check` | Tags entries whose path is gone with `[gone]`. Without it, the footer just counts them |
 | Just the tag names | `doma tags --names` | Cheap probe before committing to a tag. `doma tags --tree` shows the `work/proj/...` hierarchy; `doma tags -0` is NUL-separated for `xargs -0` |
+| Git state across a tagged set | `doma status -t TAG --json` | Per-repo `branch`, `ahead`/`behind`, `dirty`, `clean`, `untracked`, etc. Use for "which of my X repos have uncommitted changes?" — filter `.[] \| select(.dirty > 0)`. Add `--dirty` to pre-filter. Shells out to `git` |
 
 ## When the user wants to register or bookmark paths
 

@@ -1,7 +1,7 @@
 +++
 title = "Pipelines"
 description = "Compose doma with xargs, jq, and the rest of your shell toolbox."
-weight = 6
+weight = 7
 +++
 
 doma is designed as a path source — most commands have a flag that emits a parseable form.

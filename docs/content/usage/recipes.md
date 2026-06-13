@@ -1,7 +1,7 @@
 +++
 title = "Recipes"
 description = "Real-world workflows that combine doma with the rest of your toolkit."
-weight = 8
+weight = 9
 +++
 
 Concrete patterns. Pick what fits, ignore the rest.
