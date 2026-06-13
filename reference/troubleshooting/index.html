@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta name="description" content="Common errors, diagnostic flow, and recovery paths." />
+        <title>
+            Troubleshooting - doma
+        </title>
+        <meta property="og:title" content="Troubleshooting">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://doma.hahwul.com/reference/troubleshooting/">
+  <meta property="og:description" content="Common errors, diagnostic flow, and recovery paths.">
+  <meta property="og:image" content="https://doma.hahwul.com/images/og-default.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Troubleshooting">
+  <meta name="twitter:description" content="Common errors, diagnostic flow, and recovery paths.">
+  <meta name="twitter:image" content="https://doma.hahwul.com/images/og-default.png">
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+            href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Caveat:wght@500;600&family=Patrick+Hand&family=Kalam:wght@300;400;700&display=swap"
+            rel="stylesheet"
+        />
+        <link
+            rel="icon"
+            type="image/png"
+            href="/icons/favicon-96x96.png"
+            sizes="96x96"
+        />
+        <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg" />
+        <link rel="shortcut icon" href="/icons/favicon.ico" />
+        <link
+            rel="apple-touch-icon"
+            sizes="180x180"
+            href="/icons/apple-touch-icon.png"
+        />
+        <meta name="apple-mobile-web-app-title" content="Doma" />
+        <meta name="base-url" content="https://doma.hahwul.com" />
+        <link rel="manifest" href="/icons/site.webmanifest" />
+
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark-dimmed.min.css"> <link rel="stylesheet" href="https://doma.hahwul.com/assets/css/01-variables.css?v=68ee8ea0">
+<link rel="stylesheet" href="https://doma.hahwul.com/assets/css/02-base.css?v=68ee8ea0">
+<link rel="stylesheet" href="https://doma.hahwul.com/assets/css/03-layout.css?v=68ee8ea0">
+<link rel="stylesheet" href="https://doma.hahwul.com/assets/css/04-content.css?v=68ee8ea0">
+<link rel="stylesheet" href="https://doma.hahwul.com/assets/css/05-components.css?v=68ee8ea0">
+<link rel="stylesheet" href="https://doma.hahwul.com/assets/css/06-responsive.css?v=68ee8ea0">
+<link rel="stylesheet" href="https://doma.hahwul.com/assets/css/07-landing.css?v=68ee8ea0">
+<link rel="stylesheet" href="https://doma.hahwul.com/assets/css/08-docs-accents.css?v=68ee8ea0">
+        <script defer src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script>
+    </head>
+    <body data-section="reference"></body>
+</html>
+<header class="docs-header">
+  <a href="https://doma.hahwul.com/" class="logo">
+    <img style="width:110px;" src="/images/doma-wide.webp">
+  </a>
+  <nav>
+    <a href="https://doma.hahwul.com/start/">Start</a>
+    <a href="https://doma.hahwul.com/usage/">Usage</a>
+    <a href="https://doma.hahwul.com/reference/" class="active">Reference</a>
+    <a href="https://doma.hahwul.com/ai/">AI agents</a>
+  </nav>
+  <div class="header-right">
+    <div class="docs-search" data-search>
+      <input type="search" class="docs-search-input" placeholder="Search docs…" aria-label="Search docs" autocomplete="off" spellcheck="false">
+      <div class="docs-search-results" role="listbox" hidden></div>
+    </div>
+    <a href="https://github.com/hahwul/doma" class="github-link" target="_blank" rel="noopener" aria-label="GitHub">
+      <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+    </a>
+  </div>
+</header>
+<style>
+  .logo { display: inline-flex; align-items: center; gap: 0.4rem; text-decoration: none; }
+  .logo-mark { color: var(--primary); font-weight: 400; line-height: 1; font-size: 1.4rem; }
+  .logo-text { color: var(--text); font-family: var(--font-mono); font-weight: 600; font-size: 1rem; letter-spacing: 0.02em; }
+  .logo:hover .logo-text { color: var(--primary-hover); }
+</style>
+<div class="docs-container">
+  <aside class="docs-sidebar">
+  
+  <div class="sidebar-section">
+    <div class="sidebar-title">Start</div>
+    <ul class="sidebar-links">
+      
+      
+      <li><a href="https://doma.hahwul.com/start/">Overview</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/start/installation/">Installation</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/start/quickstart/">Quickstart</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/start/shell-integration/">Shell integration</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/start/concepts/">Concepts</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/start/comparison/">Comparison</a></li>
+      
+      
+    </ul>
+  </div>
+  
+  <div class="sidebar-section">
+    <div class="sidebar-title">Usage</div>
+    <ul class="sidebar-links">
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/">Overview</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/tagging/">Tagging directories</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/navigation/">Navigation</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/ttl-and-marks/">TTL & marks</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/run/">Bulk run</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/status/">Git status</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/search-and-stats/">Search & stats</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/pipelines/">Pipelines</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/snapshots/">Snapshots</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/recipes/">Recipes</a></li>
+      
+      
+    </ul>
+  </div>
+  
+  <div class="sidebar-section">
+    <div class="sidebar-title">Reference</div>
+    <ul class="sidebar-links">
+      
+      
+      <li><a href="https://doma.hahwul.com/reference/">Overview</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/reference/commands/">Commands</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/reference/config/">Configuration</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/reference/env/">Environment</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/reference/troubleshooting/" class="active">Troubleshooting</a></li>
+      
+      
+    </ul>
+  </div>
+  
+  <div class="sidebar-section">
+    <div class="sidebar-title">AI agents</div>
+    <ul class="sidebar-links">
+      
+      
+      <li><a href="https://doma.hahwul.com/ai/">Overview</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/ai/skill/">AI skill</a></li>
+      
+      
+    </ul>
+  </div>
+  
+</aside>
+  <main class="docs-main no-toc">
+    <h1>Troubleshooting</h1>
+    <p>When something looks off, start here:</p>
+<pre><code class="language-bash hljs">doma doctor
+</code></pre>
+<p><code>doctor</code> reports paths, config status, and database stats — most issues show up in its output before they show up as a confusing error.</p>
+<h2 id="doma-cd-does-nothing-quotcommand-not-foundquot"><code>doma cd</code> does nothing / &quot;command not found&quot;</h2>
+<p>The wrapper isn't loaded. doma's <code>cd</code> lives in a shell function (a child process can't change its parent shell's cwd), and it has to be sourced into your interactive shell.</p>
+<pre><code class="language-bash hljs">doma setup install     # auto-append the wrapper to your rc file
+exec $SHELL            # reload (or restart the terminal)
+</code></pre>
+<p>To verify, run <code>type doma</code> — you should see it as a function in zsh/bash, or <code>doma is a function</code> in fish. If it still shows as a binary, the rc file change didn't take effect; check <code>~/.zshrc</code> / <code>~/.bashrc</code> for the <code># &gt;&gt;&gt; doma shell integration &gt;&gt;&gt;</code> block.</p>
+<h2 id="quotdoma-home-points-at-a-filequot-similar-config-errors">&quot;DOMA_HOME points at a file&quot; / similar config errors</h2>
+<p>Exit code 5 means doma's environment is misconfigured. The error message names exactly which variable and why:</p>
+<pre><code>✗ DOMA_HOME points at a file, not a directory: /etc/passwd
+</code></pre>
+<p>Unset the bad value (<code>unset DOMA_HOME</code>) or fix the path. doma's defaults under <code>~/.config/doma/</code> are usually what you want.</p>
+<h2 id="doma-list-shows-nothing-after-a-path-moved"><code>doma list</code> shows nothing after a path moved</h2>
+<p>Two cases:</p>
+<ol>
+<li><strong>Path moved on disk, doma doesn't know yet.</strong> Update with <code>doma move /old /new</code> — tags carry over.</li>
+<li><strong>Path is gone for real.</strong> <code>doma list --check</code> annotates dead paths with <code>[gone]</code>. Sweep with <code>doma prune --gone</code> (snapshotted to trash for 7 days; recoverable via <code>doma trash list</code> / <code>doma trash restore &lt;id&gt;</code>).</li>
+</ol>
+<p>If an external disk is <em>temporarily</em> unmounted, prefer leaving the entries alone — <code>prune --gone</code> would mark them all as missing. They reappear automatically once the disk is back.</p>
+<h2 id="quotschema-mismatchquot-or-quotversion-is-higher-than-i-understandquot-on-import">&quot;schema mismatch&quot; or &quot;version is higher than I understand&quot; on import</h2>
+<p>You're importing a snapshot from a newer doma than you're running. Upgrade doma (<code>brew upgrade doma</code>, or fetch the latest release) and retry. Lower-version snapshots are always readable; only newer ones are refused.</p>
+<h2 id="i-deleted-something-i-shouldnt-have">I deleted something I shouldn't have</h2>
+<pre><code class="language-bash hljs">doma trash list                  # what's recoverable
+doma trash restore &lt;short_id&gt;    # bring it back
+</code></pre>
+<p>Anything from <code>doma rm &lt;path&gt;</code> or <code>doma prune --gone</code> (without <code>--hard</code>) is recoverable for 7 days. After that the next trash op auto-prunes it.</p>
+<p>If you used <code>--hard</code>, the snapshot wasn't written and recovery isn't possible — restore from your most recent <code>doma export</code> instead.</p>
+<h2 id="a-tag-i-expected-isnt-matching">A tag I expected isn't matching</h2>
+<p>Common causes:</p>
+<ul>
+<li><strong>TTL elapsed.</strong> Expired tags are hidden from <code>list</code> by default. Check with <code>doma list --include-expired</code>.</li>
+<li><strong>Glob vs exact match.</strong> <code>-t work/auth</code> is an exact match; <code>-t 'work/*'</code> is a glob. <code>*</code> matches within one segment, <code>**</code> crosses <code>/</code>, <code>?</code> is a single non-<code>/</code> character.</li>
+<li><strong>Typo / case.</strong> Tag matching is case-sensitive. <code>doma tags --names | grep -i ...</code> to confirm what's actually stored.</li>
+</ul>
+<h2 id="picker-doesnt-open-in-a-script">Picker doesn't open in a script</h2>
+<p><code>--pick</code> falls back to &quot;first match&quot; when stdin isn't a TTY (with a stderr advisory). For scripts you usually want this — pass <code>--first</code> explicitly to silence the advisory. To force the picker on anyway (e.g. through a terminal multiplexer), use <code>--builtin</code>.</p>
+<h2 id="auto-tag-silently-skipped">Auto-tag silently skipped</h2>
+<p><code>--auto-tag</code> tries to use the directory's basename. If the basename can't form a valid tag even after sanitization (e.g. <code>...</code>), doma skips it rather than erroring. Same for <code>--git-tag</code> when there's no <code>[remote &quot;origin&quot;]</code> in <code>.git/config</code>.</p>
+<p>If you wanted that tag, add it explicitly with <code>-t TAG</code>.</p>
+<h2 id="database-locked-quotanother-doma-is-runningquot">Database locked / &quot;another doma is running&quot;</h2>
+<p>doma uses SQLite WAL with <code>busy_timeout</code>, so concurrent reads from multiple shells work fine. A persistent lock usually means a previous process crashed mid-write. Check for stale <code>*.db-shm</code> / <code>*.db-wal</code> files next to <code>doma.db</code>, and if no doma is actually running, removing them is safe — SQLite will recreate on next open.</p>
+<h2 id="reporting-a-bug">Reporting a bug</h2>
+<p>Include the output of <code>doma doctor</code> and <code>doma version</code> in the issue. Those answer 80% of &quot;what does your environment look like?&quot; questions before we have to ask.</p>
+<p>If the problem is reproducible from a fresh DB, even better — point <code>DOMA_DB</code> at a scratch location and reproduce there:</p>
+<pre><code class="language-bash hljs">DOMA_DB=/tmp/doma-repro.db doma add /some/path -t test
+DOMA_DB=/tmp/doma-repro.db doma list
+</code></pre>
+
+    <footer class="docs-footer">
+      <span>MIT &middot; written in <a href="https://crystal-lang.org" target="_blank" rel="noopener">Crystal</a> &middot; built with <a href="https://hwaro.hahwul.com" target="_blank" rel="noopener">hwaro</a></span>
+      <span><a href="https://github.com/hahwul/doma" target="_blank" rel="noopener">GitHub</a> &middot; <a href="https://github.com/hahwul/doma/edit/main/docs/content/reference/troubleshooting/.md" target="_blank" rel="noopener">Edit this page</a></span>
+    </footer>
+  </main>
+  
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+<script src="https://doma.hahwul.com/assets/js/search.js?v=68ee8ea0"></script>
+</body>
+</html>

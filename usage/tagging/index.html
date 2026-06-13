@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta name="description" content="Add tags to directories, derive them automatically from basename or git remote, and manage them as your collection grows." />
+        <title>
+            Tagging directories - doma
+        </title>
+        <meta property="og:title" content="Tagging directories">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://doma.hahwul.com/usage/tagging/">
+  <meta property="og:description" content="Add tags to directories, derive them automatically from basename or git remote, and manage them as your collection grows.">
+  <meta property="og:image" content="https://doma.hahwul.com/images/og-default.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Tagging directories">
+  <meta name="twitter:description" content="Add tags to directories, derive them automatically from basename or git remote, and manage them as your collection grows.">
+  <meta name="twitter:image" content="https://doma.hahwul.com/images/og-default.png">
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+            href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Caveat:wght@500;600&family=Patrick+Hand&family=Kalam:wght@300;400;700&display=swap"
+            rel="stylesheet"
+        />
+        <link
+            rel="icon"
+            type="image/png"
+            href="/icons/favicon-96x96.png"
+            sizes="96x96"
+        />
+        <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg" />
+        <link rel="shortcut icon" href="/icons/favicon.ico" />
+        <link
+            rel="apple-touch-icon"
+            sizes="180x180"
+            href="/icons/apple-touch-icon.png"
+        />
+        <meta name="apple-mobile-web-app-title" content="Doma" />
+        <meta name="base-url" content="https://doma.hahwul.com" />
+        <link rel="manifest" href="/icons/site.webmanifest" />
+
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark-dimmed.min.css"> <link rel="stylesheet" href="https://doma.hahwul.com/assets/css/01-variables.css?v=68ee8ea0">
+<link rel="stylesheet" href="https://doma.hahwul.com/assets/css/02-base.css?v=68ee8ea0">
+<link rel="stylesheet" href="https://doma.hahwul.com/assets/css/03-layout.css?v=68ee8ea0">
+<link rel="stylesheet" href="https://doma.hahwul.com/assets/css/04-content.css?v=68ee8ea0">
+<link rel="stylesheet" href="https://doma.hahwul.com/assets/css/05-components.css?v=68ee8ea0">
+<link rel="stylesheet" href="https://doma.hahwul.com/assets/css/06-responsive.css?v=68ee8ea0">
+<link rel="stylesheet" href="https://doma.hahwul.com/assets/css/07-landing.css?v=68ee8ea0">
+<link rel="stylesheet" href="https://doma.hahwul.com/assets/css/08-docs-accents.css?v=68ee8ea0">
+        <script defer src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script>
+    </head>
+    <body data-section="usage"></body>
+</html>
+<header class="docs-header">
+  <a href="https://doma.hahwul.com/" class="logo">
+    <img style="width:110px;" src="/images/doma-wide.webp">
+  </a>
+  <nav>
+    <a href="https://doma.hahwul.com/start/">Start</a>
+    <a href="https://doma.hahwul.com/usage/" class="active">Usage</a>
+    <a href="https://doma.hahwul.com/reference/">Reference</a>
+    <a href="https://doma.hahwul.com/ai/">AI agents</a>
+  </nav>
+  <div class="header-right">
+    <div class="docs-search" data-search>
+      <input type="search" class="docs-search-input" placeholder="Search docs…" aria-label="Search docs" autocomplete="off" spellcheck="false">
+      <div class="docs-search-results" role="listbox" hidden></div>
+    </div>
+    <a href="https://github.com/hahwul/doma" class="github-link" target="_blank" rel="noopener" aria-label="GitHub">
+      <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+    </a>
+  </div>
+</header>
+<style>
+  .logo { display: inline-flex; align-items: center; gap: 0.4rem; text-decoration: none; }
+  .logo-mark { color: var(--primary); font-weight: 400; line-height: 1; font-size: 1.4rem; }
+  .logo-text { color: var(--text); font-family: var(--font-mono); font-weight: 600; font-size: 1rem; letter-spacing: 0.02em; }
+  .logo:hover .logo-text { color: var(--primary-hover); }
+</style>
+<div class="docs-container">
+  <aside class="docs-sidebar">
+  
+  <div class="sidebar-section">
+    <div class="sidebar-title">Start</div>
+    <ul class="sidebar-links">
+      
+      
+      <li><a href="https://doma.hahwul.com/start/">Overview</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/start/installation/">Installation</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/start/quickstart/">Quickstart</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/start/shell-integration/">Shell integration</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/start/concepts/">Concepts</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/start/comparison/">Comparison</a></li>
+      
+      
+    </ul>
+  </div>
+  
+  <div class="sidebar-section">
+    <div class="sidebar-title">Usage</div>
+    <ul class="sidebar-links">
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/">Overview</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/tagging/" class="active">Tagging directories</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/navigation/">Navigation</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/ttl-and-marks/">TTL & marks</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/run/">Bulk run</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/status/">Git status</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/search-and-stats/">Search & stats</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/pipelines/">Pipelines</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/snapshots/">Snapshots</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/recipes/">Recipes</a></li>
+      
+      
+    </ul>
+  </div>
+  
+  <div class="sidebar-section">
+    <div class="sidebar-title">Reference</div>
+    <ul class="sidebar-links">
+      
+      
+      <li><a href="https://doma.hahwul.com/reference/">Overview</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/reference/commands/">Commands</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/reference/config/">Configuration</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/reference/env/">Environment</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/reference/troubleshooting/">Troubleshooting</a></li>
+      
+      
+    </ul>
+  </div>
+  
+  <div class="sidebar-section">
+    <div class="sidebar-title">AI agents</div>
+    <ul class="sidebar-links">
+      
+      
+      <li><a href="https://doma.hahwul.com/ai/">Overview</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/ai/skill/">AI skill</a></li>
+      
+      
+    </ul>
+  </div>
+  
+</aside>
+  <main class="docs-main no-toc">
+    <h1>Tagging directories</h1>
+    <h2 id="basics">Basics</h2>
+<pre><code class="language-bash hljs">doma add /path/to/dir -t TAG [-t TAG ...]
+</code></pre>
+<p>Path defaults to <code>.</code>:</p>
+<pre><code class="language-bash hljs">cd ~/Projects/doma
+doma add -t crystal -t cli
+</code></pre>
+<p>Multiple paths in one shot:</p>
+<pre><code class="language-bash hljs">doma add /a /b /c -t shared
+</code></pre>
+<p>Validation failures on one path don't block the others — doma exits non-zero and reports the failed path on stderr.</p>
+<h2 id="tag-rules">Tag rules</h2>
+<p>A valid tag is <code>[A-Za-z0-9][A-Za-z0-9_.\-+:/]{0,63}</code> — starts with a letter or digit, 1–64 bytes, allows <code>_ . - + : /</code>. Whitespace and commas are rejected (commas are reserved as a CLI separator: <code>-t a,b,c</code> adds three tags).</p>
+<p><code>/</code> in tag names gets special treatment in <code>doma tags --tree</code>, which groups <code>work/proj-a</code> and <code>work/proj-b</code> under a <code>work/</code> header.</p>
+<h2 id="auto-derived-tags">Auto-derived tags</h2>
+<pre><code class="language-bash hljs">doma add . --auto-tag       # tag with the directory's basename
+doma add . --git-tag        # tag with the git remote host + repo (if any)
+doma add . --auto-tag --git-tag
+</code></pre>
+<p><code>--git-tag</code> reads <code>.git/config</code>'s <code>[remote &quot;origin&quot;]</code> and derives a host tag (<code>github</code>, <code>gitlab</code>, <code>bitbucket</code>, <code>codeberg</code>, or the raw hostname for self-hosted) and the repo name.</p>
+<p>Auto-derived tags are sanitized — <code>.dotfiles</code> becomes <code>dotfiles</code>. If sanitization can't produce a valid tag, the auto-tag is silently skipped.</p>
+<p>Defaults are configurable in <a href="../../reference/config/">config</a>.</p>
+<h2 id="re-tagging">Re-tagging</h2>
+<p><code>add</code> is idempotent on path — second call doesn't duplicate, it merges:</p>
+<pre><code class="language-bash hljs">doma add . -t alpha     # path now tagged: alpha
+doma add . -t beta      # path now tagged: alpha, beta
+</code></pre>
+<p>To remove:</p>
+<pre><code class="language-bash hljs">doma rm /path -t alpha   # untag
+doma rm /path            # drop the path entirely (and all its tags)
+</code></pre>
+<h2 id="renaming-and-merging">Renaming and merging</h2>
+<pre><code class="language-bash hljs">doma rename old-name new-name
+</code></pre>
+<p>Simple rename if <code>new-name</code> doesn't exist; otherwise the two are merged in one transaction.</p>
+<h2 id="moving-paths">Moving paths</h2>
+<pre><code class="language-bash hljs">doma move /old/path /new/path
+</code></pre>
+<p>Tags carry over. If <code>/new/path</code> is already registered, the two are merged. <code>--allow-missing</code> skips the existence check on the destination — useful for cross-machine snapshots.</p>
+<h2 id="dry-run">Dry run</h2>
+<pre><code class="language-bash hljs">doma add . -t crystal --auto-tag --git-tag --dry-run
+</code></pre>
+<p>Resolves the tag set without writing.</p>
+
+    <footer class="docs-footer">
+      <span>MIT &middot; written in <a href="https://crystal-lang.org" target="_blank" rel="noopener">Crystal</a> &middot; built with <a href="https://hwaro.hahwul.com" target="_blank" rel="noopener">hwaro</a></span>
+      <span><a href="https://github.com/hahwul/doma" target="_blank" rel="noopener">GitHub</a> &middot; <a href="https://github.com/hahwul/doma/edit/main/docs/content/usage/tagging/.md" target="_blank" rel="noopener">Edit this page</a></span>
+    </footer>
+  </main>
+  
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+<script src="https://doma.hahwul.com/assets/js/search.js?v=68ee8ea0"></script>
+</body>
+</html>

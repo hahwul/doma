@@ -1,0 +1,443 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta name="description" content="All doma subcommands at a glance." />
+        <title>
+            Commands - doma
+        </title>
+        <meta property="og:title" content="Commands">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://doma.hahwul.com/reference/commands/">
+  <meta property="og:description" content="All doma subcommands at a glance.">
+  <meta property="og:image" content="https://doma.hahwul.com/images/og-default.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Commands">
+  <meta name="twitter:description" content="All doma subcommands at a glance.">
+  <meta name="twitter:image" content="https://doma.hahwul.com/images/og-default.png">
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+            href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Inter:wght@400;500;600;700&family=Caveat:wght@500;600&family=Patrick+Hand&family=Kalam:wght@300;400;700&display=swap"
+            rel="stylesheet"
+        />
+        <link
+            rel="icon"
+            type="image/png"
+            href="/icons/favicon-96x96.png"
+            sizes="96x96"
+        />
+        <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg" />
+        <link rel="shortcut icon" href="/icons/favicon.ico" />
+        <link
+            rel="apple-touch-icon"
+            sizes="180x180"
+            href="/icons/apple-touch-icon.png"
+        />
+        <meta name="apple-mobile-web-app-title" content="Doma" />
+        <meta name="base-url" content="https://doma.hahwul.com" />
+        <link rel="manifest" href="/icons/site.webmanifest" />
+
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark-dimmed.min.css"> <link rel="stylesheet" href="https://doma.hahwul.com/assets/css/01-variables.css?v=68ee8ea0">
+<link rel="stylesheet" href="https://doma.hahwul.com/assets/css/02-base.css?v=68ee8ea0">
+<link rel="stylesheet" href="https://doma.hahwul.com/assets/css/03-layout.css?v=68ee8ea0">
+<link rel="stylesheet" href="https://doma.hahwul.com/assets/css/04-content.css?v=68ee8ea0">
+<link rel="stylesheet" href="https://doma.hahwul.com/assets/css/05-components.css?v=68ee8ea0">
+<link rel="stylesheet" href="https://doma.hahwul.com/assets/css/06-responsive.css?v=68ee8ea0">
+<link rel="stylesheet" href="https://doma.hahwul.com/assets/css/07-landing.css?v=68ee8ea0">
+<link rel="stylesheet" href="https://doma.hahwul.com/assets/css/08-docs-accents.css?v=68ee8ea0">
+        <script defer src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script>
+    </head>
+    <body data-section="reference"></body>
+</html>
+<header class="docs-header">
+  <a href="https://doma.hahwul.com/" class="logo">
+    <img style="width:110px;" src="/images/doma-wide.webp">
+  </a>
+  <nav>
+    <a href="https://doma.hahwul.com/start/">Start</a>
+    <a href="https://doma.hahwul.com/usage/">Usage</a>
+    <a href="https://doma.hahwul.com/reference/" class="active">Reference</a>
+    <a href="https://doma.hahwul.com/ai/">AI agents</a>
+  </nav>
+  <div class="header-right">
+    <div class="docs-search" data-search>
+      <input type="search" class="docs-search-input" placeholder="Search docs…" aria-label="Search docs" autocomplete="off" spellcheck="false">
+      <div class="docs-search-results" role="listbox" hidden></div>
+    </div>
+    <a href="https://github.com/hahwul/doma" class="github-link" target="_blank" rel="noopener" aria-label="GitHub">
+      <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+    </a>
+  </div>
+</header>
+<style>
+  .logo { display: inline-flex; align-items: center; gap: 0.4rem; text-decoration: none; }
+  .logo-mark { color: var(--primary); font-weight: 400; line-height: 1; font-size: 1.4rem; }
+  .logo-text { color: var(--text); font-family: var(--font-mono); font-weight: 600; font-size: 1rem; letter-spacing: 0.02em; }
+  .logo:hover .logo-text { color: var(--primary-hover); }
+</style>
+<div class="docs-container">
+  <aside class="docs-sidebar">
+  
+  <div class="sidebar-section">
+    <div class="sidebar-title">Start</div>
+    <ul class="sidebar-links">
+      
+      
+      <li><a href="https://doma.hahwul.com/start/">Overview</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/start/installation/">Installation</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/start/quickstart/">Quickstart</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/start/shell-integration/">Shell integration</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/start/concepts/">Concepts</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/start/comparison/">Comparison</a></li>
+      
+      
+    </ul>
+  </div>
+  
+  <div class="sidebar-section">
+    <div class="sidebar-title">Usage</div>
+    <ul class="sidebar-links">
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/">Overview</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/tagging/">Tagging directories</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/navigation/">Navigation</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/ttl-and-marks/">TTL & marks</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/run/">Bulk run</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/status/">Git status</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/search-and-stats/">Search & stats</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/pipelines/">Pipelines</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/snapshots/">Snapshots</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/recipes/">Recipes</a></li>
+      
+      
+    </ul>
+  </div>
+  
+  <div class="sidebar-section">
+    <div class="sidebar-title">Reference</div>
+    <ul class="sidebar-links">
+      
+      
+      <li><a href="https://doma.hahwul.com/reference/">Overview</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/reference/commands/" class="active">Commands</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/reference/config/">Configuration</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/reference/env/">Environment</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/reference/troubleshooting/">Troubleshooting</a></li>
+      
+      
+    </ul>
+  </div>
+  
+  <div class="sidebar-section">
+    <div class="sidebar-title">AI agents</div>
+    <ul class="sidebar-links">
+      
+      
+      <li><a href="https://doma.hahwul.com/ai/">Overview</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/ai/skill/">AI skill</a></li>
+      
+      
+    </ul>
+  </div>
+  
+</aside>
+  <main class="docs-main no-toc">
+    <h1>Commands</h1>
+    <table>
+<thead>
+<tr>
+<th>Command</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>add [&lt;path&gt;]</code></td>
+<td>Register a path (defaults to <code>.</code>) with one or more tags.</td>
+</tr>
+<tr>
+<td><code>mark [-p &lt;path&gt;] &lt;tag&gt; ...</code></td>
+<td>Tag a directory with temporary (7-day) tags. Defaults to cwd.</td>
+</tr>
+<tr>
+<td><code>rm &lt;path&gt;</code></td>
+<td>Remove tag(s) from a path, or drop the path entirely.</td>
+</tr>
+<tr>
+<td><code>prune --gone|--expired</code></td>
+<td>Bulk-delete entries whose path is missing, or tag rows past their TTL.</td>
+</tr>
+<tr>
+<td><code>move &lt;old&gt; &lt;new&gt;</code></td>
+<td>Move a registered path; tags carry over.</td>
+</tr>
+<tr>
+<td><code>tags</code></td>
+<td>List all tags with usage counts.</td>
+</tr>
+<tr>
+<td><code>rename &lt;old&gt; &lt;new&gt;</code></td>
+<td>Rename a tag, or merge into an existing one.</td>
+</tr>
+<tr>
+<td><code>list [&lt;query&gt;]</code></td>
+<td>List or search directories (<code>--pick</code> to resolve to one path).</td>
+</tr>
+<tr>
+<td><code>info [&lt;path&gt;]</code></td>
+<td>Show one entry&#39;s details (tags, TTLs, last-used). Defaults to cwd.</td>
+</tr>
+<tr>
+<td><code>stats</code></td>
+<td>Top tags + recently added/used paths.</td>
+</tr>
+<tr>
+<td><code>run &lt;tag&gt; -- &lt;cmd&gt;</code></td>
+<td>Run a command in every tagged directory.</td>
+</tr>
+<tr>
+<td><code>export</code></td>
+<td>Dump the database (JSON or YAML).</td>
+</tr>
+<tr>
+<td><code>import &lt;file&gt;</code></td>
+<td>Load a snapshot (<code>--merge</code> or <code>--replace</code>).</td>
+</tr>
+<tr>
+<td><code>trash &lt;action&gt;</code></td>
+<td>Recover from <code>rm</code> or empty the soft-delete store.</td>
+</tr>
+<tr>
+<td><code>config &lt;action&gt;</code></td>
+<td>Read or write <code>config.yml</code> keys from the CLI.</td>
+</tr>
+<tr>
+<td><code>setup install</code></td>
+<td>Append the shell wrapper to your rc file.</td>
+</tr>
+<tr>
+<td><code>setup init &lt;shell&gt;</code></td>
+<td>Print the shell wrapper for manual install.</td>
+</tr>
+<tr>
+<td><code>setup completion &lt;shell&gt;</code></td>
+<td>Print a shell completion script.</td>
+</tr>
+<tr>
+<td><code>doctor</code></td>
+<td>Check the install (paths, config, DB).</td>
+</tr>
+<tr>
+<td><code>version</code> / <code>help</code></td>
+<td>Show version / help.</td>
+</tr>
+</tbody>
+</table>
+<p><code>doma cd &lt;tag&gt;</code> lives in the shell wrapper from <code>setup install</code>, not in the binary.</p>
+<h2 id="global-flags">Global flags</h2>
+<table>
+<thead>
+<tr>
+<th>Flag</th>
+<th>Effect</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>-q</code>, <code>--quiet</code></td>
+<td>Suppress success/info output (errors still print).</td>
+</tr>
+<tr>
+<td><code>-v</code>, <code>--verbose</code>, <code>--debug</code></td>
+<td>Print debug traces to stderr.</td>
+</tr>
+<tr>
+<td><code>--no-color</code></td>
+<td>Force color off.</td>
+</tr>
+<tr>
+<td><code>--color</code></td>
+<td>Force color on (defaults to TTY auto-detect).</td>
+</tr>
+</tbody>
+</table>
+<p><code>NO_COLOR</code> env is honored automatically.</p>
+<h2 id="add"><code>add</code></h2>
+<pre><code>doma add [&lt;path&gt; ...] [-t TAG ...] [--ttl DUR | --tmp]
+                                   [--auto-tag] [--git-tag] [--dry-run] [--json]
+</code></pre>
+<ul>
+<li><code>-t TAG</code>: add a tag. Repeatable; comma-separated also works (<code>-t a,b</code>).</li>
+<li><code>--ttl DUR</code>: tag expires after <code>DUR</code> (e.g. <code>30s</code>, <code>5m</code>, <code>1h</code>, <code>7d</code>, <code>2w</code>).</li>
+<li><code>--tmp</code>: alias for <code>--ttl 7d</code>.</li>
+<li><code>--auto-tag</code> / <code>--no-auto-tag</code>: include the basename as a tag.</li>
+<li><code>--git-tag</code> / <code>--no-git-tag</code>: derive host and repo tags from <code>.git/config</code>.</li>
+<li><code>-n</code>, <code>--dry-run</code>: resolve and print without writing.</li>
+<li><code>--json</code>: structured output (array of results including <code>short_id</code> per path). <code>mark</code> forwards this flag. Useful for agents that want the stable ID immediately.</li>
+</ul>
+<h2 id="mark"><code>mark</code></h2>
+<pre><code>doma mark [-p PATH] (&lt;tag&gt; [&lt;tag&gt; ...] | -t TAG [-t TAG ...])
+</code></pre>
+<p>Equivalent to <code>doma add &lt;path&gt; -t TAG ... --tmp</code>. Path defaults to cwd; <code>-p PATH</code> marks elsewhere. 7-day TTL. Tags accept positional or <code>-t/--tag</code>; both forms may be mixed.</p>
+<h2 id="rm"><code>rm</code></h2>
+<pre><code>doma rm &lt;path&gt; [&lt;path&gt; ...] [-t TAG ...] [--hard]
+</code></pre>
+<ul>
+<li><code>&lt;path&gt;</code> alone: drop the path and all its tags (snapshotted to trash by default).</li>
+<li><code>&lt;path&gt; -t TAG</code>: untag.</li>
+<li><code>--hard</code>: skip the trash and delete permanently.</li>
+</ul>
+<h2 id="prune"><code>prune</code></h2>
+<pre><code>doma prune (--gone | --expired) [--hard]
+</code></pre>
+<ul>
+<li><code>--gone</code>: remove entries whose path no longer exists (snapshotted to trash for 7 days; recover with <code>doma trash list</code> / <code>doma trash restore &lt;id&gt;</code>).</li>
+<li><code>--expired</code>: drop tag rows whose TTL has elapsed and GC any tags left orphaned.</li>
+<li><code>--hard</code>: skip the trash on <code>--gone</code>.</li>
+</ul>
+<p>The two flags are mutually exclusive.</p>
+<h2 id="list"><code>list</code></h2>
+<pre><code>doma list [&lt;query&gt;] [-t TAG] [--by path|recent|tag]
+                    [--check] [--include-expired]
+                    [--json] [--paths] [-0]
+                    [--pick [--first | --builtin] [--query Q]]
+</code></pre>
+<ul>
+<li><code>&lt;query&gt;</code>: substring match across path/basename/tag.</li>
+<li><code>-t TAG</code>: exact tag (or glob if <code>*</code> / <code>?</code> is present).</li>
+<li><code>--by</code>: sort/group key.
+<ul>
+<li><code>path</code> (default): alphabetical by path.</li>
+<li><code>recent</code> (aliases: <code>used</code>, <code>recency</code>): most-recently-used first.</li>
+<li><code>tag</code>: group output under per-tag headers. Entries with multiple tags appear under each; entries with no active tags collect under <code>(no tags)</code> at the end. Notes:
+<ul>
+<li>Incompatible with <code>--pick</code>.</li>
+<li>With <code>--json</code>, the result is an object keyed by tag name (<code>&quot;&quot;</code> for untagged) instead of a flat array.</li>
+<li>With <code>--paths</code> / <code>-0</code>, paths are emitted in tag-sorted order with duplicates collapsed.</li>
+<li>Only <strong>active</strong> tags create headers — TTL-expired tags are hidden unless <code>--include-expired</code> is set, so an entry whose only tags have expired falls into <code>(no tags)</code> by default.</li>
+<li>Combining with <code>-t TAG</code> filters which entries appear, but each surviving entry still renders under every tag it carries (not only <code>TAG</code>).</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><code>--check</code>: annotate entries whose path is gone with <code>[gone]</code>.</li>
+<li><code>--include-expired</code>: include tag rows whose TTL has elapsed.</li>
+<li><code>--json</code> / <code>--paths</code> / <code>-0</code>: machine-readable forms (see <a href="../../usage/pipelines/">Pipelines</a>).</li>
+<li><code>--pick</code>: resolve to a single path on stdout. <code>--first</code> for deterministic auto-pick, <code>--builtin</code> to force the picker even off-TTY.</li>
+</ul>
+<h2 id="info"><code>info</code></h2>
+<pre><code>doma info [&lt;path-or-short-id&gt;] [--json]
+</code></pre>
+<p>Defaults to <code>.</code>. Accepts either a path or a short_id (full or unique prefix). Prints short_id, canonical path, tags (with TTL or <code>~expired</code> suffix), <code>created_at</code>, <code>last_used_at</code>, and an <code>exists</code> check. Exits 3 when not registered. If the entry is in the trash, surfaces the trash short_id and a restore hint.</p>
+<h2 id="run"><code>run</code></h2>
+<pre><code>doma run (&lt;tag&gt; | -t TAG) [--fail-fast] [--parallel] -- &lt;cmd&gt; [args...]
+</code></pre>
+<p><code>--</code> is required. <code>--fail-fast</code> is sequential-only. The tag can be passed positionally or via <code>-t/--tag</code> (alias) — pick one. A single tag is accepted; commas are not split, but glob patterns (<code>*</code>, <code>?</code>) match across multiple tags.</p>
+<h2 id="status"><code>status</code></h2>
+<pre><code>doma status [&lt;tag&gt; | -t TAG] [--dirty] [--jobs N] [--json]
+</code></pre>
+<p>Reports each tagged directory's git working-tree state — branch, ahead/behind vs upstream, dirty-file count. No tag scans every tracked directory. <code>--dirty</code> shows only repos with uncommitted changes. Probes run in parallel (<code>--jobs</code> to tune; default CPU count) by shelling out to <code>git</code>; non-git and missing paths are surfaced too. See <a href="../../usage/status/">Git status</a>.</p>
+<h2 id="export-import"><code>export</code> / <code>import</code></h2>
+<pre><code>doma export [--json | --yaml] [-o FILE]
+doma import &lt;file&gt; [--merge | --replace] [-y | --yes]
+</code></pre>
+<p><code>--replace</code> without <code>--yes</code> requires a TTY confirmation.</p>
+<h2 id="trash"><code>trash</code></h2>
+<pre><code>doma trash list [--json]
+doma trash restore &lt;short_id&gt; [--merge]
+doma trash empty [--older DUR] [--json]
+</code></pre>
+<p><code>rm &lt;path&gt;</code> writes to the trash by default — <code>trash list</code> shows what's recoverable (newest first). Use <code>--json</code> for machine-readable output (array of entries with <code>short_id</code>, <code>path</code>, <code>tags</code>, <code>deleted_at</code>, <code>expirations</code>, etc.). <code>trash restore</code> brings an entry back. Use <code>--merge</code> if the path is already re-registered with different tags. <code>empty</code> purges everything (optionally <code>--json</code> for <code>{&quot;purged&quot;: N}</code>); <code>empty --older 7d</code> purges only old entries.</p>
+<p>Anything older than 7 days is auto-pruned on the next trash op.</p>
+<h2 id="config"><code>config</code></h2>
+<pre><code>doma config get &lt;key&gt;
+doma config set &lt;key&gt; &lt;value&gt;
+doma config unset &lt;key&gt;
+doma config list
+doma config edit
+doma config path
+</code></pre>
+<p>Keys: <code>db_path</code>, <code>selector</code>, <code>auto_tag.basename</code>, <code>auto_tag.git</code> (see <a href="../config/">Configuration</a> for what each does).</p>
+<p><code>set</code> / <code>unset</code> rewrite <code>config.yml</code> and don't preserve comments — use <code>config edit</code> to open the file in <code>$EDITOR</code> for hand-edits.</p>
+<h2 id="setup"><code>setup</code></h2>
+<pre><code>doma setup install [&lt;shell&gt;] [-y | --yes] [-n | --dry-run]
+doma setup init &lt;bash|zsh|fish&gt;
+doma setup completion &lt;bash|zsh|fish&gt;
+</code></pre>
+<h2 id="doctor"><code>doctor</code></h2>
+<pre><code>doma doctor
+</code></pre>
+<p>Reports paths (home / config / DB), config-file status, and database stats (directories, tags, missing-on-disk count, schema version).</p>
+
+    <footer class="docs-footer">
+      <span>MIT &middot; written in <a href="https://crystal-lang.org" target="_blank" rel="noopener">Crystal</a> &middot; built with <a href="https://hwaro.hahwul.com" target="_blank" rel="noopener">hwaro</a></span>
+      <span><a href="https://github.com/hahwul/doma" target="_blank" rel="noopener">GitHub</a> &middot; <a href="https://github.com/hahwul/doma/edit/main/docs/content/reference/commands/.md" target="_blank" rel="noopener">Edit this page</a></span>
+    </footer>
+  </main>
+  
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>hljs.highlightAll();</script>
+<script src="https://doma.hahwul.com/assets/js/search.js?v=68ee8ea0"></script>
+</body>
+</html>
