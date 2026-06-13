@@ -126,6 +126,14 @@ doma run (<tag> | -t TAG) [--fail-fast] [--parallel] -- <cmd> [args...]
 
 `--` is required. `--fail-fast` is sequential-only. The tag can be passed positionally or via `-t/--tag` (alias) — pick one. A single tag is accepted; commas are not split, but glob patterns (`*`, `?`) match across multiple tags.
 
+## `status`
+
+```
+doma status [<tag> | -t TAG] [--dirty] [--jobs N] [--json]
+```
+
+Reports each tagged directory's git working-tree state — branch, ahead/behind vs upstream, dirty-file count. No tag scans every tracked directory. `--dirty` shows only repos with uncommitted changes. Probes run in parallel (`--jobs` to tune; default CPU count) by shelling out to `git`; non-git and missing paths are surfaced too. See [Git status](../../usage/status/).
+
 ## `export` / `import`
 
 ```

@@ -1,7 +1,7 @@
 +++
 title = "Search & stats"
 description = "Substring search across paths and tags, plus the stats summary."
-weight = 5
+weight = 6
 +++
 
 ## Search

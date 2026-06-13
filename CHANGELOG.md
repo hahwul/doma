@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- `status [<tag>]` — git dashboard across a tagged set: branch, ahead/behind vs upstream, and a dirty-file count, one row per directory. `--dirty` filters to repos with uncommitted work; `--json` emits the full per-entry breakdown; `--jobs N` tunes the parallel probe (default CPU count). Non-git and missing paths surface as `not a git repo` / `gone`. Shells out to `git`; errors clearly if git isn't on PATH
+
 ## v0.2.1
 
 ### Changed

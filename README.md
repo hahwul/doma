@@ -46,6 +46,7 @@ doma mark spike                # bookmark cwd for 7 days
 ### Navigation & operations
 - `list --pick` resolves to a single path (Crystal-native picker, no fzf dependency); the `doma cd <tag>` shell wrapper from `doma setup install` builds on it
 - `run <tag> -- <cmd>` to execute a command in every tagged directory; `--parallel` (with `--jobs N`, default CPU count) and `--fail-fast` available
+- `status <tag>` for a one-glance git dashboard across a tagged set — branch, ahead/behind, dirty count; `--dirty` to show only repos with uncommitted work, `--json` for scripting
 - `move` to follow a path that moved on disk; tags carry over
 - `rename` to merge or relabel tags
 - Recency tracking — most-used directories surface first in pickers and `list --by recent`

@@ -100,6 +100,8 @@ module Doma::CLI
         %w[-h --help], [] of String),
       CmdSpec.new("stats", "Top tags and recent paths",
         %w[--top --recent --used --json -h --help], [] of String),
+      CmdSpec.new("status", "Git status across tagged repos",
+        %w[-t --tag --dirty --jobs --json -h --help], [] of String),
       CmdSpec.new("run", "Run a command in every tagged directory",
         %w[-t --tag --fail-fast --parallel --jobs --no-header -h --help], [] of String),
       CmdSpec.new("export", "Dump the database",
@@ -123,7 +125,7 @@ module Doma::CLI
     # Commands whose first positional is a tag — completion shells these
     # out to `doma tags --names`. Picked deliberately conservative: only
     # commands where the first positional is *unambiguously* a tag.
-    private TAG_FIRST_ARG = %w[cd run rename]
+    private TAG_FIRST_ARG = %w[cd run rename status]
 
     # Subcommands whose first positional is a known directory path.
     private PATH_FIRST_ARG = %w[add move rm info]
