@@ -1,9 +1,20 @@
 # Changelog
 
-## Unreleased
+## v0.3.0
 
 ### Added
 - `status [<tag>]` — git dashboard across a tagged set: branch, ahead/behind vs upstream, and a dirty-file count, one row per directory. `--dirty` filters to repos with uncommitted work; `--json` emits the full per-entry breakdown; `--jobs N` tunes the parallel probe (default CPU count). Non-git and missing paths surface as `not a git repo` / `gone`. Shells out to `git`; errors clearly if git isn't on PATH
+
+### Fixed
+- Harden IO and terminal boundaries so bad input degrades gracefully instead of crashing or hanging (c311bf4):
+  - `add` with `auto_tag.git` no longer crashes on an unreadable `.git` file, config, or commondir — git detection returns empty instead of raising
+  - `doctor` survives a malformed `config.yml`, reporting the error instead of dying before any section prints
+  - `run --parallel`: an unexpected worker failure degrades to a failed directory (exit 126) rather than deadlocking the reaper
+  - `picker`: swallows invalid UTF-8 input, treats a TTY hangup as cancel, and always restores terminal state
+  - `config get`/`set`/`list`/`unset`: non-string YAML keys (e.g. `1: foo`) raise a clear `ConfigError` instead of crashing
+  - permission / not-a-file IO errors surface as `ConfigError`/`ImportError`/`Error` instead of leaking as `internal error`
+  - a failed `~` expansion (no `$HOME`, no passwd entry) raises a `ValidationError` with a hint
+  - broken-pipe (`EPIPE`) detection also checks the OS error code
 
 ## v0.2.1
 

@@ -1,6 +1,6 @@
 name: doma
 base: core24
-version: 0.2.1
+version: 0.3.0
 summary: Directory tag manager — put your directories on the cutting board.
 description: |
   doma (도마) is a directory tag manager written in Crystal. Tag any path
