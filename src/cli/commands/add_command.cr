@@ -218,24 +218,22 @@ module Doma::CLI
     private def process_each(paths : Array(String), json_results : Array(Hash(String, JSON::Any))? = nil, &)
       failures = 0
       paths.each do |path|
-        begin
-          yield path
-        rescue ex : Doma::ValidationError
-          failures += 1
-          if json_results
-            row = {
-              "input" => JSON::Any.new(path),
-              "error" => JSON::Any.new(format_failure(path, ex, paths.size)),
-            }
-            if hint = ex.hint
-              row["hint"] = JSON::Any.new(hint)
-            end
-            json_results << row
-          else
-            Doma::Logger.error format_failure(path, ex, paths.size)
-            if hint = ex.hint
-              STDERR.puts "  #{hint}"
-            end
+        yield path
+      rescue ex : Doma::ValidationError
+        failures += 1
+        if json_results
+          row = {
+            "input" => JSON::Any.new(path),
+            "error" => JSON::Any.new(format_failure(path, ex, paths.size)),
+          }
+          if hint = ex.hint
+            row["hint"] = JSON::Any.new(hint)
+          end
+          json_results << row
+        else
+          Doma::Logger.error format_failure(path, ex, paths.size)
+          if hint = ex.hint
+            STDERR.puts "  #{hint}"
           end
         end
       end
