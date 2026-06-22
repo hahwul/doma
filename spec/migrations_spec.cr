@@ -203,13 +203,11 @@ describe Doma::Migrations do
         done = Channel(Nil).new
         4.times do
           spawn do
-            begin
-              Doma::Database.open(path).close
-            rescue ex
-              errors_mu.synchronize { errors << (ex.message || ex.class.name) }
-            ensure
-              done.send(nil)
-            end
+            Doma::Database.open(path).close
+          rescue ex
+            errors_mu.synchronize { errors << (ex.message || ex.class.name) }
+          ensure
+            done.send(nil)
           end
         end
         4.times { done.receive }

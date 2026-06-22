@@ -21,13 +21,14 @@ require "./commands/move_command"
 require "./commands/config_command"
 require "./commands/trash_command"
 require "./commands/status_command"
+require "./commands/tui_command"
 
 module Doma
   module CLI
     class Runner
       KNOWN_COMMANDS = %w[
         add mark rm remove prune list ls info tags rename move mv
-        stats status run export import setup doctor config trash
+        stats status run export import setup doctor config trash tui
         version help -V --version -h --help
       ]
 
@@ -38,7 +39,15 @@ module Doma
         Runner.apply_globals!(args)
 
         if args.empty?
-          print_help
+          # Bare `doma` launches the interactive finder when there's a terminal
+          # to draw on; otherwise (pipes, scripts) it stays orientation help so
+          # existing non-interactive behavior is preserved. DOMA_NO_TUI=1 is an
+          # escape hatch back to help for terminals termisu misbehaves on.
+          if STDIN.tty? && !ENV["DOMA_NO_TUI"]?
+            TuiCommand.new.run([] of String)
+          else
+            print_help
+          end
           return
         end
 
@@ -104,6 +113,8 @@ module Doma
           ConfigCommand.new.run(args)
         when "trash"
           TrashCommand.new.run(args)
+        when "tui"
+          TuiCommand.new.run(args)
         else
           Doma::Logger.error "unknown command '#{command}'"
           if suggestion = Doma::Suggester.suggest(command, KNOWN_COMMANDS)
@@ -178,6 +189,7 @@ module Doma
         {"move <old> <new>", "Move a registered path (tags carry over)"},
         {"tags", "List all tags with counts"},
         {"rename <old> <new>", "Rename or merge a tag"},
+        {"tui", "Fuzzy-find directories interactively (default with no args)"},
         {"list [<query>] [-t TAG]", "List/search directories (--json, --paths, --pick)"},
         {"info [<path>]", "Show one entry's tags / TTLs / last-used (default: cwd)"},
         {"stats", "Top tags + recently added paths"},

@@ -243,20 +243,18 @@ describe "doma mark CLI alias" do
       status.success?.should be_true
 
       Doma::Database.open(File.join(home, "doma.db")).tap do |db|
-        begin
-          db.paths_for_tag("reading").size.should eq(1)
-          # The tag must have a TTL — that's the whole point of mark.
-          # Re-query the row directly to confirm expires_at != NULL.
-          row = db.db.query_one?(
-            "SELECT dt.expires_at FROM directory_tags dt " \
-            "INNER JOIN tags t ON t.id = dt.tag_id " \
-            "WHERE t.name = ?",
-            "reading", as: Int64?
-          )
-          row.should_not be_nil
-        ensure
-          db.close
-        end
+        db.paths_for_tag("reading").size.should eq(1)
+        # The tag must have a TTL — that's the whole point of mark.
+        # Re-query the row directly to confirm expires_at != NULL.
+        row = db.db.query_one?(
+          "SELECT dt.expires_at FROM directory_tags dt " \
+          "INNER JOIN tags t ON t.id = dt.tag_id " \
+          "WHERE t.name = ?",
+          "reading", as: Int64?
+        )
+        row.should_not be_nil
+      ensure
+        db.close
       end
     ensure
       FileUtils.rm_rf(home)
@@ -278,13 +276,11 @@ describe "doma mark CLI alias" do
       )
 
       Doma::Database.open(File.join(home, "doma.db")).tap do |db|
-        begin
-          db.paths_for_tag("spike").size.should eq(1)
-          db.paths_for_tag("skim").size.should eq(1)
-          db.paths_for_tag("review").size.should eq(1)
-        ensure
-          db.close
-        end
+        db.paths_for_tag("spike").size.should eq(1)
+        db.paths_for_tag("skim").size.should eq(1)
+        db.paths_for_tag("review").size.should eq(1)
+      ensure
+        db.close
       end
     ensure
       FileUtils.rm_rf(home)

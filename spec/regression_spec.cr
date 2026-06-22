@@ -106,13 +106,11 @@ describe "doma add" do
       status.success?.should be_true
 
       Doma::Database.open(File.join(home, "doma.db")).tap do |db|
-        begin
-          paths = db.paths_for_tag("auto-default")
-          paths.size.should eq(1)
-          paths.first.should eq(Doma::Validator.canonicalize(workdir))
-        ensure
-          db.close
-        end
+        paths = db.paths_for_tag("auto-default")
+        paths.size.should eq(1)
+        paths.first.should eq(Doma::Validator.canonicalize(workdir))
+      ensure
+        db.close
       end
     ensure
       FileUtils.rm_rf(home)

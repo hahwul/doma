@@ -17,6 +17,9 @@ targets:
 dependencies:
   sqlite3:
     github: crystal-lang/crystal-sqlite3
+  termisu:
+    github: omarluq/termisu
+    version: 0.5.0
 
 development_dependencies:
   ameba:
