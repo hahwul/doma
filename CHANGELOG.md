@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- `tui` — an interactive fuzzy finder over your registered directories, built on [termisu](https://github.com/omarluq/termisu) (compiled in; no extra runtime dependency). Type to fuzzy-match paths with match highlighting; narrow with a small query syntax — `tag:NAME` (glob-aware, repeatable AND), `-tag:`/`!tag:` to exclude, `id:PREFIX`, `path:TERM`, plus bare fuzzy terms. Navigate with arrows / `Ctrl-N`·`Ctrl-P` / PageUp·PageDown. `Ctrl-A` registers a directory and `Ctrl-Y` copies the highlighted path (OSC-52), both without leaving the finder; `F1`/`?` shows help. Enter prints the selected path to stdout and bumps recency so the shell wrapper `cd`s into it — same contract as `list --pick`; Esc/`Ctrl-C` cancels (exit 130). The UI lives on `/dev/tty`, so `cd "$(doma tui)"` works
+- Running `doma` with no subcommand now launches the finder when stdin is a TTY, falling back to the help banner otherwise (`DOMA_NO_TUI=1` forces help). The `doma setup init` shell wrappers `cd` into the path picked by bare `doma` / `doma tui` as well as `doma cd`
+
 ## v0.3.0
 
 ### Added

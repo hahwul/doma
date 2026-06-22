@@ -29,6 +29,9 @@ require "./services/git_detector"
 require "./services/installer"
 require "./services/exporter"
 require "./services/importer"
+require "./tui/fuzzy"
+require "./tui/query"
+require "./tui/app"
 require "./cli/runner"
 
 module Doma

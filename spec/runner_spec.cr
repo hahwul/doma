@@ -10,7 +10,10 @@ private DOMA_BIN = File.expand_path("../bin/doma", __DIR__)
 private def run(args : Array(String)) : NamedTuple(out: String, err: String, status: Process::Status)
   stdout_buf = IO::Memory.new
   stderr_buf = IO::Memory.new
-  status = Process.run(DOMA_BIN, args, output: stdout_buf, error: stderr_buf)
+  # Feed an empty, non-tty stdin so behavior is deterministic regardless of
+  # how the suite is launched — otherwise bare `doma` from an interactive
+  # terminal would open the TUI and hang the run.
+  status = Process.run(DOMA_BIN, args, input: IO::Memory.new, output: stdout_buf, error: stderr_buf)
   {out: stdout_buf.to_s, err: stderr_buf.to_s, status: status}
 end
 
@@ -96,6 +99,28 @@ describe "Runner dispatch" do
     r = run(["--help"])
     r[:out].should contain("doma setup install")
     r[:out].should contain("doma cd")
+  end
+
+  it "[no args, non-tty] stays help instead of launching the TUI" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    # stdin is not a tty here (see `run`), so bare `doma` must fall back to
+    # orientation help and exit cleanly rather than block on the finder.
+    r = run([] of String)
+    r[:status].exit_code.should eq(0)
+    r[:out].should contain("Usage: doma <command>")
+  end
+
+  it "[tui, non-tty] errors out before touching the terminal (no hang)" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    r = run(["tui"])
+    r[:status].exit_code.should eq(2)
+    r[:err].should contain("interactive terminal")
+  end
+
+  it "[help banner] lists the tui command" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    r = run(["--help"])
+    r[:out].should contain("tui")
   end
 
   it "[doma cd in binary] points at the shell wrapper" do

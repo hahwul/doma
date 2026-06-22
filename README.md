@@ -44,6 +44,7 @@ doma mark spike                # bookmark cwd for 7 days
 - Stable 7-char `short_id` per directory — survives renames; usable via `rm <id>` and `trash restore <id>`
 
 ### Navigation & operations
+- `tui` — full-screen fuzzy finder over your registered directories, and the default when you run `doma` with no subcommand. Fuzzy match on paths with match highlighting, narrow with a small query syntax (`tag:crystal`, `-tag:archived`, `id:0d`, `path:src`), register a directory with `Ctrl-A` or copy a path with `Ctrl-Y` without leaving it. Enter prints the path so the shell wrapper `cd`s into it
 - `list --pick` resolves to a single path (Crystal-native picker, no fzf dependency); the `doma cd <tag>` shell wrapper from `doma setup install` builds on it
 - `run <tag> -- <cmd>` to execute a command in every tagged directory; `--parallel` (with `--jobs N`, default CPU count) and `--fail-fast` available
 - `status <tag>` for a one-glance git dashboard across a tagged set — branch, ahead/behind, dirty count; `--dirty` to show only repos with uncommitted work, `--json` for scripting
@@ -116,7 +117,10 @@ docker run --rm -it -v "$HOME/.config/doma:/root/.config/doma" \
 doma setup install                    # auto-detects $SHELL, appends to your rc
 exec $SHELL                           # or `source ~/.zshrc`
 doma cd crystal                       # interactive picker, then cd
+doma                                  # bare doma opens the fuzzy finder, then cd
 ```
+
+The wrapper also makes bare `doma` and `doma tui` `cd` into whatever you pick in the finder.
 
 If you'd rather wire it manually:
 
