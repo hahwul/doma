@@ -20,9 +20,11 @@ def with_temp_db(&)
   path = File.join(dir, "doma.db")
   prev_home = ENV["DOMA_HOME"]?
   ENV["DOMA_HOME"] = dir
+  db = Doma::Database.open(path)
   begin
-    yield Doma::Database.open(path)
+    yield db
   ensure
+    db.close if db
     prev_home ? (ENV["DOMA_HOME"] = prev_home) : ENV.delete("DOMA_HOME")
     FileUtils.rm_rf(dir)
   end
