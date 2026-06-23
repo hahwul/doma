@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.4.1
+
+### Fixed
+- `tui` Enter now reliably `cd`s through the shell wrapper. A full-screen finder must own the terminal, so the `setup init` wrappers no longer capture its stdout with `$(...)` (fragile under job control); they hand it a `DOMA_CD_FILE`, let it draw on the terminal, then `cd` to the path it writes there (the `lf`/`ranger` pattern). Re-run `doma setup install` or open a new shell to pick up the updated wrapper
+- `tui` footer no longer promises `cd` when nothing will act on the selection: with the shell wrapper active Enter shows `cd`, otherwise it shows `print` and the help screen points at `doma setup install`
+
 ## v0.4.0
 
 ### Added

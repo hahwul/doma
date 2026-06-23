@@ -800,6 +800,11 @@ describe "doma setup init" do
     # Wrapper delegates resolution to `doma list --pick` rather than a
     # dedicated `cd` subcommand — the binary no longer ships one.
     r[:out].should contain("--pick")
+    # The full-screen TUI can't have its stdout captured by $(...) (it hangs
+    # under job control), so the wrapper hands it DOMA_CD_FILE, lets it draw
+    # on the terminal, then cds to the path written there.
+    r[:out].should contain(%(DOMA_CD_FILE="$__doma_cd_file" command doma "$@"))
+    r[:out].should contain("command mktemp")
   end
 
   it "[bash] same wrapper as zsh" do
@@ -816,6 +821,7 @@ describe "doma setup init" do
     r[:out].should contain("function doma")
     r[:out].should contain(%($argv[1] = "cd"))
     r[:out].should contain("--pick")
+    r[:out].should contain("set -lx DOMA_CD_FILE")
   end
 
   it "[unsupported] errors with 2" do

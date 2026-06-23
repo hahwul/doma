@@ -46,10 +46,12 @@ module Doma::CLI
     # Bash and zsh share enough syntax that one wrapper covers both. The
     # function shadows the binary in PATH so directory-changing commands work
     # as expected — the binary can't change its parent shell's cwd, so the
-    # function captures the picked path and runs `cd` itself:
-    #   - `doma cd <tag>` → `doma list -t <tag> --pick`
-    #   - bare `doma` / `doma tui` → the interactive finder; the path it
-    #     prints on selection becomes the new cwd
+    # function recovers the picked path and runs `cd` itself:
+    #   - `doma cd <tag>` → `doma list -t <tag> --pick`, captured via `$(...)`
+    #   - bare `doma` / `doma tui` → the full-screen finder. It must own the
+    #     terminal, so we can't capture its stdout with `$(...)` (that hangs it
+    #     under job control). Instead we hand it DOMA_CD_FILE, let it draw on
+    #     the terminal, then `cd` to the path it wrote there.
     # Everything else passes through to `command doma` unchanged.
     private def posix_wrapper : String
       <<-SH
@@ -74,9 +76,19 @@ module Doma::CLI
             fi
             [ -n "$__doma_target" ] && builtin cd -- "$__doma_target"
           elif [ $# -eq 0 ] || [ "$1" = "tui" ]; then
-            local __doma_target
-            __doma_target="$(command doma "$@")" || return $?
+            # The full-screen finder owns the terminal, so its stdout can't be
+            # captured with $(...) — under job control that hangs it before it
+            # renders. It writes the chosen path to DOMA_CD_FILE instead; we
+            # read that and cd. Its presence also tells the TUI footer that
+            # Enter really does `cd` here.
+            local __doma_cd_file __doma_target __doma_rc
+            __doma_cd_file="$(command mktemp "${TMPDIR:-/tmp}/doma.cd.XXXXXX")" || return $?
+            DOMA_CD_FILE="$__doma_cd_file" command doma "$@"
+            __doma_rc=$?
+            __doma_target="$(cat "$__doma_cd_file" 2>/dev/null)"
+            command rm -f "$__doma_cd_file"
             [ -n "$__doma_target" ] && builtin cd -- "$__doma_target"
+            return $__doma_rc
           else
             command doma "$@"
           fi
@@ -109,11 +121,24 @@ module Doma::CLI
               builtin cd -- $__doma_target
             end
           else if test (count $argv) -eq 0; or test $argv[1] = "tui"
-            set -l __doma_target (command doma $argv)
-            or return $status
+            # The full-screen finder owns the terminal, so its stdout can't be
+            # captured with (...) — under job control that hangs it before it
+            # renders. It writes the chosen path to DOMA_CD_FILE instead; we
+            # read that and cd. Its presence also tells the TUI footer that
+            # Enter really does `cd` here.
+            set -l __doma_tmpl /tmp/doma.cd.XXXXXX
+            test -n "$TMPDIR"; and set __doma_tmpl "$TMPDIR/doma.cd.XXXXXX"
+            set -l __doma_cd_file (command mktemp $__doma_tmpl); or return $status
+            set -lx DOMA_CD_FILE $__doma_cd_file
+            command doma $argv
+            set -l __doma_rc $status
+            set -e DOMA_CD_FILE
+            set -l __doma_target (cat $__doma_cd_file 2>/dev/null)
+            command rm -f $__doma_cd_file
             if test -n "$__doma_target"
               builtin cd -- $__doma_target
             end
+            return $__doma_rc
           else
             command doma $argv
           end

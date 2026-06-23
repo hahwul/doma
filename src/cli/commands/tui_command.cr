@@ -9,10 +9,16 @@ module Doma::CLI
   # `doma` is run with no subcommand (the runner dispatches here when stdin is
   # a TTY).
   #
-  # Output contract (identical to `doma list --pick`): the UI lives entirely on
-  # /dev/tty, and on selection the chosen path is printed to STDOUT after the
-  # screen is torn down — so a shell wrapper can `cd "$(doma)"`. Cancellation
-  # prints nothing and exits 130 so the wrapper's `cd` is skipped.
+  # Output contract: the UI lives entirely on /dev/tty. On selection the chosen
+  # path is delivered in one of two ways:
+  #   - DOMA_CD_FILE set (shell wrapper): the path is written to that file and
+  #     nothing goes to STDOUT. A full-screen TUI must own the terminal, so the
+  #     wrapper can't capture our stdout with `$(...)` — under job control that
+  #     hangs termisu before it ever renders. The file hand-off sidesteps it:
+  #     the TUI keeps the terminal, the wrapper reads the file and `cd`s.
+  #   - otherwise (scripts / `cd "$(doma list --pick)"`-style use): the path is
+  #     printed to STDOUT after the screen is torn down.
+  # Cancellation delivers nothing and exits 130 so the wrapper's `cd` is skipped.
   class TuiCommand
     def run(args : Array(String))
       query : String? = nil
@@ -50,7 +56,7 @@ module Doma::CLI
         result = run_app(db, entries, initial_query(query, tag))
         if result.selected? && (path = result.path)
           bump_used_safe(db, path)
-          puts path
+          deliver(path)
           selected = true
         end
       ensure
@@ -70,6 +76,20 @@ module Doma::CLI
         "no controlling terminal for the TUI",
         hint: "use `doma list` for non-interactive output"
       )
+    end
+
+    # Hand the chosen path back to the caller. With a wrapper-provided
+    # DOMA_CD_FILE we write there (keeping STDOUT — and the terminal — clean);
+    # otherwise we print to STDOUT for `$(...)`-style capture. If the file write
+    # fails, fall back to STDOUT so the selection is never silently lost.
+    private def deliver(path : String)
+      if cd_file = ENV["DOMA_CD_FILE"]?.presence
+        File.write(cd_file, path)
+      else
+        puts path
+      end
+    rescue
+      puts path
     end
 
     private def initial_query(query : String?, tag : String?) : String

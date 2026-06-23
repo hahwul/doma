@@ -58,6 +58,11 @@ module Doma
         @status = ""
         @status_error = false
         @show_help = false
+        # Whether a shell wrapper will `cd` into the selection. The wrapper
+        # (`doma setup init`) hands us a DOMA_CD_FILE to write the chosen path
+        # to; without it, Enter only *prints* the path — so the footer must
+        # not promise `cd`.
+        @shell_integration = !ENV["DOMA_CD_FILE"]?.presence.nil?
         @scored = Query.filter(@entries, Query.parse(@query))
       end
 
@@ -346,7 +351,8 @@ module Doma
         end
 
         count = "#{@scored.size}/#{@entries.size}"
-        keys = "↑↓ move · enter cd · ^a add · ^y copy · ? help · esc quit"
+        enter = @shell_integration ? "enter cd" : "enter print"
+        keys = "↑↓ move · #{enter} · ^a add · ^y copy · ? help · esc quit"
         line = "#{count}   #{keys}"
         draw_text(2, y, line, fg: Termisu::Color.bright_black, max_x: @width)
       end
@@ -365,6 +371,7 @@ module Doma
       end
 
       private def render_help
+        enter_desc = @shell_integration ? "cd to entry" : "print path to stdout"
         lines = [
           {"doma tui — fuzzy finder", Termisu::Color.cyan, Termisu::Attribute::Bold},
           {"", Termisu::Color.default, Termisu::Attribute::None},
@@ -375,13 +382,20 @@ module Doma
           {"  path:TERM   fuzzy-match the whole path (no basename bias)", Termisu::Color.default, Termisu::Attribute::None},
           {"", Termisu::Color.default, Termisu::Attribute::None},
           {"Keys:", Termisu::Color.bright_white, Termisu::Attribute::Bold},
-          {"  ↑/↓  ^p/^n   move          enter    cd to entry", Termisu::Color.default, Termisu::Attribute::None},
+          {"  ↑/↓  ^p/^n   move          enter    #{enter_desc}", Termisu::Color.default, Termisu::Attribute::None},
           {"  pgup/pgdn    page          ^a       add a directory", Termisu::Color.default, Termisu::Attribute::None},
           {"  ^y           copy path     esc/^c   quit", Termisu::Color.default, Termisu::Attribute::None},
           {"  f1 / ?       toggle help", Termisu::Color.default, Termisu::Attribute::None},
-          {"", Termisu::Color.default, Termisu::Attribute::None},
-          {"press any key to close", Termisu::Color.bright_black, Termisu::Attribute::Italic},
         ]
+        # When no shell wrapper is capturing stdout, Enter can't change the
+        # parent shell's cwd — point the user at the one-time setup that lets
+        # it, instead of silently under-delivering on the "cd" hint.
+        unless @shell_integration
+          lines << {"", Termisu::Color.default, Termisu::Attribute::None}
+          lines << {"Enter prints the path; run `doma setup install` to cd on Enter.", Termisu::Color.yellow, Termisu::Attribute::None}
+        end
+        lines << {"", Termisu::Color.default, Termisu::Attribute::None}
+        lines << {"press any key to close", Termisu::Color.bright_black, Termisu::Attribute::Italic}
         lines.each_with_index do |line, i|
           break if i >= @list_height
           text, fg, attr = line
