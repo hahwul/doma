@@ -3,6 +3,7 @@ require "colorize"
 require "../../db/database"
 require "../../utils/errors"
 require "../../utils/logger"
+require "../../utils/parallel"
 require "../../utils/suggester"
 require "../../utils/tag_glob"
 
@@ -135,37 +136,22 @@ module Doma::CLI
 
       if parallel
         Doma::Logger.warn "--fail-fast is ignored in --parallel mode" if stop_on_fail
-        # Worker-pool over a bounded job channel. Without a cap, spawning
-        # one fiber per directory was fine for a `pwd` sweep but a foot-
-        # gun for `git fetch` / `npm install` style commands — 200
-        # simultaneous network jobs would saturate the user's box.
-        # Workers pull from `pending` until it's drained; results land
-        # in `results` so the announcement loop can preserve a stable
-        # consumer count regardless of how many workers we run.
-        # Crystal narrows `jobs` (Int32?) only inside the closure; pull
-        # it into a non-nil local before the clamp.
+        # Bounded fan-out (see Doma::Parallel): without a cap, one fiber
+        # per directory is fine for a `pwd` sweep but a foot-gun for
+        # `git fetch` / `npm install` — 200 simultaneous network jobs
+        # would saturate the user's box. Process.run yields while each
+        # child runs, so the capped pool still overlaps real subprocess
+        # time. `each_completed` streams a ✓/✗ marker the moment each
+        # directory returns and yields on this fiber, so the `failures`
+        # tally needs no cross-fiber synchronization.
+        # Copy the closured `jobs` into a plain local so Crystal can
+        # narrow Int32? → Int32 (a captured var can't be narrowed in place).
         j = jobs
-        requested_jobs : Int32 = j.nil? ? DEFAULT_JOBS : j
-        cap = requested_jobs.clamp(1, paths.size)
-        pending = Channel(String).new(paths.size)
-        results = Channel({String, Int32}).new(paths.size)
-
-        paths.each { |path| pending.send(path) }
-        pending.close
-
-        cap.times do
-          spawn do
-            loop do
-              path = pending.receive?
-              break if path.nil?
-              code = run_one(cmd, cmd_rest, path, attach_stdin: false)
-              results.send({path, code})
-            end
-          end
-        end
-
-        paths.size.times do
-          path, code = results.receive
+        requested_jobs = j || DEFAULT_JOBS
+        Doma::Parallel.each_completed(
+          paths, requested_jobs,
+          ->(path : String) { run_one(cmd, cmd_rest, path, attach_stdin: false) }
+        ) do |path, code|
           announce(path, code, color, no_header)
           failures += 1 unless code == 0
         end

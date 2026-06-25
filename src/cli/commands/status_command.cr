@@ -5,6 +5,7 @@ require "../../db/database"
 require "../../services/git_status"
 require "../../utils/errors"
 require "../../utils/logger"
+require "../../utils/parallel"
 require "../../utils/suggester"
 require "../../utils/tag_glob"
 
@@ -140,42 +141,19 @@ module Doma::CLI
       entries
     end
 
-    # Worker-pool over a bounded channel — same shape as `run --parallel`,
-    # and for the same reason: one fiber per directory is fine for a `pwd`
-    # sweep but a foot-gun once each unit forks git against 200 repos.
-    # Results land at their original index so output order stays stable
-    # (path-sorted) regardless of which probe finishes first.
+    # Bounded fan-out over the directory set (see Doma::Parallel). Each
+    # probe forks git, and Process.run yields the fiber while the child
+    # runs, so the sweep overlaps real subprocess time even on doma's
+    # single-threaded runtime — the same reason `run --parallel` is a win.
+    # Results come back in input order, so the rendered table stays
+    # path-sorted regardless of which probe finishes first.
     private def probe_all(entries : Array(Doma::Entry), jobs : Int32?) : Array(RepoState)
-      results = Array(RepoState?).new(entries.size, nil)
-      cap = (jobs || DEFAULT_JOBS).clamp(1, entries.size)
-
-      pending = Channel({Int32, Doma::Entry}).new(entries.size)
-      done = Channel(Nil).new(entries.size)
-      entries.each_with_index { |e, i| pending.send({i, e}) }
-      pending.close
-
-      cap.times do
-        spawn do
-          loop do
-            msg = pending.receive?
-            break if msg.nil?
-            i, entry = msg
-            begin
-              results[i] = inspect_one(entry)
-            rescue
-              # Degrade cleanly and avoid hanging the status command if a probe fails unexpectedly
-              results[i] = RepoState.new(entry, Dir.exists?(entry.path), Doma::GitStatus::NON_GIT)
-            ensure
-              done.send(nil)
-            end
-          end
-        end
+      Doma::Parallel.map(entries, jobs || DEFAULT_JOBS) do |entry|
+        inspect_one(entry)
+      rescue
+        # Degrade cleanly: one probe blowing up must never abort the sweep.
+        RepoState.new(entry, Dir.exists?(entry.path), Doma::GitStatus::NON_GIT)
       end
-
-      entries.size.times { done.receive }
-      # Every slot was filled by a worker before its `done` send, so the
-      # compact is just to satisfy the nilable element type.
-      results.compact
     end
 
     private def inspect_one(entry : Doma::Entry) : RepoState

@@ -43,17 +43,39 @@ class Doma::Database
     )
     directory_id = cnn.scalar("SELECT id FROM directories WHERE path = ?", abs).as(Int64)
 
-    clean_tags.each do |tag|
-      cnn.exec("INSERT OR IGNORE INTO tags (name, created_at) VALUES (?, ?)", tag, now)
-      tag_id = cnn.scalar("SELECT id FROM tags WHERE name = ?", tag).as(Int64)
-      # ON CONFLICT DO UPDATE so re-tagging refreshes expires_at —
-      # absent --ttl on a re-tag, the row reverts to permanent (NULL).
-      # That mirrors what the user is asking for: "the latest add is
-      # the source of truth for this tag."
+    # Tag writes batched into three statements regardless of tag count,
+    # instead of three round trips *per* tag. On a bulk import (many
+    # entries, each re-running add_tx) that's the difference between
+    # ~3N and ~3 queries per directory. `clean_tags` is already
+    # de-duplicated by `Validator.tags!`, so no two rows below collide on
+    # the same conflict target within one statement.
+    unless clean_tags.empty?
+      # 1. Create any missing tag rows in one multi-row INSERT OR IGNORE.
+      #    Existing tags are skipped, preserving their original created_at.
+      tag_rows = Doma::Sql.placeholders_for(clean_tags.size, "(?, ?)")
+      tag_args = clean_tags.flat_map { |tag| [tag.as(DB::Any), now.as(DB::Any)] }
+      cnn.exec("INSERT OR IGNORE INTO tags (name, created_at) VALUES #{tag_rows}", args: tag_args)
+
+      # 2. Map every name → id in one IN-list SELECT.
+      name_placeholders = Doma::Sql.placeholders_for(clean_tags.size)
+      id_by_name = {} of String => Int64
+      cnn.query_all(
+        "SELECT name, id FROM tags WHERE name IN (#{name_placeholders})",
+        args: clean_tags.map(&.as(DB::Any)), as: {String, Int64}
+      ).each { |row| id_by_name[row[0]] = row[1] }
+
+      # 3. Upsert all associations in one multi-row statement. Each row
+      #    keeps the per-row ON CONFLICT semantics: re-tagging refreshes
+      #    expires_at — absent --ttl on a re-tag it reverts to permanent
+      #    (NULL), so "the latest add is the source of truth for this tag."
+      assoc_rows = Doma::Sql.placeholders_for(clean_tags.size, "(?, ?, ?)")
+      assoc_args = clean_tags.flat_map do |tag|
+        [directory_id.as(DB::Any), id_by_name[tag].as(DB::Any), expires_at.as(DB::Any)]
+      end
       cnn.exec(
-        "INSERT INTO directory_tags (directory_id, tag_id, expires_at) VALUES (?, ?, ?) " \
+        "INSERT INTO directory_tags (directory_id, tag_id, expires_at) VALUES #{assoc_rows} " \
         "ON CONFLICT(directory_id, tag_id) DO UPDATE SET expires_at = excluded.expires_at",
-        directory_id, tag_id, expires_at
+        args: assoc_args
       )
     end
 

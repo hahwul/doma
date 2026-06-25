@@ -16,6 +16,14 @@ module Doma
   module TagGlob
     extend self
 
+    # Compiled-regex memo keyed by the raw glob pattern. A single
+    # `doma run 'work/*' -- …` (or `list -t 'proj/*'`) calls `match?` once
+    # per tag per directory, all with the *same* pattern; without this
+    # cache each call recompiles an identical regex. Patterns per process
+    # are few and short-lived, so the unbounded map can't grow unboundedly
+    # in practice.
+    @@regex_cache = {} of String => Regex
+
     # True when `name` matches `pattern` under the strict semantics.
     # Plain (no glob char) patterns short-circuit to equality so the
     # common case stays cheap.
@@ -24,10 +32,16 @@ module Doma
       to_regex(pattern).matches?(name)
     end
 
+    # Memoized compile — see `compile_regex` for the translation. The
+    # glob → regex mapping is pure, so caching by pattern string is safe.
+    private def to_regex(pattern : String) : Regex
+      @@regex_cache[pattern] ||= compile_regex(pattern)
+    end
+
     # Compile a pattern to a Crystal regex. `**` is detected before `*`
     # so we don't accidentally split it into two single-`*` tokens. The
     # output is anchored on both ends — globs are whole-string matches.
-    private def to_regex(pattern : String) : Regex
+    private def compile_regex(pattern : String) : Regex
       io = IO::Memory.new
       io << "\\A"
       i = 0
