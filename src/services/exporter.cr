@@ -52,11 +52,18 @@ module Doma
     end
 
     def build(db : Doma::Database) : Snapshot
-      entries = db.directories.map do |e|
-        ttl_map = db.tag_expirations(e.id)
-        Snapshot::Entry.new(e.path, e.tags, e.basename, ttl_map.empty? ? nil : ttl_map)
+      entries = db.directories
+      # One round trip for every directory's TTLs instead of a
+      # per-entry `tag_expirations` query — the same N+1 → bulk fix the
+      # list render loop already uses. `tag_expirations_bulk` only keys a
+      # directory when it has a future-dated TTL, so a missing id maps to
+      # nil, exactly matching the old `empty? ? nil : map` branch and
+      # keeping permanent-only snapshots byte-identical to before.
+      ttl_by_id = db.tag_expirations_bulk(entries.map(&.id))
+      snapshot_entries = entries.map do |e|
+        Snapshot::Entry.new(e.path, e.tags, e.basename, ttl_by_id[e.id]?)
       end
-      Snapshot.new(entries)
+      Snapshot.new(snapshot_entries)
     end
 
     def write(db : Doma::Database, format : Format, io : IO)

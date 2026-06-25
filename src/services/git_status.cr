@@ -139,12 +139,16 @@ module Doma
         case line[0]?
         when '1', '2'
           modified += 1
-          # XY is the 2nd whitespace-delimited token. X != '.' → staged,
-          # Y != '.' → unstaged. A file can be both.
-          xy = line.split(' ')[1]?
-          if xy && xy.size >= 2
-            staged += 1 if xy[0] != '.'
-            unstaged += 1 if xy[1] != '.'
+          # Porcelain v2 fixes the 2-char XY field at a known offset:
+          # "1 XY …" / "2 XY …" → X at index 2, Y at index 3. Read those
+          # directly instead of splitting the whole line into ~9 tokens;
+          # this runs once per changed file across the whole sweep.
+          # X != '.' → staged, Y != '.' → unstaged (a file can be both).
+          x = line[2]?
+          y = line[3]?
+          if x && y
+            staged += 1 if x != '.'
+            unstaged += 1 if y != '.'
           end
         when 'u'
           conflicts += 1
