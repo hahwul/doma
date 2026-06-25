@@ -63,7 +63,7 @@ module Doma
       in Format::Yaml
         begin
           Snapshot.from_yaml(content)
-        rescue ex : YAML::ParseException
+        rescue ex : YAML::Error
           raise ImportError.new("malformed snapshot#{label}: invalid YAML — #{ex.message}")
         end
       end

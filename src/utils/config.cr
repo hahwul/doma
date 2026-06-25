@@ -124,6 +124,8 @@ module Doma
       from_yaml(content)
     rescue ex : YAML::ParseException
       raise ConfigError.new(format_parse_error(path, ex))
+    rescue ex : YAML::Error
+      raise ConfigError.new("invalid config (#{path}): #{ex.message}")
     rescue ex : IO::Error
       # Permission denied and friends — same actionable shape as a
       # parse failure instead of leaking an internal error.
