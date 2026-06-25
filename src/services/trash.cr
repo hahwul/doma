@@ -285,7 +285,7 @@ module Doma
         # user mid-`rm`, so silently drop the malformed row.
         begin
           out << Entry.from_json(line)
-        rescue JSON::ParseException
+        rescue JSON::Error
           next
         end
       end

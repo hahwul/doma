@@ -160,8 +160,14 @@ module Doma::CLI
             msg = pending.receive?
             break if msg.nil?
             i, entry = msg
-            results[i] = inspect_one(entry)
-            done.send(nil)
+            begin
+              results[i] = inspect_one(entry)
+            rescue
+              # Degrade cleanly and avoid hanging the status command if a probe fails unexpectedly
+              results[i] = RepoState.new(entry, Dir.exists?(entry.path), Doma::GitStatus::NON_GIT)
+            ensure
+              done.send(nil)
+            end
           end
         end
       end
