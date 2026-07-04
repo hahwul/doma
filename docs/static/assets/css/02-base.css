@@ -1,5 +1,5 @@
 /* =============================================================================
-   Base Styles – Clean Dark Theme
+   Base — the board surface
    ============================================================================= */
 
 *,
@@ -16,34 +16,55 @@ body {
     font-family: var(--font-sans);
     line-height: 1.7;
     margin: 0;
-    color: var(--text);
-    background: var(--bg);
-    font-size: 15px;
+    color: var(--ink);
+    background: var(--board);
+    font-size: 15.5px;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
 }
 
-/* Selection */
+/* End-grain brand strip — the board's edge, on every page */
+body::before {
+    content: "";
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: var(--strip-h);
+    background: var(--grain);
+    z-index: 500;
+    pointer-events: none;
+}
+
+/* Selection — the seal's ink */
 ::selection {
-    background: var(--primary);
-    color: #fff;
+    background: var(--lacquer);
+    color: var(--board);
 }
 
 /* Links */
 a {
-    color: var(--primary);
+    color: var(--lacquer);
     text-decoration: none;
-    transition: color 0.15s ease;
+    transition: color var(--transition-fast);
 }
 
 a:hover {
-    color: var(--primary-hover);
+    color: var(--lacquer-deep);
+}
+
+/* Focus */
+:focus-visible {
+    outline: 2px solid var(--lacquer);
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
 }
 
 /* Scrollbar */
 ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 8px;
+    height: 8px;
 }
 
 ::-webkit-scrollbar-track {
@@ -51,16 +72,31 @@ a:hover {
 }
 
 ::-webkit-scrollbar-thumb {
-    background: var(--border);
-    border-radius: 3px;
+    background: var(--score-strong);
+    border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: var(--border-light);
+    background: var(--ink-faint);
 }
 
 /* Images */
 img {
     max-width: 100%;
     height: auto;
+}
+
+/* Reduced motion — cut the theatrics, keep the content */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+
+    html {
+        scroll-behavior: auto;
+    }
 }

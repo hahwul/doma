@@ -1,5 +1,5 @@
 /* =============================================================================
-   Responsive Styles
+   Responsive
    ============================================================================= */
 
 /* Hide TOC on medium screens */
@@ -14,116 +14,60 @@
     }
 }
 
-/* Adjust main padding on smaller screens */
 @media (max-width: 1024px) {
     .docs-main {
-        padding: 2rem 2rem;
+        padding: 2.25rem 2rem 3.5rem;
     }
 }
 
-/* Mobile layout */
+/* Mobile */
 @media (max-width: 768px) {
+    .docs-header nav {
+        display: none;
+    }
+
+    .mobile-menu-btn {
+        display: flex;
+    }
+
     .docs-sidebar {
-        position: fixed;
         left: -100%;
-        width: 280px;
-        z-index: 200;
-        transition: left 0.25s ease;
-        background: var(--bg-elevated);
-        box-shadow: none;
+        width: 290px;
+        z-index: 400;
+        background: var(--board);
+        transition: left 0.28s var(--ease-out);
+        border-right: 1px solid var(--score-strong);
     }
 
     .docs-sidebar.is-open {
         left: 0;
-        box-shadow: 4px 0 24px rgba(0, 0, 0, 0.5);
+        box-shadow: 24px 0 60px -24px rgba(36, 30, 21, 0.45);
     }
 
     .sidebar-overlay {
         display: none;
         position: fixed;
         inset: 0;
-        z-index: 150;
-        background: rgba(0, 0, 0, 0.5);
-        backdrop-filter: blur(2px);
-        -webkit-backdrop-filter: blur(2px);
+        z-index: 300;
+        background: rgba(36, 30, 21, 0.35);
     }
 
     .sidebar-overlay.is-visible {
         display: block;
     }
 
-    .docs-toc {
-        display: none;
-    }
-
-    .docs-main {
+    .docs-main,
+    .docs-main.no-toc {
         margin-left: 0;
         margin-right: 0;
-        padding: 1.75rem 1.25rem;
+        padding: 1.75rem 1.25rem 3rem;
         max-width: 100%;
     }
 
-    .docs-main.no-toc {
-        max-width: 100%;
-    }
-
-    .docs-header nav {
-        display: none;
-    }
-
-    .docs-header .mobile-menu-btn {
-        display: flex;
-    }
-
-    .heading-anchor {
-        position: static;
-        display: inline-flex;
-        transform: none;
-        opacity: 0.4;
-        margin-left: 0.4rem;
-    }
-
-    /* Landing page mobile adjustments */
-    .hero {
-        padding: 9rem 1.25rem 3rem;
-    }
-
-    .hero h1 {
-        font-size: 1.75rem;
-    }
-
-    .hero p {
-        font-size: 0.95rem;
-    }
-
-    .hero-buttons {
-        flex-direction: column;
-        align-items: center;
-    }
-
-    .landing-header {
-        padding: 0 1rem;
-    }
-
-    .landing-header nav {
-        gap: 0.25rem;
-    }
-
-    .landing-header nav a {
-        font-size: 0.75rem;
-        padding: 0.4rem 0.5rem;
-    }
-
-    .features-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .code-content pre {
-        font-size: 0.75rem;
-    }
-
-    .ascii-decoration {
-        display: none;
+    /* Wide tables scroll inside their own box */
+    .docs-main table {
+        display: block;
+        overflow-x: auto;
     }
 
     .docs-footer {
@@ -131,24 +75,20 @@
         gap: 0.5rem;
         text-align: center;
     }
+
+    .docs-header {
+        padding-left: 1rem;
+        padding-right: 1rem;
+        gap: 1rem;
+    }
+
+    .docs-search-input {
+        max-width: 28vw;
+    }
 }
 
-/* Very small screens */
 @media (max-width: 480px) {
-    .hero h1 {
-        font-size: 1.5rem;
-    }
-
-    .btn {
-        width: 100%;
-        justify-content: center;
-    }
-
     .docs-main {
-        padding: 1.25rem 1rem;
-    }
-
-    .docs-main > h1:first-child {
-        font-size: 1.35rem;
+        padding: 1.5rem 1rem 2.5rem;
     }
 }

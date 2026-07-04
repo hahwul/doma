@@ -1,222 +1,211 @@
 /* =============================================================================
-   Docs search
+   Search — a slip of brighter paper
    ============================================================================= */
 
 .docs-search {
     position: relative;
-    margin-right: 0.6rem;
+    margin-right: 0.5rem;
 }
 
 .docs-search-input {
     appearance: none;
     -webkit-appearance: none;
-    width: 200px;
+    width: 190px;
     max-width: 32vw;
-    padding: 0.4rem 0.7rem;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    background: var(--bg-elevated, var(--bg-card, transparent));
-    color: var(--text);
+    padding: 0.42rem 0.75rem;
+    border: 1px solid var(--score-strong);
+    border-radius: var(--radius-md);
+    background: var(--board-bright);
+    color: var(--ink);
     font-family: var(--font-sans);
     font-size: 0.85rem;
-    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+    transition:
+        border-color var(--transition-fast),
+        box-shadow var(--transition-fast),
+        width 0.25s var(--ease-out);
 }
-.docs-search-input::placeholder { color: var(--text-muted); }
+
+.docs-search-input::placeholder {
+    color: var(--ink-faint);
+}
+
 .docs-search-input:focus {
     outline: none;
-    border-color: var(--primary);
-    box-shadow: 0 0 0 2px rgba(192, 133, 82, 0.15);
+    width: 240px;
+    border-color: var(--lacquer);
+    box-shadow: 0 0 0 3px var(--lacquer-tint);
 }
 
 .docs-search-results {
     position: absolute;
-    top: calc(100% + 0.4rem);
+    top: calc(100% + 0.5rem);
     right: 0;
     width: 380px;
     max-width: min(380px, 90vw);
     max-height: 60vh;
     overflow-y: auto;
-    background: var(--bg-elevated, var(--bg-card, var(--bg)));
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
-    z-index: 50;
+    background: var(--board-bright);
+    border: 1px solid var(--score-strong);
+    border-radius: var(--radius-lg);
+    box-shadow:
+        0 1px 2px rgba(36, 30, 21, 0.08),
+        0 16px 40px -16px rgba(36, 30, 21, 0.35);
+    z-index: 150;
 }
-.docs-search-results[hidden] { display: none; }
+
+.docs-search-results[hidden] {
+    display: none;
+}
 
 .docs-search-result {
     display: block;
-    padding: 0.6rem 0.85rem;
-    border-bottom: 1px solid var(--border);
-    color: var(--text);
-    text-decoration: none;
-    transition: background var(--transition-fast);
+    padding: 0.65rem 0.9rem;
+    border-bottom: 1px solid var(--score);
+    color: var(--ink);
+    transition: background-color var(--transition-fast);
 }
-.docs-search-result:last-child { border-bottom: none; }
+
+.docs-search-result:last-child {
+    border-bottom: none;
+}
+
 .docs-search-result:hover,
 .docs-search-result.is-active {
-    background: rgba(192, 133, 82, 0.08);
+    background: var(--lacquer-tint);
 }
 
 .docs-search-result-title {
     display: block;
     font-weight: 600;
     font-size: 0.9rem;
-    color: var(--text);
+    color: var(--ink);
     margin-bottom: 0.15rem;
 }
 
 .docs-search-result-snippet {
     display: block;
     font-size: 0.8rem;
-    color: var(--text-secondary);
+    color: var(--ink-mute);
     line-height: 1.5;
 }
+
 .docs-search-result-snippet mark {
-    background: rgba(192, 133, 82, 0.25);
-    color: inherit;
+    background: var(--lacquer-glow);
+    color: var(--ink);
     padding: 0 0.1em;
     border-radius: 2px;
 }
 
 .docs-search-empty {
-    padding: 0.8rem 0.85rem;
-    color: var(--text-muted);
+    padding: 0.8rem 0.9rem;
+    color: var(--ink-mute);
     font-size: 0.85rem;
 }
 
-@media (max-width: 720px) {
-    .docs-search-input { width: 140px; }
-    .docs-search-results { width: 90vw; }
-}
-
 /* =============================================================================
-   Info Boxes — Clean Modern Style
+   Info boxes — tinted paper, no shouting
    ============================================================================= */
 
 .info-box {
-    padding: 1rem 1.25rem;
+    padding: 0.9rem 1.15rem;
     margin: 1.5rem 0;
-    border-left: 3px solid;
-    border-radius: 6px;
-    font-size: 0.875rem;
+    border: 1px solid;
+    border-radius: var(--radius-md);
+    font-size: 0.88rem;
     line-height: 1.7;
-    position: relative;
-    background: rgba(255, 255, 255, 0.02);
 }
 
 .info-box p {
     margin: 0;
+    color: inherit;
 }
 
 .info-box.note {
-    background: rgba(59, 130, 246, 0.06);
-    border-left-color: #3b82f6;
-    color: #93c5fd;
+    background: rgba(56, 97, 140, 0.07);
+    border-color: rgba(56, 97, 140, 0.25);
+    color: #33587c;
 }
 
 .info-box.warning {
-    background: rgba(234, 179, 8, 0.06);
-    border-left-color: #eab308;
-    color: #fde68a;
+    background: rgba(158, 116, 22, 0.09);
+    border-color: rgba(158, 116, 22, 0.3);
+    color: #7c5c12;
 }
 
 .info-box.tip {
-    background: rgba(34, 197, 94, 0.06);
-    border-left-color: #22c55e;
-    color: #86efac;
+    background: rgba(62, 125, 79, 0.08);
+    border-color: rgba(62, 125, 79, 0.28);
+    color: #35673f;
 }
 
 .info-box.danger {
-    background: rgba(176, 80, 80, 0.08);
-    border-left-color: var(--primary);
-    color: #f0a8a8;
+    background: var(--lacquer-tint);
+    border-color: rgba(178, 58, 28, 0.3);
+    color: var(--lacquer-deep);
 }
 
 /* =============================================================================
-   Section List — Card Style
+   Page index — a numbered prep list, not a card grid
    ============================================================================= */
 
+ul.page-list,
 ul.section-list {
     list-style: none;
     padding: 0;
-    display: grid;
-    gap: 0.5rem;
-    margin: 1.5rem 0;
+    margin: 1.5rem 0 2rem;
+    counter-reset: prep;
 }
 
+ul.page-list li,
 ul.section-list li {
-    padding: 0.875rem 1.125rem;
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    transition: all 0.15s ease;
-    position: relative;
+    counter-increment: prep;
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
+    padding: 0.75rem 0.4rem;
+    border-bottom: 1px solid var(--score);
+    transition: background-color var(--transition-fast);
 }
 
+ul.page-list li::before,
+ul.section-list li::before {
+    content: counter(prep, decimal-leading-zero);
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--lacquer);
+    min-width: 2ch;
+}
+
+ul.page-list li:hover,
 ul.section-list li:hover {
-    border-color: var(--border-light);
-    background: var(--bg-hover);
+    background: var(--board-raised);
 }
 
+ul.page-list li a,
 ul.section-list li a {
-    font-weight: 500;
-    color: var(--text);
-    font-size: 0.9rem;
-    border-bottom: none;
+    flex: 1;
+    font-weight: 550;
+    font-size: 0.92rem;
+    color: var(--ink);
 }
 
+ul.page-list li a:hover,
 ul.section-list li a:hover {
-    color: var(--primary);
+    color: var(--lacquer-deep);
 }
 
 /* =============================================================================
-   Page List — Section index pages
-   ============================================================================= */
-
-ul.page-list {
-    list-style: none;
-    padding: 0;
-    display: grid;
-    gap: 0.5rem;
-    margin: 1.5rem 0;
-}
-
-ul.page-list li {
-    padding: 0.875rem 1.125rem;
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    transition: all 0.15s ease;
-}
-
-ul.page-list li:hover {
-    border-color: var(--border-light);
-    background: var(--bg-hover);
-}
-
-ul.page-list li a {
-    font-weight: 500;
-    color: var(--text);
-    font-size: 0.9rem;
-    border-bottom: none;
-}
-
-ul.page-list li a:hover {
-    color: var(--primary);
-}
-
-/* =============================================================================
-   Footer
+   Docs footer
    ============================================================================= */
 
 .docs-footer {
-    margin-top: 4rem;
-    padding-top: 1.5rem;
-    border-top: 1.5px dashed var(--border-light, var(--border));
-    color: var(--text-muted);
-    font-family: var(--font-hand-body, "Patrick Hand", "Kalam", "Caveat", cursive);
-    font-size: 1.1rem;
+    margin-top: 4.5rem;
+    padding-top: 1.4rem;
+    border-top: 1px solid var(--score-strong);
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.02em;
+    color: var(--ink-mute);
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -224,133 +213,11 @@ ul.page-list li a:hover {
     gap: 0.75rem;
 }
 
-.docs-footer p {
-    margin: 0;
-}
-
 .docs-footer a {
-    color: var(--text-secondary);
-    text-decoration: none;
-    border-bottom: 1px dotted var(--text-muted);
-    transition: color var(--transition-fast), border-bottom-color var(--transition-fast);
+    color: var(--ink-soft);
+    transition: color var(--transition-fast);
 }
 
 .docs-footer a:hover {
-    color: var(--primary);
-    border-bottom-color: var(--primary);
-}
-
-.hahwul-img {
-    width: 80px;
-    filter: grayscale(100%) brightness(0.5);
-    transition: filter 0.3s ease; /* 부드럽게 변하게 해줌 */
-}
-
-.hahwul-img:hover {
-    filter: grayscale(0%) brightness(1.2); /* 원래 색상 + 조금 더 밝게 */
-}
-
-/* =============================================================================
-   Landing — Feature Grid
-   ============================================================================= */
-
-.feature-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 0.75rem;
-    margin: 1.25rem 0 1.5rem 0;
-}
-
-.feature-card {
-    background: var(--bg-card);
-    padding: 1.25rem;
-    transition: all 0.15s ease;
-}
-
-.feature-card:hover {
-    border-color: var(--border-light);
-    background: var(--bg-hover);
-}
-
-.feature-icon {
-    font-size: 1.35rem;
-    margin-bottom: 0.5rem;
-    line-height: 1;
-}
-
-.feature-card h3 {
-    font-family: var(--font-sans);
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: var(--text);
-    margin: 0 0 0.4rem 0;
-}
-
-.feature-card p {
-    font-size: 0.8rem;
-    color: var(--text-muted);
-    line-height: 1.55;
-    margin: 0;
-}
-
-/* =============================================================================
-   Landing — Documentation Grid
-   ============================================================================= */
-
-.doc-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 0.75rem;
-    margin: 1.25rem 0 1.5rem 0;
-}
-
-.doc-card {
-    display: block;
-    background: var(--bg-card);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 1.25rem;
-    text-decoration: none;
-    transition: all 0.15s ease;
-    border-bottom: none;
-}
-
-.doc-card:hover {
-    border-color: var(--primary-dark);
-    background: var(--bg-hover);
-    border-bottom: none;
-}
-
-.doc-card h3 {
-    font-family: var(--font-sans);
-    font-size: 0.9rem;
-    font-weight: 600;
-    color: var(--text);
-    margin: 0 0 0.35rem 0;
-}
-
-.doc-card:hover h3 {
-    color: var(--primary);
-}
-
-.doc-card p {
-    font-size: 0.8rem;
-    color: var(--text-muted);
-    line-height: 1.55;
-    margin: 0;
-}
-
-/* Responsive: 2 columns on narrower screens */
-@media (max-width: 900px) {
-    .feature-grid,
-    .doc-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-}
-
-@media (max-width: 600px) {
-    .feature-grid,
-    .doc-grid {
-        grid-template-columns: 1fr;
-    }
+    color: var(--lacquer);
 }
