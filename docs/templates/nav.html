@@ -1,6 +1,9 @@
 <header class="docs-header">
-  <a href="{{ base_url }}/" class="logo">
-    <img style="width:110px;" src="/images/doma-wide.webp">
+  <button class="mobile-menu-btn" aria-label="Toggle navigation">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h12"/></svg>
+  </button>
+  <a href="{{ base_url }}/" class="logo" aria-label="doma home">
+    <img src="/images/doma-wide.webp" alt="doma" width="102" height="35" />
   </a>
   <nav>
     <a href="{{ base_url }}/start/"{% if page.section == "start" %} class="active"{% endif %}>Start</a>
@@ -18,9 +21,3 @@
     </a>
   </div>
 </header>
-<style>
-  .logo { display: inline-flex; align-items: center; gap: 0.4rem; text-decoration: none; }
-  .logo-mark { color: var(--primary); font-weight: 400; line-height: 1; font-size: 1.4rem; }
-  .logo-text { color: var(--text); font-family: var(--font-mono); font-weight: 600; font-size: 1rem; letter-spacing: 0.02em; }
-  .logo:hover .logo-text { color: var(--primary-hover); }
-</style>

@@ -1,4 +1,24 @@
 {{ highlight_js }}
 {{ auto_includes_js }}
+<script>
+  (function () {
+    var btn = document.querySelector(".mobile-menu-btn");
+    var sidebar = document.querySelector(".docs-sidebar");
+    if (!btn || !sidebar) return;
+    var overlay = document.createElement("div");
+    overlay.className = "sidebar-overlay";
+    document.body.appendChild(overlay);
+    function toggle(open) {
+      sidebar.classList.toggle("is-open", open);
+      overlay.classList.toggle("is-visible", open);
+    }
+    btn.addEventListener("click", function () {
+      toggle(!sidebar.classList.contains("is-open"));
+    });
+    overlay.addEventListener("click", function () {
+      toggle(false);
+    });
+  })();
+</script>
 </body>
 </html>

@@ -1,11 +1,13 @@
 {% include "header.html" %}
+{% include "nav.html" %}
 <div class="docs-container">
   <main class="docs-main no-toc" style="margin-left:0;max-width:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:calc(100vh - var(--header-h) - 4rem);text-align:center;">
-    <div style="max-width:420px">
-      <h1 style="font-size:4rem;margin:0 0 0.5rem;color:var(--text-dim);font-weight:800;letter-spacing:-0.04em;">404</h1>
-      <p style="font-size:1.1rem;color:var(--text-muted);margin:0 0 1.5rem;line-height:1.6;">This page isn't on the cutting board.</p>
-      <a href="{{ base_url }}/" style="display:inline-flex;align-items:center;gap:0.4rem;padding:0.65rem 1.25rem;background:var(--primary-dim);color:var(--primary);border:1px solid var(--primary-glow);border-radius:8px;font-size:0.9rem;font-weight:500;text-decoration:none;">
-        Back to home
+    <div style="max-width:440px">
+      <span aria-hidden="true" style="display:inline-grid;place-items:center;width:64px;height:64px;background:var(--lacquer);color:var(--board);font-family:var(--font-hangul);font-size:1.35rem;font-weight:700;line-height:1;writing-mode:vertical-rl;text-orientation:upright;letter-spacing:0.12em;border-radius:4px;box-shadow:inset 0 0 0 2px rgba(245,239,227,0.3),inset 0 0 0 4px var(--lacquer);transform:rotate(-4deg);margin-bottom:1.5rem;">도마</span>
+      <h1 style="font-size:4rem;margin:0 0 0.5rem;color:var(--ink);font-weight:800;letter-spacing:-0.03em;line-height:1;">404</h1>
+      <p style="font-size:1.05rem;color:var(--ink-mute);margin:0 0 1.75rem;line-height:1.6;">This page isn't on the cutting board.</p>
+      <a href="{{ base_url }}/" style="display:inline-flex;align-items:center;gap:0.4rem;padding:0.65rem 1.3rem;background:var(--lacquer);color:var(--board);border-radius:6px;font-size:0.9rem;font-weight:600;text-decoration:none;box-shadow:0 8px 20px -10px rgba(82,44,23,0.55);">
+        Back to the board
       </a>
     </div>
   </main>

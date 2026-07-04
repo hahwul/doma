@@ -1,65 +1,107 @@
 /* =============================================================================
-   CSS Variables — doma documentation theme.
+   Design tokens — doma documentation theme.
 
-   The metaphor is the cutting board: warm dark wood as the surface, a
-   single copper-amber accent for highlights (knife glint, ember on the
-   board), cream-warm text instead of cold white. Everything here is
-   tuned to make the rest of the structural CSS (02–08) look "of a
-   piece" with the brand without touching layout rules.
+   Direction: "the craftsman's board" — light board, dark blade.
+
+   The page is the board: warm butcher-paper cream, ink-charcoal type,
+   hairline "score" lines left by the knife. Terminals and code blocks
+   are the blade: cold forged-steel slabs resting on the board. One
+   accent only — lacquer persimmon, the red of a Korean maker's seal.
    ============================================================================= */
 
 :root {
-    /* Primary — copper / amber on aged wood */
-    --primary: #c08552;
-    --primary-hover: #d49b6a;
-    --primary-dark: #9a6b3f;
-    --primary-dim: rgba(192, 133, 82, 0.1);
-    --primary-glow: rgba(192, 133, 82, 0.25);
+    /* The board — warm paper-birch surfaces */
+    --board: #f5efe3;
+    --board-raised: #efe7d5;
+    --board-deep: #e8ddc6;
+    --board-bright: #fbf7ee;
 
-    /* Accent — slightly warmer amber */
-    --accent: #d49b6a;
-    --accent-dim: rgba(212, 155, 106, 0.08);
+    /* Ink — warm near-black type */
+    --ink: #241e15;
+    --ink-soft: #5a5244;
+    --ink-mute: #8b8170;
+    --ink-faint: #b3a78f;
 
-    /* Text — warm cream rather than cold white */
-    --text: #f1e8d8;
-    --text-secondary: #c2b4a0;
-    --text-muted: #9a8c79;
-    --text-dim: #5e544a;
+    /* Score lines — hairlines left by the knife */
+    --score: #e2d8c1;
+    --score-strong: #cfc3a4;
 
-    /* Backgrounds — dark warm browns, not pure black */
-    --bg: #0d0a07;
-    --bg-elevated: #15100a;
-    --bg-subtle: #1a140d;
-    --bg-hover: #1f1810;
-    --bg-card: #120e08;
-    --code-bg: #16110b;
+    /* Lacquer — the single accent; deep kodong brown, like ottchil
+       lacquer burnished into wood */
+    --lacquer: #6d3d24;
+    --lacquer-deep: #522c17;
+    --lacquer-tint: rgba(109, 61, 36, 0.08);
+    --lacquer-glow: rgba(109, 61, 36, 0.22);
 
-    /* Borders — subtle warm tones */
-    --border: #2a1f15;
-    --border-light: #3a2c1f;
+    /* Steel — the blade; terminals and code slabs.
+       Matches highlight.js github-dark-dimmed (#22272e). */
+    --steel: #22272e;
+    --steel-edge: #3a414b;
+    --steel-text: #cdd9e5;
+    --steel-mute: #768390;
+    --steel-warm: #d9a976; /* copper glint on the blade (tags, prompts) */
+    --steel-prompt: #db9c63;
+
+    /* End-grain brand strip — the board seen edge-on */
+    --grain: linear-gradient(
+        90deg,
+        #7a4e30 0 12%,
+        #9b6b44 12% 26%,
+        #67402a 26% 33%,
+        #ad855b 33% 47%,
+        #8a5a38 47% 60%,
+        #75482e 60% 71%,
+        #a1734c 71% 85%,
+        #8a5a38 85% 93%,
+        #6d4429 93% 100%
+    );
 
     /* Semantic */
-    --primary-light: #dca677;
-    --success: #3fa856;
+    --success: #3e7d4f;
+
+    /* Compatibility aliases (used by inline template styles) */
+    --primary: var(--lacquer);
+    --primary-hover: var(--lacquer-deep);
+    --primary-dark: var(--lacquer-deep);
+    --primary-dim: var(--lacquer-tint);
+    --primary-glow: var(--lacquer-glow);
+    --primary-light: var(--lacquer);
+    --accent: var(--lacquer);
+    --accent-dim: var(--lacquer-tint);
+    --text: var(--ink);
+    --text-secondary: var(--ink-soft);
+    --text-muted: var(--ink-mute);
+    --text-dim: var(--ink-faint);
+    --bg: var(--board);
+    --bg-elevated: var(--board-raised);
+    --bg-subtle: var(--board-raised);
+    --bg-hover: var(--board-deep);
+    --bg-card: var(--board-bright);
+    --code-bg: var(--steel);
+    --border: var(--score);
+    --border-light: var(--score-strong);
 
     /* Layout */
-    --header-h: 56px;
-    --sidebar-w: 260px;
+    --strip-h: 4px;
+    --header-h: 60px;
+    --sidebar-w: 264px;
     --toc-w: 220px;
 
     /* Typography */
-    --font-mono:
-        "JetBrains Mono", "SF Mono", "Fira Code", "Monaco", Consolas, monospace;
     --font-sans:
-        "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+        "Bricolage Grotesque", -apple-system, BlinkMacSystemFont, "Segoe UI",
         sans-serif;
+    --font-hangul: "Gowun Batang", "Apple SD Gothic Neo", serif;
+    --font-mono:
+        "JetBrains Mono", "SF Mono", "Fira Code", Menlo, Consolas, monospace;
 
-    /* Radius */
-    --radius-sm: 4px;
+    /* Radius — cut, not rounded: chip / control / slab */
+    --radius-sm: 3px;
     --radius-md: 6px;
-    --radius-lg: 8px;
+    --radius-lg: 10px;
 
-    /* Transitions */
-    --transition-fast: 0.12s ease;
-    --transition-normal: 0.2s ease;
+    /* Motion */
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --transition-fast: 0.14s ease;
+    --transition-normal: 0.22s var(--ease-out);
 }
