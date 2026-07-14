@@ -6,8 +6,12 @@
     <h1>{{ page.title }}</h1>
     {{ content }}
     <footer class="docs-footer">
-      <span>MIT &middot; written in <a href="https://crystal-lang.org" target="_blank" rel="noopener">Crystal</a> &middot; built with <a href="https://hwaro.hahwul.com" target="_blank" rel="noopener">hwaro</a></span>
-      <span><a href="https://github.com/hahwul/doma" target="_blank" rel="noopener">GitHub</a> &middot; <a href="https://github.com/hahwul/doma/edit/main/docs/content{{ page.url }}.md" target="_blank" rel="noopener">Edit this page</a></span>
+      <div class="footer-mark">
+        <a href="https://www.hahwul.com" target="_blank" rel="noopener" aria-label="hahwul">
+          <span class="hahwul-img" role="img" aria-label="hahwul"></span>
+        </a>
+        <p class="footer-love">Built with Love</p>
+      </div>
     </footer>
   </main>
   {% if page.toc %}
