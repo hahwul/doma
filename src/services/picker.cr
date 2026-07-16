@@ -75,9 +75,19 @@ module Doma
       (ord < 0x20 && ord != 0x09) || ord == 0x7f
     end
 
+    # Treat any non-control codepoint as filter input. Crystal's `Char`
+    # has `#printable?` for ASCII; we extend tolerance to multibyte
+    # codepoints (Korean, etc.) by accepting anything > 0x1f and not ==
+    # 0x7f. Shared with the TUI, which needs the same policy for its
+    # query line.
+    def printable?(c : Char) : Bool
+      ord = c.ord
+      ord >= 0x20 && ord != 0x7f
+    end
+
     private def open_tty : IO::FileDescriptor?
       File.open("/dev/tty", "r+")
-    rescue
+    rescue IO::Error
       nil
     end
 
@@ -89,6 +99,11 @@ module Doma
       @offset : Int32 = 0
       @rows : Int32 = DEFAULT_VIEWPORT_ROWS
       @width : Int32 = 100
+      # Memoized filter result for the current @query. render/move/enter
+      # all need it, often for the same keystroke — recomputing per call
+      # would re-downcase every label each time. Reset whenever @query
+      # changes.
+      @filtered : Array(Item)?
 
       def initialize(@items : Array(Item), @prompt : String, @tty : IO::FileDescriptor)
         @width = (ENV["COLUMNS"]?.try(&.to_i?) || 100).clamp(20, 240)
@@ -110,8 +125,7 @@ module Doma
             when :page_up   then move(-@rows)
             when :page_down then move(+@rows)
             when :enter
-              filtered = Picker.filter(@items, @query)
-              if pick = filtered[@cursor]?
+              if pick = filtered_items[@cursor]?
                 cleanup
                 result = Result.new(value: pick.value)
                 break
@@ -123,14 +137,12 @@ module Doma
             when :backspace
               unless @query.empty?
                 @query = @query[0...-1]
-                @cursor = 0
-                @offset = 0
+                reset_view
               end
             else
-              if action.is_a?(Char) && printable?(action)
+              if action.is_a?(Char) && Picker.printable?(action)
                 @query += action.to_s
-                @cursor = 0
-                @offset = 0
+                reset_view
               end
             end
           end
@@ -146,7 +158,7 @@ module Doma
       # ---------- Render ----------
 
       private def render
-        filtered = Picker.filter(@items, @query)
+        filtered = filtered_items
         # Keep cursor inside bounds when the filter shrinks the list.
         @cursor = filtered.size - 1 if @cursor >= filtered.size && filtered.size > 0
         @cursor = 0 if filtered.empty?
@@ -220,7 +232,7 @@ module Doma
       #   Char  (printable filter input)
       #   nil   (unknown sequence, ignore)
       private def read_action
-        c = blocking_read_char
+        c = @tty.read_char
         return :cancel if c.nil?
         case c
         when '\u0003', '\u0004' then :cancel # Ctrl-C / Ctrl-D
@@ -266,16 +278,23 @@ module Doma
       # ---------- Cursor / scrolling ----------
 
       private def move(delta : Int32)
-        filtered = Picker.filter(@items, @query)
+        filtered = filtered_items
         return if filtered.empty?
         @cursor = (@cursor + delta).clamp(0, filtered.size - 1)
       end
 
-      # ---------- Termios ----------
-
-      private def blocking_read_char : Char?
-        @tty.read_char
+      private def filtered_items : Array(Item)
+        @filtered ||= Picker.filter(@items, @query)
       end
+
+      # Query edits restart the view from the top with a fresh filter.
+      private def reset_view
+        @filtered = nil
+        @cursor = 0
+        @offset = 0
+      end
+
+      # ---------- Termios ----------
 
       private def with_raw_mode(&)
         original = uninitialized LibC::Termios
@@ -327,15 +346,6 @@ module Doma
           attrs.c_cc[VTIME] = prev_time
           LibC.tcsetattr(@tty.fd, LibC::TCSANOW, pointerof(attrs))
         end
-      end
-
-      private def printable?(c : Char) : Bool
-        # Treat any non-control byte as filter input. Crystal's `Char`
-        # has `#printable?` for ASCII; we extend tolerance to multibyte
-        # codepoints (Korean, etc.) by accepting anything > 0x1f and
-        # not == 0x7f.
-        ord = c.ord
-        ord >= 0x20 && ord != 0x7f
       end
     end
   end

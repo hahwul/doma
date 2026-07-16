@@ -87,7 +87,7 @@ module Doma::CLI
         end
         removed = db.remove_ids!(pending.map { |(id, _)| id })
         pending.each { |(_, snap)| Doma::Trash.add!(snap) }
-        sample_ids = pending.first(3).map { |(_, snap)| snap.short_id[0..6] }.join(", ")
+        sample_ids = pending.first(3).map { |(_, snap)| snap.display_id }.join(", ")
         more = pending.size > 3 ? ", ..." : ""
         Doma::Logger.success(
           "trashed #{removed} missing path(s) " \

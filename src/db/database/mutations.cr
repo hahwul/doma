@@ -117,12 +117,16 @@ class Doma::Database
       next unless directory_id
       result = RemoveTagsResult::NoMatch
 
-      tags.each do |tag|
-        tag_id = cnn.query_one?("SELECT id FROM tags WHERE name = ?", tag, as: Int64)
-        next unless tag_id
+      # One IN-list DELETE instead of a SELECT + DELETE pair per tag —
+      # the same batching `add_tx` uses for its tag writes.
+      unless tags.empty?
+        placeholders = Doma::Sql.placeholders_for(tags.size)
+        args = [directory_id.as(DB::Any)]
+        tags.each { |tag| args << tag.as(DB::Any) }
         deleted = cnn.exec(
-          "DELETE FROM directory_tags WHERE directory_id = ? AND tag_id = ?",
-          directory_id, tag_id
+          "DELETE FROM directory_tags WHERE directory_id = ? " \
+          "AND tag_id IN (SELECT id FROM tags WHERE name IN (#{placeholders}))",
+          args: args
         ).rows_affected
         result = RemoveTagsResult::Removed if deleted > 0
       end
@@ -170,18 +174,12 @@ class Doma::Database
         # the source. Carry each association's `expires_at` so a TTL'd
         # tag isn't silently promoted to permanent (and an already-lapsed
         # one isn't resurrected as permanent — it keeps its past epoch and
-        # stays hidden). On a per-path collision (the destination already
-        # had the tag) keep the more permissive lifetime, matching
-        # `rename_tag`: NULL/permanent beats any TTL, otherwise the later
-        # epoch wins.
+        # stays hidden). Per-path collisions keep the more permissive
+        # lifetime (see MERGE_KEEP_LONGER_TTL), matching `rename_tag`.
         cnn.exec(
           "INSERT INTO directory_tags (directory_id, tag_id, expires_at) " \
           "SELECT ?, tag_id, expires_at FROM directory_tags WHERE directory_id = ? " \
-          "ON CONFLICT(directory_id, tag_id) DO UPDATE SET expires_at = " \
-          "  CASE " \
-          "    WHEN excluded.expires_at IS NULL OR directory_tags.expires_at IS NULL THEN NULL " \
-          "    ELSE MAX(excluded.expires_at, directory_tags.expires_at) " \
-          "  END",
+          "#{MERGE_KEEP_LONGER_TTL}",
           existing_id, old_id
         )
         cnn.exec("DELETE FROM directories WHERE id = ?", old_id)
@@ -197,14 +195,9 @@ class Doma::Database
     result
   end
 
-  # Wipes every row. Used by `import --replace`.
-  def clear!
-    @db.transaction do |tx|
-      clear_tx(tx.connection)
-    end
-  end
-
-  # Same as `clear!`, scoped to an existing transaction.
+  # Wipes every row, scoped to an existing transaction. Used by
+  # `import --replace` so the clear and the re-inserts commit
+  # atomically.
   def clear_tx(cnn : DB::Connection)
     cnn.exec("DELETE FROM directory_tags")
     cnn.exec("DELETE FROM directories")
@@ -221,6 +214,14 @@ class Doma::Database
       "UPDATE directories SET last_used_at = ? WHERE path = ?",
       Time.utc.to_unix, abs
     )
+  end
+
+  # Best-effort variant for callers about to print a selection
+  # (`list --pick`, the TUI): frecency bookkeeping must never block
+  # the actual output, so every failure is swallowed.
+  def bump_used_safe(path : String)
+    bump_used!(path)
+  rescue
   end
 
   # Renames a tag. If `new_name` already exists, the two are merged:
@@ -250,18 +251,13 @@ class Doma::Database
       if existing
         # Re-point every old-tag row at the new tag, carrying the
         # original `expires_at` so a TTL'd source row doesn't get
-        # silently promoted to permanent. On per-path collision
-        # (path already had both tags), MAX-with-NULL-as-permanent
-        # picks the more permissive lifetime: NULL wins over any
-        # epoch, otherwise the larger epoch wins.
+        # silently promoted to permanent. Per-path collisions (path
+        # already had both tags) keep the more permissive lifetime
+        # (see MERGE_KEEP_LONGER_TTL).
         cnn.exec(
           "INSERT INTO directory_tags (directory_id, tag_id, expires_at) " \
           "SELECT directory_id, ?, expires_at FROM directory_tags WHERE tag_id = ? " \
-          "ON CONFLICT(directory_id, tag_id) DO UPDATE SET expires_at = " \
-          "  CASE " \
-          "    WHEN excluded.expires_at IS NULL OR directory_tags.expires_at IS NULL THEN NULL " \
-          "    ELSE MAX(excluded.expires_at, directory_tags.expires_at) " \
-          "  END",
+          "#{MERGE_KEEP_LONGER_TTL}",
           existing, old_id
         )
         cnn.exec("DELETE FROM directory_tags WHERE tag_id = ?", old_id)

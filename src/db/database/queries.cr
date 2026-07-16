@@ -186,14 +186,15 @@ class Doma::Database
   end
 
   # Substring search across path, basename, and tag name. Returns
-  # deduped entries sorted by path. Same single-query GROUP_CONCAT
-  # shape as `directories()` so both share `build_entry`.
+  # deduped entries in `sort` order (path by default). Same
+  # single-query GROUP_CONCAT shape as `directories()` so both share
+  # `build_entry`.
   #
   # When `include_expired` is true, the tag-name match branch no longer
   # filters expired rows, and the displayed tag list includes expired
   # entries — so combining `-t TAG --include-expired <query>` in the
   # list command honors the flag end-to-end.
-  def search(query : String, *, include_expired : Bool = false) : Array(Entry)
+  def search(query : String, *, sort : SortBy = SortBy::Path, include_expired : Bool = false) : Array(Entry)
     term = "%#{escape_like(query)}%"
     tag_select = include_expired ? TAGS_GROUP_CONCAT_ALL : TAGS_GROUP_CONCAT_ACTIVE
     tag_expired_pred = include_expired ? "" : " AND #{NOT_EXPIRED_DT}"
@@ -215,7 +216,7 @@ class Doma::Database
             INNER JOIN tags t ON t.id = dt.tag_id
             WHERE t.name LIKE ? ESCAPE '\\'#{tag_expired_pred}
         )
-        ORDER BY d.path
+        #{order_clause(sort, prefix: "d.")}
         SQL
     )
     rows.map { |row| build_entry(row) }
@@ -346,7 +347,7 @@ class Doma::Database
   # over LIKE so users don't have to remember to escape `_`/`%`,
   # which are valid characters inside tag names.
   private def tag_match_clause(tag : String) : String
-    tag.includes?('*') || tag.includes?('?') ? "GLOB" : "="
+    Doma::TagGlob.pattern?(tag) ? "GLOB" : "="
   end
 
   private def order_clause(sort : SortBy, *, prefix : String) : String

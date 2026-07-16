@@ -62,7 +62,7 @@ module Doma
         # (`doma setup init`) hands us a DOMA_CD_FILE to write the chosen path
         # to; without it, Enter only *prints* the path — so the footer must
         # not promise `cd`.
-        @shell_integration = !ENV["DOMA_CD_FILE"]?.presence.nil?
+        @shell_integration = !!ENV["DOMA_CD_FILE"]?.presence
         @scored = Query.filter(@entries, Query.parse(@query))
       end
 
@@ -150,7 +150,7 @@ module Doma
         when event.key.backspace?
           @buffer = @buffer[0...-1] unless @buffer.empty?
         else
-          if (c = event.char) && printable?(c) && !event.ctrl? && !event.alt?
+          if (c = event.char) && Doma::Picker.printable?(c) && !event.ctrl? && !event.alt?
             @buffer += c
           end
         end
@@ -160,7 +160,7 @@ module Doma
       private def append_query(event : Termisu::Event::Key)
         return if event.ctrl? || event.alt?
         c = event.char
-        return unless c && printable?(c)
+        return unless c && Doma::Picker.printable?(c)
         @query += c
         refilter
       end
@@ -426,11 +426,6 @@ module Doma
 
       private def char_width(ch : Char) : Int32
         Termisu::UnicodeWidth.codepoint_width(ch.ord).to_i
-      end
-
-      private def printable?(c : Char) : Bool
-        ord = c.ord
-        ord >= 0x20 && ord != 0x7f
       end
     end
   end

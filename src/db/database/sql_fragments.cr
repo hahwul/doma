@@ -52,4 +52,17 @@ class Doma::Database
            WHERE dt2.directory_id = d.id
            ORDER BY t2.name)) AS joined_tags
     SQL
+
+  # Conflict action for merge-style INSERTs into `directory_tags`
+  # (`move` onto an existing path, `rename` onto an existing tag).
+  # When the destination already has the tag, keep whichever lifetime
+  # is more permissive: NULL/permanent beats any TTL, and between two
+  # TTLs the later epoch wins.
+  MERGE_KEEP_LONGER_TTL = <<-SQL
+    ON CONFLICT(directory_id, tag_id) DO UPDATE SET expires_at =
+      CASE
+        WHEN excluded.expires_at IS NULL OR directory_tags.expires_at IS NULL THEN NULL
+        ELSE MAX(excluded.expires_at, directory_tags.expires_at)
+      END
+    SQL
 end

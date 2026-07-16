@@ -22,6 +22,10 @@ module Doma::CLI
   #                                tag (replaces the old `search` command)
   #   doma list -t crystal foo  → both: tag-tagged AND containing "foo"
   class ListCommand
+    # Accepted `--by` values (canonical names + aliases). Public so
+    # `setup completion` completes exactly what the parser accepts.
+    BY_CHOICES = %w[path recent used recency tag]
+
     # Sentinel returned to the renderer when an entry has no TTL'd tags
     # at all, so the inner `t -> TagRenderer.render(t, ttl_map[t]?, color)`
     # loop never has to special-case "no entry in the bulk map." Frozen
@@ -299,9 +303,7 @@ module Doma::CLI
       end
 
       if items.size == 1
-        chosen = items.first.value
-        bump_used_safe(db, chosen)
-        puts chosen
+        emit_choice(db, items.first.value)
         return
       end
 
@@ -317,10 +319,8 @@ module Doma::CLI
         if STDIN.tty?
           effective = Doma::Settings::SelectorMode::Builtin
         else
-          first_tag = tags.first?
-          context = first_tag ? "tag '#{first_tag}'" : "current filter"
           raise Doma::Error.new(
-            "ambiguous --pick (#{context} matches #{items.size} directories) " \
+            "ambiguous --pick (#{pick_context(tags)} matches #{items.size} directories) " \
             "and stdin is not a TTY",
             exit_code: 4,
             hint: "narrow the filter, or pass --first to take the most-recent match",
@@ -334,33 +334,37 @@ module Doma::CLI
         result = Doma::Picker.pick(items, prompt)
         raise Doma::Error.new("selection cancelled", 130) if result.cancelled
         if value = result.value
-          bump_used_safe(db, value)
-          puts value
+          emit_choice(db, value)
         end
       in Doma::Settings::SelectorMode::First
         # Deterministic auto-pick. Warn so scripted callers don't silently
         # get a heuristic choice they didn't expect.
         unless Doma::Logger.quiet?
-          first_tag = tags.first?
-          context = first_tag ? "tag '#{first_tag}'" : "current filter"
           Doma::Logger.warn(
-            "#{context} matches #{items.size} directories; picked first. " \
+            "#{pick_context(tags)} matches #{items.size} directories; picked first. " \
             "Pass --by recent or refine the filter to disambiguate."
           )
         end
-        chosen = items.first.value
-        bump_used_safe(db, chosen)
-        puts chosen
+        emit_choice(db, items.first.value)
       in Doma::Settings::SelectorMode::Auto
         # Already resolved above; this branch satisfies exhaustiveness.
-        puts items.first.value
+        emit_choice(db, items.first.value)
       end
     end
 
-    private def bump_used_safe(db : Doma::Database, path : String)
-      db.bump_used!(path)
-    rescue
-      # Frecency is best-effort — never block the actual output.
+    # Print the picked path, stamping recency first (best-effort — see
+    # `Database#bump_used_safe`). Every selection path funnels through
+    # here so no branch can forget the frecency bump.
+    private def emit_choice(db : Doma::Database, path : String)
+      db.bump_used_safe(path)
+      puts path
+    end
+
+    # Human label for what the user filtered by, used in ambiguity
+    # warnings/errors.
+    private def pick_context(tags : Array(String)) : String
+      first_tag = tags.first?
+      first_tag ? "tag '#{first_tag}'" : "current filter"
     end
 
     # Mirror cd's old miss-hint: when the user passes a path-like string
@@ -403,7 +407,7 @@ module Doma::CLI
     # rules wouldn't accept.
     private def collect(db : Doma::Database, tags : Array(String), query : String?, sort : Doma::Database::SortBy, include_expired : Bool) : Array(Doma::Entry)
       base = if tags.empty?
-               query ? db.search(query, include_expired: include_expired) : db.directories(sort: sort, include_expired: include_expired)
+               query ? db.search(query, sort: sort, include_expired: include_expired) : db.directories(sort: sort, include_expired: include_expired)
              else
                # Anchor on the first tag (gets the right `sort`/`include_expired`
                # treatment), then narrow by intersecting against each
@@ -422,7 +426,7 @@ module Doma::CLI
       return base if query.nil? || tags.empty?
 
       tagged_ids = base.map(&.id).to_set
-      db.search(query, include_expired: include_expired).select { |e| tagged_ids.includes?(e.id) }
+      db.search(query, sort: sort, include_expired: include_expired).select { |e| tagged_ids.includes?(e.id) }
     end
 
     # Trim entries the SQL GLOB matched but our stricter rules would

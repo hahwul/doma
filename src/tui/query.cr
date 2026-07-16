@@ -44,9 +44,7 @@ module Doma
         raw.split.each do |tok|
           if v = strip_prefix(tok, "tag:")
             tag_includes << v unless v.empty?
-          elsif v = strip_prefix(tok, "-tag:")
-            tag_excludes << v unless v.empty?
-          elsif v = strip_prefix(tok, "!tag:")
+          elsif v = strip_prefix(tok, "-tag:") || strip_prefix(tok, "!tag:")
             tag_excludes << v unless v.empty?
           elsif v = strip_prefix(tok, "id:")
             id_prefixes << v.downcase unless v.empty?

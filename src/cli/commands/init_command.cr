@@ -1,5 +1,6 @@
 require "option_parser"
 require "../../utils/errors"
+require "./shell_arg"
 
 module Doma::CLI
   # Emits a shell wrapper so `doma cd` actually changes the parent
@@ -11,8 +12,6 @@ module Doma::CLI
   #
   #   eval "$(doma setup init zsh)"      # or bash / fish
   class InitCommand
-    SUPPORTED = %w[bash zsh fish]
-
     def run(args : Array(String))
       shell : String? = nil
 
@@ -28,18 +27,11 @@ module Doma::CLI
       end
       parser.parse(args)
 
-      target = shell
-      raise Doma::ValidationError.new("shell is required (one of: #{SUPPORTED.join(", ")})") unless target
-
-      case target
+      case ShellArg.validate!(shell)
       when "bash", "zsh"
         STDOUT.puts posix_wrapper
       when "fish"
         STDOUT.puts fish_wrapper
-      else
-        raise Doma::ValidationError.new(
-          "unsupported shell '#{target}' (supported: #{SUPPORTED.join(", ")})"
-        )
       end
     end
 

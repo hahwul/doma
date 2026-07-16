@@ -27,7 +27,7 @@ module Doma
   module CLI
     class Runner
       KNOWN_COMMANDS = %w[
-        add mark rm remove prune list ls info tags rename move mv
+        add mark rm remove prune list ls cd info tags rename move mv
         stats status run export import setup doctor config trash tui
         version help -V --version -h --help
       ]

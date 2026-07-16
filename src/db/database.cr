@@ -5,6 +5,7 @@ require "../utils/config"
 require "../utils/errors"
 require "../utils/sql"
 require "../utils/suggester"
+require "../utils/tag_glob"
 require "../utils/validator"
 require "./migrations"
 

@@ -82,7 +82,7 @@ module Doma::CLI
       now = Time.utc.to_unix
       puts "ID       AGE   PATH                                                TAGS"
       entries.each do |e|
-        id = e.short_id[0..6].ljust(7)
+        id = e.display_id.ljust(7)
         age = humanize_age(now - e.deleted_at).rjust(5)
         # Truncate from the left with an ellipsis so the *end* of the
         # path (the part that disambiguates similar entries) stays

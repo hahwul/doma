@@ -54,7 +54,7 @@ module Doma::CLI
 
         result = run_app(db, entries, initial_query(query, tag))
         if result.selected? && (path = result.path)
-          bump_used_safe(db, path)
+          db.bump_used_safe(path)
           deliver(path)
           selected = true
         end
@@ -94,13 +94,6 @@ module Doma::CLI
       parts << "tag:#{tag}" if tag && !tag.empty?
       parts << query if query && !query.empty?
       parts.join(" ")
-    end
-
-    # Frecency is best-effort: a failure here must never block the selection
-    # from reaching stdout. Mirrors `list --pick`'s bump_used_safe.
-    private def bump_used_safe(db : Doma::Database, path : String)
-      db.bump_used!(path)
-    rescue
     end
   end
 end
