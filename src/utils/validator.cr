@@ -35,6 +35,21 @@ module Doma
       cleaned
     end
 
+    # Parse a single `-t`/`--tag` flag value into one or more tag strings.
+    # The value may be comma-separated (`-t a,b`), so split, trim, and drop
+    # empties — raising a clear error when nothing usable remains (`-t ''`,
+    # `-t ','`, `-t '  '`) instead of letting it slip through as a silent
+    # no-op tag write that prints a misleading "added (no tags)". Shared by
+    # the option blocks of `add`/`rm`/`mark`/`list`; `run`/`status`
+    # deliberately take a single, non-split tag and don't use it.
+    def split_tag_flag!(raw : String) : Array(String)
+      parts = raw.split(',').map(&.strip).reject(&.empty?)
+      if parts.empty?
+        raise ValidationError.new("tag is empty (-t got an empty value)")
+      end
+      parts
+    end
+
     def tags!(raw : Enumerable(String)) : Array(String)
       raw.flat_map(&.split(','))
         .map(&.strip)

@@ -12,14 +12,6 @@ module Doma::CLI
   #
   #   doma run <tag> -- <cmd> [args...]
   class RunCommand
-    # Default cap for `--parallel` when the user doesn't pass `--jobs`.
-    # CPU count is the right shape for compute-bound sweeps (build,
-    # test); for IO-bound sweeps (git fetch, npm install) the user
-    # almost certainly wants a different number — that's what `--jobs`
-    # is there to set. Falls back to 4 on platforms where the helper
-    # returns 0 so we never spawn unbounded fibers by accident.
-    private DEFAULT_JOBS = {System.cpu_count.to_i, 1}.max
-
     def run(args : Array(String))
       stop_on_fail = false
       parallel = false
@@ -124,11 +116,7 @@ module Doma::CLI
         # reimpose shell-glob semantics in Crystal so `run 'a/*' -- ...`
         # doesn't end up running in `a/b/c/d`.
         entries = db.directories(tag, sort: Doma::Database::SortBy::Recent)
-        if tag.includes?('*') || tag.includes?('?')
-          entries = entries.select do |e|
-            e.tags.any? { |t| Doma::TagGlob.match?(tag, t) }
-          end
-        end
+        entries = Doma::TagGlob.filter(entries, tag, &.tags)
         {entries.map(&.path).uniq!, db.tag_names}
       ensure
         db.close
@@ -176,7 +164,7 @@ module Doma::CLI
         # Copy the closured `jobs` into a plain local so Crystal can
         # narrow Int32? → Int32 (a captured var can't be narrowed in place).
         j = jobs
-        requested_jobs = j || DEFAULT_JOBS
+        requested_jobs = j || Doma::Parallel.default_jobs
         Doma::Parallel.each_completed(
           paths, requested_jobs,
           ->(path : String) { run_one(cmd, cmd_rest, path, attach_stdin: false) }

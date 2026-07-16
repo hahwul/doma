@@ -20,11 +20,6 @@ module Doma::CLI
   #   doma status 'work/*'        → glob over tags (shell semantics)
   #   doma status -t work --dirty → only repos with uncommitted changes
   class StatusCommand
-    # IO-bound (each probe forks git), so parallel-by-default with a
-    # CPU-count cap is the right shape; `--jobs` tunes it for slow disks
-    # or huge sets. Floor at 1 so a 0-core helper return never stalls.
-    private DEFAULT_JOBS = {System.cpu_count.to_i, 1}.max
-
     # One directory's resolved state. `exists` is tracked separately from
     # the git Status so a gone path (✗ gone) reads differently from a
     # live non-repo directory (✗ not a git repo).
@@ -133,12 +128,7 @@ module Doma::CLI
       return db.directories(nil, sort: Doma::Database::SortBy::Path) unless tag
 
       entries = db.directories(tag, sort: Doma::Database::SortBy::Path)
-      if tag.includes?('*') || tag.includes?('?')
-        entries = entries.select do |e|
-          e.tags.any? { |t| Doma::TagGlob.match?(tag, t) }
-        end
-      end
-      entries
+      Doma::TagGlob.filter(entries, tag, &.tags)
     end
 
     # Bounded fan-out over the directory set (see Doma::Parallel). Each
@@ -148,7 +138,7 @@ module Doma::CLI
     # Results come back in input order, so the rendered table stays
     # path-sorted regardless of which probe finishes first.
     private def probe_all(entries : Array(Doma::Entry), jobs : Int32?) : Array(RepoState)
-      Doma::Parallel.map(entries, jobs || DEFAULT_JOBS) do |entry|
+      Doma::Parallel.map(entries, jobs || Doma::Parallel.default_jobs) do |entry|
         inspect_one(entry)
       rescue
         # Degrade cleanly: one probe blowing up must never abort the sweep.

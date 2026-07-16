@@ -4,7 +4,7 @@
 #   utils/     logger, config, errors, validator
 #   models/    Entry value type
 #   db/        SQLite-backed Database + Migrations
-#   services/  selector, git_detector, exporter, importer
+#   services/  picker, git_detector, installer, exporter, importer
 #   cli/       Runner + per-command classes
 
 require "option_parser"
@@ -25,7 +25,6 @@ require "./models/entry"
 require "./db/migrations"
 require "./db/database"
 require "./services/picker"
-require "./services/selector"
 require "./services/git_detector"
 require "./services/installer"
 require "./services/exporter"

@@ -1,5 +1,6 @@
 require "option_parser"
 require "../../utils/errors"
+require "../../utils/validator"
 require "./add_command"
 
 module Doma::CLI
@@ -27,14 +28,7 @@ module Doma::CLI
           ttl = v
         end
         p.on("-t TAG", "--tag=TAG", "Add this tag (alias for positional; repeatable, comma-separated allowed)") do |t|
-          if t.strip.empty?
-            raise Doma::ValidationError.new("tag is empty (-t got an empty value)")
-          end
-          parts = t.split(',').map(&.strip).reject(&.empty?)
-          if parts.empty?
-            raise Doma::ValidationError.new("tag is empty (-t got an empty value)")
-          end
-          parts.each { |part| tags << part }
+          Doma::Validator.split_tag_flag!(t).each { |part| tags << part }
         end
         p.on("-h", "--help", "Show help") do
           puts p

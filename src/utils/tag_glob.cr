@@ -24,12 +24,30 @@ module Doma
     # in practice.
     @@regex_cache = {} of String => Regex
 
+    # True when `s` carries a glob metacharacter (`*` or `?`) and so needs
+    # GLOB matching rather than plain equality. Centralizes the check that
+    # list/run/status and the SQL prefilter each spelled out inline.
+    def pattern?(s : String) : Bool
+      s.includes?('*') || s.includes?('?')
+    end
+
     # True when `name` matches `pattern` under the strict semantics.
     # Plain (no glob char) patterns short-circuit to equality so the
     # common case stays cheap.
     def match?(pattern : String, name : String) : Bool
-      return pattern == name unless pattern.includes?('*') || pattern.includes?('?')
+      return pattern == name unless pattern?(pattern)
       to_regex(pattern).matches?(name)
+    end
+
+    # Narrow `entries` to those carrying a tag that matches `pattern` under
+    # the strict semantics. A no-op for a plain (non-glob) pattern — the SQL
+    # layer already returned the exact-match set, so there's nothing to
+    # re-filter. The block yields each entry's tag list, keeping this
+    # decoupled from any particular row type (list/run/status all pass
+    # `&.tags`).
+    def filter(entries : Array(T), pattern : String, & : T -> Array(String)) : Array(T) forall T
+      return entries unless pattern?(pattern)
+      entries.select { |e| (yield e).any? { |t| match?(pattern, t) } }
     end
 
     # Memoized compile — see `compile_regex` for the translation. The

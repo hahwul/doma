@@ -24,19 +24,11 @@ module Doma::CLI
       parser = OptionParser.new do |p|
         p.banner = "Usage: doma add [<path> ...] [-t TAG ...] [--ttl DUR | --tmp] [--auto-tag] [--git-tag] [--dry-run] [--json]"
         p.on("-t TAG", "--tag=TAG", "Add a tag (repeatable, comma-separated allowed)") do |t|
-          # Reject `-t ''` (and `-t ','` etc that collapse to nothing) outright
-          # instead of letting it slide through the empty-string filter in
-          # `Validator.tags!`. Silent acceptance produces an "added (no tags)"
-          # line that looks like a successful tag write, which is misleading.
-          # Mirrors the check in `list`.
-          if t.strip.empty?
-            raise Doma::ValidationError.new("tag is empty (-t got an empty value)")
-          end
-          parts = t.split(',').map(&.strip).reject(&.empty?)
-          if parts.empty?
-            raise Doma::ValidationError.new("tag is empty (-t got an empty value)")
-          end
-          raw_tags << t
+          # Reject `-t ''`/`-t ','` up front rather than letting the empty
+          # string slide through `Validator.tags!` and print a misleading
+          # "added (no tags)". `split_tag_flag!` also pre-splits `-t a,b`,
+          # so the parts reach `tags!` already clean.
+          Doma::Validator.split_tag_flag!(t).each { |part| raw_tags << part }
         end
         # `--ttl DUR` and `--tmp` are mutually exclusive in spirit; if
         # both are passed the last one wins, which is the same lenient

@@ -115,10 +115,11 @@ class Doma::Database
     PathInfo.new(id, short_id, p, basename, created_at, last_used_at)
   end
 
-  # Resolves a short_id prefix to matching directories. The cd
-  # command uses this to support both the bare form (`cd 0dc0db9`)
-  # and prefix typing (`cd 0d` if unique). Empty result = no match;
-  # multiple = ambiguous. Caller decides what to do with each.
+  # Resolves a short_id prefix to matching directories. Backs
+  # `ShortIdResolver`, so a bare id (`0dc0db9`) or any unique prefix
+  # (`0d`) works anywhere a short_id is accepted — `rm`, `info`, and the
+  # `add` / `trash restore` redirects. Empty result = no match; multiple
+  # = ambiguous. Caller decides what to do with each.
   def directories_by_short_id_prefix(prefix : String) : Array(Entry)
     pattern = "#{prefix}%"
     rows = @db.query_all(
@@ -133,10 +134,12 @@ class Doma::Database
   end
 
   # Paths matching a tag (or tag-glob), sorted by recency. A tag
-  # containing `*` or `?` triggers GLOB matching so `doma cd 'work*'`
-  # resolves to every directory tagged `work-foo`, `work-bar`, etc.
-  # Expired tag rows are filtered out — the user shouldn't navigate
-  # to a path via a tag that's no longer applied.
+  # containing `*` or `?` triggers GLOB matching so `'work*'` resolves to
+  # every directory tagged `work-foo`, `work-bar`, etc. Expired tag rows
+  # are filtered out — a path shouldn't surface via a tag no longer
+  # applied. A convenience read (the CLI goes through `directories()` so
+  # it can post-filter globs with strict shell semantics); handy for
+  # callers — and tests — that want just the recency-ordered paths.
   def paths_for_tag(tag : String) : Array(String)
     op = tag_match_clause(tag)
     @db.query_all(
