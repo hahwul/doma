@@ -3,6 +3,7 @@ require "json"
 require "../db/database"
 require "../utils/config"
 require "../utils/errors"
+require "../utils/logger"
 require "../utils/sql"
 
 module Doma
@@ -38,6 +39,19 @@ module Doma
       def initialize(@deleted_at, @short_id, @path, @basename,
                      @last_used_at, @tags, @expirations)
       end
+
+      # 7-char display form of the short id — what `trash list` prints
+      # and what restore hints reference.
+      def display_id : String
+        short_id[0..6]
+      end
+    end
+
+    # Canonical "it's recoverable" hint attached to errors by add/rm/
+    # info when the input matches a trashed entry. One format so the
+    # restore incantation can't drift between commands.
+    def restore_hint(entry : Entry) : String
+      "in trash (#{entry.path}). Restore: doma trash restore #{entry.display_id}"
     end
 
     def file_path : String
@@ -49,28 +63,21 @@ module Doma
     # (callers should check this before issuing the actual delete so the
     # trash row mirrors what was removed).
     def snapshot(db : Doma::Database, abs_path : String) : Entry?
-      row = db.db.query_one?(
-        "SELECT id, short_id, path, basename, last_used_at " \
-        "FROM directories WHERE path = ?",
-        abs_path, as: {Int64, String, String, String, Int64}
-      )
-      return unless row
-      id, short_id, path, basename, last_used_at = row
-      tags = db.tags_for(id)
-      expirations = db.tag_expirations(id, include_past: true)
+      info = db.find_path_info(abs_path)
+      return unless info
+      tags = db.tags_for(info.id)
+      expirations = db.tag_expirations(info.id, include_past: true)
       Entry.new(
         deleted_at: Time.utc.to_unix,
-        short_id: short_id,
-        path: path,
-        basename: basename,
-        last_used_at: last_used_at,
+        short_id: info.short_id,
+        path: info.path,
+        basename: info.basename,
+        last_used_at: info.last_used_at,
         tags: tags,
         expirations: expirations,
       )
     end
 
-    # Append a snapshot to the trash file. Lazy mkdir so callers that
-    # never trash anything don't pay for a directory creation.
     # Append a snapshot to the trash file. Lazy mkdir so callers that
     # never trash anything don't pay for a directory creation.
     def add!(entry : Entry)
@@ -290,10 +297,14 @@ module Doma
         next if line.strip.empty?
         # A truncated or hand-edited line shouldn't take down the whole
         # trash — skip and continue. We can't usefully complain to the
-        # user mid-`rm`, so silently drop the malformed row.
+        # user mid-`rm`, so drop the malformed row with only a debug
+        # note. (Note the next lazy prune rewrites the file from the
+        # parsed set, which erases the bad line permanently — the debug
+        # line is the one trace it leaves.)
         begin
           out << Entry.from_json(line)
         rescue JSON::Error
+          Doma::Logger.debug "trash: skipping malformed line in #{path}"
           next
         end
       end

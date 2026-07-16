@@ -74,7 +74,10 @@ module Doma
     # trips the `short_id` UNIQUE index and rolls the whole import back.
     def self.generate_short_id(db : DB::Database | DB::Connection) : String
       loop do
-        candidate = Random.new.random_bytes(SHORT_ID_BYTES).hexstring[0, SHORT_ID_CHARS]
+        # Random::Secure draws straight from the OS — no per-call PRNG
+        # allocation + reseed like `Random.new` would incur, and this
+        # runs once per inserted row.
+        candidate = Random::Secure.random_bytes(SHORT_ID_BYTES).hexstring[0, SHORT_ID_CHARS]
         existing = db.scalar(
           "SELECT COUNT(*) FROM directories WHERE short_id = ?", candidate
         ).as(Int64)

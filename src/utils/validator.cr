@@ -163,7 +163,7 @@ module Doma
       resolved = if File.exists?(expanded)
                    begin
                      File.realpath(expanded)
-                   rescue
+                   rescue File::Error
                      expanded
                    end
                  else
@@ -185,7 +185,7 @@ module Doma
 
       real = begin
         File.realpath(current)
-      rescue
+      rescue File::Error
         current
       end
       trailing.empty? ? real : File.join([real] + trailing)

@@ -102,7 +102,7 @@ module Doma::CLI
       end
 
       states = probe_all(entries, jobs)
-      states = states.select { |s| s.exists && s.status.clean? == false && s.status.git } if dirty_only
+      states = states.select { |s| s.exists && s.status.git && !s.status.clean? } if dirty_only
 
       if json_mode
         emit_json(states)

@@ -10,7 +10,6 @@ module Doma::CLI
   class ImportCommand
     def run(args : Array(String))
       explicit_mode : Doma::Importer::Mode? = nil
-      assume_yes = false
       dry_run = false
       positional = [] of String
 
@@ -30,7 +29,10 @@ module Doma::CLI
           end
           explicit_mode = Doma::Importer::Mode::Replace
         end
-        p.on("-y", "--yes", "Skip the --replace confirmation prompt") { assume_yes = true }
+        # `-y/--yes` is normally consumed by Runner's global-flag pass
+        # before this parser ever sees it; the registration keeps the
+        # flag documented in --help and routes to the same switch.
+        p.on("-y", "--yes", "Skip the --replace confirmation prompt") { Doma::Runtime.assume_yes = true }
         p.on("-n", "--dry-run", "Report what would be imported without writing anything") { dry_run = true }
         p.on("-h", "--help", "Show help") do
           puts p
@@ -53,7 +55,7 @@ module Doma::CLI
 
       # A dry-run writes nothing, so the destructive `--replace` prompt
       # would be a lie — skip it and let the preview run freely.
-      if mode == Doma::Importer::Mode::Replace && !dry_run && !assume_yes && !Doma::Runtime.assume_yes?
+      if mode == Doma::Importer::Mode::Replace && !dry_run && !Doma::Runtime.assume_yes?
         unless confirm_replace
           Doma::Logger.warn "aborted"
           exit 1

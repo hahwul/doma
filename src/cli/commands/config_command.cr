@@ -21,7 +21,13 @@ module Doma::CLI
       "auto_tag.git",
     ]
 
-    SELECTOR_VALUES = %w[auto builtin first]
+    # Also referenced by `setup completion`, so the action list in the
+    # generated completion scripts can't drift from the dispatcher below.
+    ACTIONS = %w[get set unset list edit path]
+
+    # Derived from the enum so a new mode is accepted by `config set`
+    # the moment it exists.
+    SELECTOR_VALUES = Doma::Settings::SelectorMode.values.map(&.to_s.downcase)
 
     def run(args : Array(String))
       action = args.shift?
@@ -42,7 +48,7 @@ module Doma::CLI
         cmd_path(args)
       else
         Doma::Logger.error "unknown config action '#{action}'"
-        if suggestion = Doma::Suggester.suggest(action, %w[get set unset list edit path])
+        if suggestion = Doma::Suggester.suggest(action, ACTIONS)
           STDERR.puts "  Did you mean '#{suggestion}'?"
         end
         STDERR.puts "Run 'doma config --help' to see actions."

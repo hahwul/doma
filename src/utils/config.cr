@@ -165,7 +165,7 @@ module Doma
     # config without grepping source.
     VALID_KEYS  = %w[db_path selector auto_tag]
     ENUM_VALUES = {
-      "SelectorMode" => %w[auto builtin first],
+      "SelectorMode" => SelectorMode.values.map(&.to_s.downcase),
     }
   end
 end

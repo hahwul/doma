@@ -249,8 +249,7 @@ module Doma::CLI
       if entry = Doma::Trash.find_by_short_id(raw.downcase)
         raise Doma::ValidationError.new(
           "looks like a short_id, not a path: #{raw}",
-          "in trash (#{entry.path}). " \
-          "Restore: doma trash restore #{entry.short_id[0..6]}"
+          Doma::Trash.restore_hint(entry)
         )
       end
     end

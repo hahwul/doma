@@ -37,7 +37,7 @@ module Doma::CLI
       # with a clear error, instead of silently no-op'ing inside
       # `remove_tags` (where a non-existent tag name simply matches no
       # rows). Mirrors `add_command`'s validation step.
-      cleaned_tags = tags.empty? ? tags : Doma::Validator.tags!(tags)
+      cleaned_tags = Doma::Validator.tags!(tags)
 
       missing = 0
       Doma::Database.open do |db|
@@ -117,8 +117,7 @@ module Doma::CLI
     private def not_registered_hint(db : Doma::Database, raw : String) : String
       if Doma::ShortIdResolver.looks_like?(raw)
         if entry = Doma::Trash.find_by_short_id(raw.downcase)
-          return "in trash (#{entry.path}). " \
-                 "Restore: doma trash restore #{entry.short_id[0..6]}"
+          return Doma::Trash.restore_hint(entry)
         end
       end
 

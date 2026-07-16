@@ -12,12 +12,14 @@ module Doma::CLI
   class InstallCommand
     def run(args : Array(String))
       shell : String? = nil
-      assume_yes = false
       dry_run = false
 
       parser = OptionParser.new do |p|
         p.banner = "Usage: doma setup install [<shell>] [--yes] [--dry-run]"
-        p.on("-y", "--yes", "Skip the confirmation prompt") { assume_yes = true }
+        # `-y/--yes` is normally consumed by Runner's global-flag pass
+        # before this parser ever sees it; the registration keeps the
+        # flag documented in --help and routes to the same switch.
+        p.on("-y", "--yes", "Skip the confirmation prompt") { Doma::Runtime.assume_yes = true }
         p.on("-n", "--dry-run", "Show what would change without writing") { dry_run = true }
         p.on("-h", "--help", "Show help") do
           puts p
@@ -49,10 +51,7 @@ module Doma::CLI
         return
       end
 
-      # Global -y/--yes is stripped by Runner before subcommand parsing,
-      # so honor it here too — the local --yes flag and the global flag
-      # should be interchangeable for the user.
-      unless assume_yes || Doma::Runtime.assume_yes?
+      unless Doma::Runtime.assume_yes?
         unless confirm(plan)
           Doma::Logger.warn "aborted"
           exit 1

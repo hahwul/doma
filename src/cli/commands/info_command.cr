@@ -55,10 +55,7 @@ module Doma::CLI
           if Doma::ShortIdResolver.looks_like?(raw)
             msg = "no entry with short_id '#{raw}'"
             if trashed = Doma::Trash.find_by_short_id(raw.downcase)
-              raise Doma::NotFoundError.new(
-                msg,
-                hint: "in trash (#{trashed.path}). Restore: doma trash restore #{trashed.short_id[0..6]}"
-              )
+              raise Doma::NotFoundError.new(msg, hint: Doma::Trash.restore_hint(trashed))
             end
             # short_id input that didn't resolve: caller-friendly message
             # without an `add` hint (the user typed an id, not a path).
@@ -74,22 +71,15 @@ module Doma::CLI
           # means cwd). Exactly one hit → show it. Multiple →
           # disambiguate with short_ids so the user can re-issue.
           if name_like?(raw) && (info = resolve_by_search(db, raw))
-            tags = db.tags_for(info.id)
-            ttl_map = db.tag_expirations(info.id, include_past: true)
-            exists = Dir.exists?(info.path)
-            if json_mode
-              render_json(info, tags, ttl_map, exists)
-            else
-              render_text(info, tags, ttl_map, exists, raw)
-            end
+            render_entry(db, info, json_mode, raw)
             return
           end
 
           if trashed = Doma::Trash.find_by_path(canonical)
             raise Doma::NotFoundError.new(
               "not registered: #{canonical}",
-              hint: "in trash (id #{trashed.short_id[0..6]}). " \
-                    "Restore: doma trash restore #{trashed.short_id[0..6]}"
+              hint: "in trash (id #{trashed.display_id}). " \
+                    "Restore: doma trash restore #{trashed.display_id}"
             )
           end
           raise Doma::NotFoundError.new(
@@ -98,18 +88,25 @@ module Doma::CLI
           )
         end
 
-        tags = db.tags_for(info.id)
-        # Show every TTL — including past ones — so an expired tag
-        # doesn't silently disappear from the detail view. The render
-        # layer marks "expired" rows distinctly.
-        ttl_map = db.tag_expirations(info.id, include_past: true)
-        exists = Dir.exists?(info.path)
+        render_entry(db, info, json_mode, raw)
+      end
+    end
 
-        if json_mode
-          render_json(info, tags, ttl_map, exists)
-        else
-          render_text(info, tags, ttl_map, exists, raw)
-        end
+    # Fetch the entry's tags/TTLs/existence and emit it — shared by the
+    # direct-lookup path and the bare-name search fallback so the two
+    # can't render differently.
+    private def render_entry(db : Doma::Database, info : Doma::Database::PathInfo, json_mode : Bool, raw : String)
+      tags = db.tags_for(info.id)
+      # Show every TTL — including past ones — so an expired tag
+      # doesn't silently disappear from the detail view. The render
+      # layer marks "expired" rows distinctly.
+      ttl_map = db.tag_expirations(info.id, include_past: true)
+      exists = Dir.exists?(info.path)
+
+      if json_mode
+        render_json(info, tags, ttl_map, exists)
+      else
+        render_text(info, tags, ttl_map, exists, raw)
       end
     end
 

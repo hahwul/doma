@@ -1,4 +1,5 @@
 require "levenshtein"
+require "./tag_glob"
 
 module Doma
   # Picks a "did you mean ...?" candidate from a list. The threshold scales
@@ -49,7 +50,7 @@ module Doma
     # we surface that glob form before falling back to a typo hint.
     def tag_hint_for(input : String, candidates : Enumerable(String)) : String?
       return if input.empty?
-      return if input.includes?('*') || input.includes?('?')
+      return if TagGlob.pattern?(input)
 
       unless input.includes?('/')
         prefix = "#{input}/"

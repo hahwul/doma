@@ -1,5 +1,8 @@
 require "option_parser"
 require "../../utils/errors"
+require "./config_command"
+require "./list_command"
+require "./shell_arg"
 
 module Doma::CLI
   # Emits shell completion scripts for bash, zsh, and fish. Mirrors the
@@ -14,8 +17,6 @@ module Doma::CLI
   # --names` — that way new tags show up in completion the moment they
   # exist, no rebuild needed.
   class CompletionCommand
-    SUPPORTED = %w[bash zsh fish]
-
     def run(args : Array(String))
       shell : String? = nil
 
@@ -40,17 +41,10 @@ module Doma::CLI
       end
       parser.parse(args)
 
-      target = shell
-      raise Doma::ValidationError.new("shell is required (one of: #{SUPPORTED.join(", ")})") unless target
-
-      case target
+      case ShellArg.validate!(shell)
       when "bash" then STDOUT.puts bash_script
       when "zsh"  then STDOUT.puts zsh_script
       when "fish" then STDOUT.puts fish_script
-      else
-        raise Doma::ValidationError.new(
-          "unsupported shell '#{target}' (supported: #{SUPPORTED.join(", ")})"
-        )
       end
     end
 
@@ -81,7 +75,7 @@ module Doma::CLI
       CmdSpec.new("add", "Register a path with tags",
         %w[-t --tag --ttl --tmp --auto-tag --no-auto-tag --git-tag --no-git-tag -n --dry-run --json -h --help], [] of String),
       CmdSpec.new("mark", "Tag cwd with temporary (7d) tags",
-        %w[-t --tag -p --path -h --help], [] of String),
+        %w[-t --tag -p --path --ttl -h --help], [] of String),
       CmdSpec.new("rm", "Remove tag(s) or the path itself",
         %w[-t --tag --hard -h --help], [] of String),
       CmdSpec.new("prune", "Bulk-delete missing paths or expired tags",
@@ -89,11 +83,11 @@ module Doma::CLI
       CmdSpec.new("move", "Move a registered path (tags carry over)",
         %w[--allow-missing -h --help], [] of String),
       CmdSpec.new("tags", "List all tags with counts",
-        %w[--names --tree --json -0 -h --help], [] of String),
+        %w[--names --tree --json -0 --print0 -h --help], [] of String),
       CmdSpec.new("rename", "Rename or merge a tag",
         [] of String, [] of String),
       CmdSpec.new("list", "List/search directories",
-        %w[-t --tag --by --check --include-expired --json --paths -0 --pick --query --first --builtin -h --help], [] of String),
+        %w[-t --tag --by --check --include-expired --json --paths -0 --print0 --pick --query --first --builtin -h --help], [] of String),
       CmdSpec.new("tui", "Fuzzy-find directories interactively",
         %w[-t --tag --query -h --help], [] of String),
       CmdSpec.new("info", "Show one entry's details (default: cwd)",
@@ -105,17 +99,17 @@ module Doma::CLI
       CmdSpec.new("status", "Git status across tagged repos",
         %w[-t --tag --dirty --jobs --json -h --help], [] of String),
       CmdSpec.new("run", "Run a command in every tagged directory",
-        %w[-t --tag --fail-fast --parallel --jobs --no-header -h --help], [] of String),
+        %w[-t --tag --fail-fast --parallel --jobs --no-header -n --dry-run -h --help], [] of String),
       CmdSpec.new("export", "Dump the database",
-        %w[--json --yaml -h --help], [] of String),
+        %w[--json --yaml -o --output -h --help], [] of String),
       CmdSpec.new("import", "Load a snapshot",
-        %w[--merge --replace --yes -h --help], [] of String),
+        %w[--merge --replace -y --yes -n --dry-run -h --help], [] of String),
       CmdSpec.new("setup", "install / init / completion",
         [] of String, %w[install init completion]),
       CmdSpec.new("doctor", "Check the install (paths, config, DB)",
         %w[-h --help], [] of String),
       CmdSpec.new("config", "get / set / list — settings",
-        %w[-h --help], %w[get set unset list edit path]),
+        %w[-h --help], ConfigCommand::ACTIONS),
       CmdSpec.new("trash", "list / restore / empty — recover from rm",
         %w[--merge --older --json -h --help], %w[list restore empty]),
       CmdSpec.new("version", "Print version",
@@ -136,11 +130,13 @@ module Doma::CLI
     # not just registered directories).
     private FILE_FIRST_ARG = %w[import]
 
-    # Known config keys for `config get/set/unset` value completion.
-    private CONFIG_KEYS = %w[db_path selector auto_tag.basename auto_tag.git]
+    # Known config keys for `config get/set/unset` value completion —
+    # sourced from the config command itself so the two can't drift.
+    private CONFIG_KEYS = ConfigCommand::KEYS
 
-    # Argument-value enums shared by every shell.
-    private BY_VALUES  = %w[path recent used recency tag]
+    # Argument-value enums shared by every shell. `--by` values come
+    # from the list command so completion can't lag the parser.
+    private BY_VALUES  = ListCommand::BY_CHOICES
     private TTL_VALUES = %w[30m 1h 4h 1d 7d 2w 30d]
 
     # ------------------------------------------------------------------

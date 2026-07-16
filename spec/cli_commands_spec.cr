@@ -948,6 +948,22 @@ describe "doma list flags" do
     end
   end
 
+  it "[--by recent with query] honors the sort when a text query is present" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    # Regression guard: the search path used to hard-code path order,
+    # silently ignoring --by recent whenever a query was given.
+    with_home do |home|
+      seed_home(home)
+      # Bump /var (the only 'fs'-tagged entry) so it outranks the other
+      # 'shared'-tagged entry on recency while losing to it on path order.
+      run(["list", "-t", "fs", "--pick", "--first"], {"DOMA_HOME" => home})
+
+      r = run(["list", "shared", "--by", "recent", "--paths"], {"DOMA_HOME" => home})
+      first_line = r[:out].split('\n', remove_empty: true).first
+      first_line.should eq(Doma::Validator.canonicalize("/var"))
+    end
+  end
+
   it "[-t '' ] rejects empty tag instead of silently matching everything" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     with_home do |home|

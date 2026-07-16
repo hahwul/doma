@@ -208,6 +208,30 @@ describe "Database#search" do
     end
   end
 
+  it "honors sort: Recent (and defaults to path order)" do
+    # Regression guard: `search` used to hard-code ORDER BY path, so
+    # `list <query> --by recent` silently ignored the sort flag.
+    with_temp_db do |db|
+      parent = File.tempname("doma-search-sort")
+      first_by_path = File.join(parent, "aaa-proj")
+      recently_used = File.join(parent, "zzz-proj")
+      FileUtils.mkdir_p(first_by_path)
+      FileUtils.mkdir_p(recently_used)
+      begin
+        db.add(first_by_path, [] of String)
+        db.add(recently_used, [] of String)
+        db.bump_used!(recently_used)
+
+        db.search("proj").map(&.path).first
+          .should eq(Doma::Validator.canonicalize(first_by_path))
+        db.search("proj", sort: Doma::Database::SortBy::Recent).map(&.path).first
+          .should eq(Doma::Validator.canonicalize(recently_used))
+      ensure
+        FileUtils.rm_rf(parent)
+      end
+    end
+  end
+
   it "treats SQL LIKE meta-characters literally" do
     with_temp_db do |db|
       tmp = File.tempname("doma-search-pct")
