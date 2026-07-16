@@ -74,6 +74,19 @@ module Doma
       new(raw, target)
     end
 
+    # Block form: open the database, yield it, and always close it — the
+    # stdlib `File.open`-style idiom that replaces the hand-rolled
+    # `db = open; begin … ensure db.close end` boilerplate at call sites.
+    # Returns whatever the block returns.
+    def self.open(path : String? = nil, &)
+      db = open(path)
+      begin
+        yield db
+      ensure
+        db.close
+      end
+    end
+
     private OPEN_MAX_ATTEMPTS = 25
     private OPEN_BACKOFF      = 100.milliseconds
 

@@ -92,7 +92,15 @@ module Doma
         cutoff = now - retention_seconds
         kept, pruned = raw.partition { |e| e.deleted_at >= cutoff }
         rewrite!(kept) if prune && !pruned.empty?
-        kept.sort_by { |e| -e.deleted_at }
+        # Newest first. `deleted_at` has 1-second granularity, so two
+        # deletions in the same second tie; break the tie by append order
+        # (the file is written chronologically, so a later index is the
+        # more recent deletion). Without this, `sort_by` — which is not
+        # stable — orders same-second entries arbitrarily, and "undo the
+        # latest" (bare `trash restore`) could resurrect the wrong one.
+        kept.map_with_index { |entry, i| {entry, i} }
+          .sort_by! { |(entry, i)| {-entry.deleted_at, -i} }
+          .map(&.first)
       end
     end
 

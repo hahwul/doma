@@ -44,8 +44,7 @@ module Doma::CLI
       end
 
       selected = false
-      db = Doma::Database.open
-      begin
+      Doma::Database.open do |db|
         entries = db.directories(sort: Doma::Database::SortBy::Recent)
         if entries.empty?
           Doma::Logger.warn "no directories registered yet"
@@ -59,8 +58,6 @@ module Doma::CLI
           deliver(path)
           selected = true
         end
-      ensure
-        db.close
       end
 
       # Cancellation (Esc/Ctrl-C) → no path on stdout, non-zero exit so the

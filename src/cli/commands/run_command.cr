@@ -12,25 +12,18 @@ module Doma::CLI
   #
   #   doma run <tag> -- <cmd> [args...]
   class RunCommand
-    # Default cap for `--parallel` when the user doesn't pass `--jobs`.
-    # CPU count is the right shape for compute-bound sweeps (build,
-    # test); for IO-bound sweeps (git fetch, npm install) the user
-    # almost certainly wants a different number — that's what `--jobs`
-    # is there to set. Falls back to 4 on platforms where the helper
-    # returns 0 so we never spawn unbounded fibers by accident.
-    private DEFAULT_JOBS = {System.cpu_count.to_i, 1}.max
-
     def run(args : Array(String))
       stop_on_fail = false
       parallel = false
       no_header = false
+      dry_run = false
       jobs : Int32? = nil
       flag_tags = [] of String
       positional_tags = [] of String
       cmd_args = [] of String
 
       parser = OptionParser.new do |p|
-        p.banner = "Usage: doma run (<tag> | -t TAG) [--fail-fast] [--parallel [--jobs N]] [--no-header] -- <cmd> [args...]"
+        p.banner = "Usage: doma run (<tag> | -t TAG) [--fail-fast] [--parallel [--jobs N]] [--no-header] [--dry-run] -- <cmd> [args...]"
         p.on("-t TAG", "--tag=TAG", "Tag selector — single tag, no comma split (alias for positional)") do |t|
           if t.strip.empty?
             raise Doma::ValidationError.new("tag is empty (-t got an empty value)")
@@ -47,6 +40,7 @@ module Doma::CLI
           jobs = parsed
         end
         p.on("--no-header", "Suppress per-directory ▶/✓ markers (failures still surface as ✗)") { no_header = true }
+        p.on("-n", "--dry-run", "Print the target directories and command without running anything") { dry_run = true }
         p.on("-h", "--help", "Show help") do
           puts p
           STDOUT.puts ""
@@ -99,27 +93,30 @@ module Doma::CLI
           "run accepts a single tag; got #{flag_tags.size} via -t"
         )
       end
+      # Extra positional tags were previously dropped silently — `run work
+      # personal -- cmd` swept only `work` while the user believed both
+      # sets ran. Reject it the way `status` already does, and point at the
+      # glob form for sweeping several tags at once.
+      if positional_tags.size > 1
+        raise Doma::ValidationError.new(
+          "run accepts a single tag; got #{positional_tags.size} positional args",
+          hint: "use a glob like 'work*' to sweep several tags in one run"
+        )
+      end
       tag_args = flag_tags.empty? ? positional_tags : flag_tags
 
       raise Doma::ValidationError.new("tag is required") if tag_args.empty?
 
       tag = tag_args.first
-      db = Doma::Database.open
-      paths, all_tags = begin
+      paths, all_tags = Doma::Database.open do |db|
         # Use `directories(tag)` (returns Entry rows with their tag list)
         # rather than `paths_for_tag` so we can post-filter against the
         # strict glob rules. SQL GLOB treats `*` as crossing `/`; we
         # reimpose shell-glob semantics in Crystal so `run 'a/*' -- ...`
         # doesn't end up running in `a/b/c/d`.
         entries = db.directories(tag, sort: Doma::Database::SortBy::Recent)
-        if tag.includes?('*') || tag.includes?('?')
-          entries = entries.select do |e|
-            e.tags.any? { |t| Doma::TagGlob.match?(tag, t) }
-          end
-        end
+        entries = Doma::TagGlob.filter(entries, tag, &.tags)
         {entries.map(&.path).uniq!, db.tag_names}
-      ensure
-        db.close
       end
 
       if paths.empty?
@@ -127,6 +124,23 @@ module Doma::CLI
           "no directories tagged '#{tag}'",
           hint: Doma::Suggester.tag_hint_for(tag, all_tags)
         )
+      end
+
+      # Preview mode: `run <tag> -- <cmd>` fires immediately in every match,
+      # so give users a way to *see* the target set (and confirm the glob
+      # resolved as intended) before committing to a destructive sweep. The
+      # target paths go to stdout, one per line, so a dry-run composes with
+      # the rest of the shell exactly like `list --paths`.
+      if dry_run
+        # Summary on STDERR so STDOUT stays pure paths (pipeable like
+        # `list --paths`); mirrors where `run` prints its ▶/✓ chrome.
+        # Suppressed under -q, which asks for just the machine-readable set.
+        unless Doma::Logger.quiet?
+          noun = paths.size == 1 ? "directory" : "directories"
+          STDERR.puts "[dry-run] would run `#{cmd_args.join(" ")}` in #{paths.size} #{noun} tagged '#{tag}'"
+        end
+        paths.each { |path| puts path }
+        return
       end
 
       cmd = cmd_args.first
@@ -147,7 +161,7 @@ module Doma::CLI
         # Copy the closured `jobs` into a plain local so Crystal can
         # narrow Int32? → Int32 (a captured var can't be narrowed in place).
         j = jobs
-        requested_jobs = j || DEFAULT_JOBS
+        requested_jobs = j || Doma::Parallel.default_jobs
         Doma::Parallel.each_completed(
           paths, requested_jobs,
           ->(path : String) { run_one(cmd, cmd_rest, path, attach_stdin: false) }

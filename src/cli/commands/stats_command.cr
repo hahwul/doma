@@ -40,8 +40,7 @@ module Doma::CLI
       end
       parser.parse(args)
 
-      db = Doma::Database.open
-      begin
+      Doma::Database.open do |db|
         # When rolling up by prefix, ask the database for *all* tags
         # before we collapse — otherwise a `top_n` truncation could
         # silently drop a leaf that would have changed a parent's total.
@@ -64,8 +63,6 @@ module Doma::CLI
         end
 
         render_text(stats, rendered_top, group_prefix)
-      ensure
-        db.close
       end
     end
 

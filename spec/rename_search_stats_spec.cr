@@ -121,6 +121,78 @@ describe "Database#rename_tag" do
   end
 end
 
+describe "Database#move_path merge" do
+  it "carries a source TTL onto the destination instead of promoting it to permanent" do
+    # Pre-fix: the merge INSERT omitted `expires_at`, so moving a TTL'd
+    # tag onto an already-registered path silently made it permanent —
+    # diverging from rename_tag, which carried the expiry through.
+    with_temp_db do |db|
+      tmp_a = File.tempname("doma-mv-ttl-a")
+      tmp_b = File.tempname("doma-mv-ttl-b")
+      FileUtils.mkdir_p(tmp_a)
+      FileUtils.mkdir_p(tmp_b)
+      begin
+        future = Time.utc.to_unix + 7 * 86_400
+        db.add(tmp_a, ["scratch"], expires_at: future)
+        db.add(tmp_b, ["keep"]) # destination already registered → merge
+
+        db.move_path(tmp_a, tmp_b).should eq(:merged)
+
+        dest_id = db.directories.find! { |d| d.path == Doma::Validator.canonicalize(tmp_b) }.id
+        db.tag_expirations(dest_id)["scratch"].should be_close(future, 5)
+      ensure
+        FileUtils.rm_rf(tmp_a)
+        FileUtils.rm_rf(tmp_b)
+      end
+    end
+  end
+
+  it "keeps the more permissive lifetime when both sides carry the tag" do
+    with_temp_db do |db|
+      tmp_a = File.tempname("doma-mv-ttl-collide-a")
+      tmp_b = File.tempname("doma-mv-ttl-collide-b")
+      FileUtils.mkdir_p(tmp_a)
+      FileUtils.mkdir_p(tmp_b)
+      begin
+        far = Time.utc.to_unix + 14 * 86_400
+        near = Time.utc.to_unix + 1 * 86_400
+        db.add(tmp_a, ["shared"], expires_at: near)
+        db.add(tmp_b, ["shared"], expires_at: far)
+
+        db.move_path(tmp_a, tmp_b).should eq(:merged)
+
+        dest_id = db.directories.find! { |d| d.path == Doma::Validator.canonicalize(tmp_b) }.id
+        db.tag_expirations(dest_id)["shared"].should be_close(far, 5)
+      ensure
+        FileUtils.rm_rf(tmp_a)
+        FileUtils.rm_rf(tmp_b)
+      end
+    end
+  end
+
+  it "keeps NULL (permanent) when the destination tag has no TTL" do
+    with_temp_db do |db|
+      tmp_a = File.tempname("doma-mv-ttl-perm-a")
+      tmp_b = File.tempname("doma-mv-ttl-perm-b")
+      FileUtils.mkdir_p(tmp_a)
+      FileUtils.mkdir_p(tmp_b)
+      begin
+        near = Time.utc.to_unix + 1 * 86_400
+        db.add(tmp_a, ["shared"], expires_at: near) # TTL'd source
+        db.add(tmp_b, ["shared"])                   # permanent destination
+
+        db.move_path(tmp_a, tmp_b).should eq(:merged)
+
+        dest_id = db.directories.find! { |d| d.path == Doma::Validator.canonicalize(tmp_b) }.id
+        db.tag_expirations(dest_id).has_key?("shared").should be_false
+      ensure
+        FileUtils.rm_rf(tmp_a)
+        FileUtils.rm_rf(tmp_b)
+      end
+    end
+  end
+end
+
 describe "Database#search" do
   it "matches against path, basename, and tag name" do
     with_temp_db do |db|

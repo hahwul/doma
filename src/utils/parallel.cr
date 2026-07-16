@@ -22,6 +22,15 @@ module Doma
   module Parallel
     extend self
 
+    # Default concurrency for a sweep: one fiber per core, floored at 1 so
+    # a helper that reports 0 cores can never yield an empty pool (which
+    # would stall). Shared by `run --parallel` and `status`, both of which
+    # default `--jobs` to it. IO-bound sweeps (git fetch, npm install) will
+    # often want a different number — that's what `--jobs` overrides.
+    def default_jobs : Int32
+      {System.cpu_count.to_i, 1}.max
+    end
+
     # Runs `block` over every item with at most `jobs` concurrent fibers,
     # returning results in INPUT order regardless of which item finishes
     # first. Use when the caller renders or tallies *after* the whole

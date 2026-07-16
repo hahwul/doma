@@ -35,7 +35,13 @@ class Doma::Database
     # leaves it untouched). That makes the value stable for the
     # lifetime of the directory — once you cd via `crystal:abc1234`,
     # that handle keeps working until the row is removed.
-    short_id = Migrations.generate_short_id(@db)
+    #
+    # Generate on the *transaction's* connection, not the pool: a bulk
+    # import runs many `add_tx` calls in one transaction, and only `cnn`
+    # sees the short_ids inserted earlier in that same uncommitted
+    # transaction (a pooled SELECT under WAL would not — see
+    # `Migrations.generate_short_id`).
+    short_id = Migrations.generate_short_id(cnn)
     cnn.exec(
       "INSERT INTO directories (path, basename, short_id, created_at) VALUES (?, ?, ?, ?) " \
       "ON CONFLICT(path) DO UPDATE SET basename = excluded.basename",
@@ -160,12 +166,22 @@ class Doma::Database
 
       existing_id = cnn.query_one?("SELECT id FROM directories WHERE path = ?", new_abs, as: Int64)
       if existing_id
-        # Merge: copy any tags missing from the destination, then drop
-        # the source. INSERT OR IGNORE collapses duplicates so a tag
-        # present on both sides stays as one row.
+        # Merge: copy the source's tags onto the destination, then drop
+        # the source. Carry each association's `expires_at` so a TTL'd
+        # tag isn't silently promoted to permanent (and an already-lapsed
+        # one isn't resurrected as permanent — it keeps its past epoch and
+        # stays hidden). On a per-path collision (the destination already
+        # had the tag) keep the more permissive lifetime, matching
+        # `rename_tag`: NULL/permanent beats any TTL, otherwise the later
+        # epoch wins.
         cnn.exec(
-          "INSERT OR IGNORE INTO directory_tags (directory_id, tag_id) " \
-          "SELECT ?, tag_id FROM directory_tags WHERE directory_id = ?",
+          "INSERT INTO directory_tags (directory_id, tag_id, expires_at) " \
+          "SELECT ?, tag_id, expires_at FROM directory_tags WHERE directory_id = ? " \
+          "ON CONFLICT(directory_id, tag_id) DO UPDATE SET expires_at = " \
+          "  CASE " \
+          "    WHEN excluded.expires_at IS NULL OR directory_tags.expires_at IS NULL THEN NULL " \
+          "    ELSE MAX(excluded.expires_at, directory_tags.expires_at) " \
+          "  END",
           existing_id, old_id
         )
         cnn.exec("DELETE FROM directories WHERE id = ?", old_id)

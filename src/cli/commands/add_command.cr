@@ -24,19 +24,11 @@ module Doma::CLI
       parser = OptionParser.new do |p|
         p.banner = "Usage: doma add [<path> ...] [-t TAG ...] [--ttl DUR | --tmp] [--auto-tag] [--git-tag] [--dry-run] [--json]"
         p.on("-t TAG", "--tag=TAG", "Add a tag (repeatable, comma-separated allowed)") do |t|
-          # Reject `-t ''` (and `-t ','` etc that collapse to nothing) outright
-          # instead of letting it slide through the empty-string filter in
-          # `Validator.tags!`. Silent acceptance produces an "added (no tags)"
-          # line that looks like a successful tag write, which is misleading.
-          # Mirrors the check in `list`.
-          if t.strip.empty?
-            raise Doma::ValidationError.new("tag is empty (-t got an empty value)")
-          end
-          parts = t.split(',').map(&.strip).reject(&.empty?)
-          if parts.empty?
-            raise Doma::ValidationError.new("tag is empty (-t got an empty value)")
-          end
-          raw_tags << t
+          # Reject `-t ''`/`-t ','` up front rather than letting the empty
+          # string slide through `Validator.tags!` and print a misleading
+          # "added (no tags)". `split_tag_flag!` also pre-splits `-t a,b`,
+          # so the parts reach `tags!` already clean.
+          Doma::Validator.split_tag_flag!(t).each { |part| raw_tags << part }
         end
         # `--ttl DUR` and `--tmp` are mutually exclusive in spirit; if
         # both are passed the last one wins, which is the same lenient
@@ -92,38 +84,36 @@ module Doma::CLI
       if dry_run
         # Read-only DB just to check for short_id collisions in the
         # pre-validation hint. Same rationale as the non-dry-run branch.
-        preview_db = Doma::Database.open
-        results = [] of Hash(String, JSON::Any)
-        failures = process_each(positional, json_mode ? results : nil) do |path|
-          short_id_redirect_hint(preview_db, path)
-          abs = Doma::Validator.path!(path)
-          applied = Doma::Validator.tags!(raw_tags).dup
-          applied.concat(derive_tags(abs, use_basename, use_git, git_explicit))
-          applied.uniq!
-          summary = applied.empty? ? "(no tags)" : "tags: #{applied.join(", ")}"
-          summary += " (#{ttl_label})" if ttl_label
-          if json_mode
-            results << {
-              "input"     => JSON::Any.new(path),
-              "path"      => JSON::Any.new(abs),
-              "tags"      => JSON::Any.new(applied.map { |t| JSON::Any.new(t) }),
-              "dry_run"   => JSON::Any.new(true),
-              "unchanged" => JSON::Any.new(false),
-            }
-          else
-            Doma::Logger.info "[dry-run] would add #{abs} #{summary}"
+        failures = 0
+        Doma::Database.open do |preview_db|
+          results = [] of Hash(String, JSON::Any)
+          failures = process_each(positional, json_mode ? results : nil) do |path|
+            short_id_redirect_hint(preview_db, path)
+            abs = Doma::Validator.path!(path)
+            applied = Doma::Validator.tags!(raw_tags).dup
+            applied.concat(derive_tags(abs, use_basename, use_git, git_explicit))
+            applied.uniq!
+            summary = applied.empty? ? "(no tags)" : "tags: #{applied.join(", ")}"
+            summary += " (#{ttl_label})" if ttl_label
+            if json_mode
+              results << {
+                "input"     => JSON::Any.new(path),
+                "path"      => JSON::Any.new(abs),
+                "tags"      => JSON::Any.new(applied.map { |t| JSON::Any.new(t) }),
+                "dry_run"   => JSON::Any.new(true),
+                "unchanged" => JSON::Any.new(false),
+              }
+            else
+              Doma::Logger.info "[dry-run] would add #{abs} #{summary}"
+            end
           end
-        end
-        preview_db.close
-        if json_mode
-          puts results.to_json
+          puts results.to_json if json_mode
         end
         exit 2 if failures > 0
         return
       end
 
-      db = Doma::Database.open
-      begin
+      Doma::Database.open do |db|
         results = [] of Hash(String, JSON::Any)
         failures = process_each(positional, json_mode ? results : nil) do |path|
           # Catch the common "user pasted a `list` short_id into `add`"
@@ -199,8 +189,6 @@ module Doma::CLI
         # Successful paths are still committed — partial success is the
         # right default for batch add.
         exit 2 if failures > 0
-      ensure
-        db.close
       end
     end
 

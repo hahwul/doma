@@ -45,8 +45,7 @@ module Doma::CLI
         )
       end
 
-      db = Doma::Database.open
-      begin
+      Doma::Database.open do |db|
         tags = db.all_tags
         if json_mode
           puts tags.map { |t| {"name" => t.name, "count" => t.count} }.to_json
@@ -67,8 +66,6 @@ module Doma::CLI
         else
           tags.each { |t| puts "#{t.name}\t#{t.count}" }
         end
-      ensure
-        db.close
       end
     end
 

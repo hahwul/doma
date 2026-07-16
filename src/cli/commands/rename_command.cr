@@ -43,8 +43,7 @@ module Doma::CLI
       end
 
       old_name, new_name = positional[0], positional[1]
-      db = Doma::Database.open
-      begin
+      Doma::Database.open do |db|
         case db.rename_tag(old_name, new_name)
         when :noop
           Doma::Logger.info "no change (#{old_name} == #{new_name})"
@@ -53,8 +52,6 @@ module Doma::CLI
         when :merged
           Doma::Logger.success "merged #{old_name} into existing #{new_name}"
         end
-      ensure
-        db.close
       end
     end
   end

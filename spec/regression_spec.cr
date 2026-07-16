@@ -396,6 +396,48 @@ describe "Runner.apply_globals!" do
       Doma::Runtime.assume_yes = prev
     end
   end
+
+  it "[run separator] keeps global-looking flags after -- for the wrapped command" do
+    prev = Doma::Logger.quiet?
+    begin
+      Doma::Logger.quiet = false
+      # -q here belongs to git, not doma: `doma run repos -- git commit -q`.
+      args = ["run", "repos", "--", "git", "commit", "-q"]
+      Doma::CLI::Runner.apply_globals!(args)
+      args.should eq(["run", "repos", "--", "git", "commit", "-q"])
+      Doma::Logger.quiet?.should be_false
+    ensure
+      Doma::Logger.quiet = prev
+    end
+  end
+
+  it "[run separator] does not consume -y/--yes after --" do
+    prev = Doma::Runtime.assume_yes?
+    begin
+      Doma::Runtime.assume_yes = false
+      args = ["run", "all", "--", "terraform", "apply", "--yes"]
+      Doma::CLI::Runner.apply_globals!(args)
+      args.should eq(["run", "all", "--", "terraform", "apply", "--yes"])
+      Doma::Runtime.assume_yes?.should be_false
+    ensure
+      Doma::Runtime.assume_yes = prev
+    end
+  end
+
+  it "[run separator] strips globals before -- but preserves them after" do
+    prev = Doma::Logger.quiet?
+    begin
+      Doma::Logger.quiet = false
+      # Leading -q is doma's (stripped → quiet on); the -q inside the
+      # wrapped command is left alone.
+      args = ["-q", "run", "repos", "--", "sh", "-c", "echo -q"]
+      Doma::CLI::Runner.apply_globals!(args)
+      args.should eq(["run", "repos", "--", "sh", "-c", "echo -q"])
+      Doma::Logger.quiet?.should be_true
+    ensure
+      Doma::Logger.quiet = prev
+    end
+  end
 end
 
 describe "doma rm -t TAG exit code" do

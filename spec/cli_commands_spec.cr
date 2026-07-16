@@ -390,6 +390,21 @@ describe "doma run" do
     end
   end
 
+  it "[--dry-run] lists targets and the command without executing" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      # `false` would make a real run exit non-zero; a dry-run must not run
+      # it at all, so exit stays 0 and the command is only echoed.
+      r = run(["run", "shared", "--dry-run", "--", "false"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(0)
+      r[:err].should contain("[dry-run]")
+      r[:err].should contain("would run `false`")
+      # The two seeded target paths print to stdout, one per line.
+      r[:out].lines.count { |l| !l.strip.empty? }.should eq(2)
+    end
+  end
+
   it "[missing cmd] survives without hanging, reports 127" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     with_home do |home|
@@ -453,6 +468,19 @@ describe "doma run" do
       r = run(["run", "shared", "-t", "shared", "--", "echo"], {"DOMA_HOME" => home})
       r[:status].exit_code.should eq(2)
       r[:err].should contain("both positionally and via -t")
+    end
+  end
+
+  it "[multiple positional tags] errors instead of silently sweeping one" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      # `run work personal -- cmd` previously swept only `work`, silently
+      # dropping the rest — mirror `status`, which already rejects this.
+      r = run(["run", "shared", "extra", "--", "echo"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(2)
+      r[:err].should contain("run accepts a single tag")
+      r[:err].should contain("got 2 positional args")
     end
   end
 
@@ -1404,6 +1432,25 @@ describe "doma setup completion" do
     r[:status].exit_code.should eq(0)
     %w[prune info doctor].each do |cmd|
       r[:out].should contain("'#{cmd}:")
+    end
+  end
+
+  it "[zsh] lists the tui command in top_cmds (regression: tui was missing)" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    r = run(["setup", "completion", "zsh"])
+    r[:status].exit_code.should eq(0)
+    r[:out].should contain("'tui:")
+  end
+
+  it "[bash] surfaces flags that had drifted out of COMMAND_SPEC" do
+    # Regression: completion lagged the CLI — `tui`, `add --json`,
+    # `prune --hard`, `stats --group-by-prefix`, and `trash --json` all
+    # existed as real flags/commands but were absent from completion.
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    r = run(["setup", "completion", "bash"])
+    r[:status].exit_code.should eq(0)
+    %w[--json --hard --group-by-prefix].each do |flag|
+      r[:out].should contain(flag)
     end
   end
 

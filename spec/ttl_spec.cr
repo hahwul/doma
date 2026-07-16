@@ -262,6 +262,43 @@ describe "doma mark CLI alias" do
     end
   end
 
+  it "[--ttl] uses a custom lifetime instead of the 7d default" do
+    pending! "binary not built" unless File.exists?(bin)
+    home = File.tempname("doma-mark-ttl")
+    workdir = File.tempname("doma-mark-ttl-cwd")
+    FileUtils.mkdir_p(home)
+    FileUtils.mkdir_p(workdir)
+    begin
+      sink = IO::Memory.new
+      status = Process.run(
+        bin, ["mark", "spike", "--ttl", "4h"],
+        env: {"DOMA_HOME" => home}, chdir: workdir, output: sink, error: sink,
+      )
+      status.success?.should be_true
+
+      Doma::Database.open(File.join(home, "doma.db")).tap do |db|
+        exp = db.db.query_one?(
+          "SELECT dt.expires_at FROM directory_tags dt " \
+          "INNER JOIN tags t ON t.id = dt.tag_id " \
+          "WHERE t.name = ?",
+          "spike", as: Int64?
+        )
+        exp.should_not be_nil
+        if exp
+          # ~4h out, well short of the 7d (--tmp) default — proves the
+          # custom TTL was forwarded to `add` rather than falling to --tmp.
+          expected = Time.utc.to_unix + 4 * 3600
+          exp.should be_close(expected, 120)
+        end
+      ensure
+        db.close
+      end
+    ensure
+      FileUtils.rm_rf(home)
+      FileUtils.rm_rf(workdir)
+    end
+  end
+
   it "[ergonomics] accepts multiple tags as positional args" do
     pending! "binary not built" unless File.exists?(bin)
     home = File.tempname("doma-mark-2")

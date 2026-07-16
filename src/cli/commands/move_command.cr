@@ -49,8 +49,7 @@ module Doma::CLI
       end
 
       old_path, new_path = positional[0], positional[1]
-      db = Doma::Database.open
-      begin
+      Doma::Database.open do |db|
         # Pre-checks ordered to give actionable errors:
         #   (1) Is the source registered? — without this, an unregistered
         #       <old> with a non-existent <new> would surface "not a
@@ -100,8 +99,6 @@ module Doma::CLI
         when :merged
           Doma::Logger.success "merged #{old_abs} into existing #{new_abs}"
         end
-      ensure
-        db.close
       end
     end
   end

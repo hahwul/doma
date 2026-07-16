@@ -63,24 +63,19 @@ module Doma
     end
 
     # Generates a unique 7-hex short_id, retrying on the (rare) collision.
-    def self.generate_short_id(db : DB::Database) : String
+    #
+    # Accepts either a pooled `DB::Database` or a specific `DB::Connection`,
+    # both of which expose `#scalar`. Callers running inside a transaction
+    # (migration backfill, `add_tx`, and bulk `import`) MUST pass their
+    # transaction's connection: a `DB::Database`-level SELECT runs on a
+    # *different* pool connection which — under WAL — can't see rows
+    # inserted earlier in the same uncommitted transaction. Miss those
+    # in-flight ids and a bulk import can generate a duplicate that then
+    # trips the `short_id` UNIQUE index and rolls the whole import back.
+    def self.generate_short_id(db : DB::Database | DB::Connection) : String
       loop do
         candidate = Random.new.random_bytes(SHORT_ID_BYTES).hexstring[0, SHORT_ID_CHARS]
         existing = db.scalar(
-          "SELECT COUNT(*) FROM directories WHERE short_id = ?", candidate
-        ).as(Int64)
-        return candidate if existing == 0
-      end
-    end
-
-    # Connection-scoped variant used during migration backfill, where
-    # the surrounding `BEGIN IMMEDIATE` means a `DB::Database`-level
-    # SELECT on a different pool connection wouldn't see in-flight
-    # inserts.
-    private def self.generate_short_id(cnn : DB::Connection) : String
-      loop do
-        candidate = Random.new.random_bytes(SHORT_ID_BYTES).hexstring[0, SHORT_ID_CHARS]
-        existing = cnn.scalar(
           "SELECT COUNT(*) FROM directories WHERE short_id = ?", candidate
         ).as(Int64)
         return candidate if existing == 0

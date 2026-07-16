@@ -49,14 +49,9 @@ module Doma::CLI
         # tags AND together — i.e. only directories carrying every listed
         # tag survive the filter. Pre-fix this clobbered to last-wins.
         p.on("-t TAG", "--tag=TAG", "Filter by tag (repeatable; AND semantics)") do |t|
-          # Reject `-t ''`, `-t '   '`, and `-t ',,'` — anything that
-          # would collapse to an empty filter and silently match every
-          # path. Mirrors the add/rm/mark/run validation.
-          parts = t.split(',').map(&.strip).reject(&.empty?)
-          if parts.empty?
-            raise Doma::ValidationError.new("tag is empty (-t got an empty value)")
-          end
-          parts.each { |x| tags << x }
+          # Reject `-t ''`, `-t '   '`, `-t ',,'` — anything that would
+          # collapse to an empty filter and silently match every path.
+          Doma::Validator.split_tag_flag!(t).each { |x| tags << x }
         end
         p.on("--by SORT", "Sort by 'path' (default), 'recent' ('used'/'recency'), or 'tag' (group)") do |val|
           case val
@@ -135,8 +130,7 @@ module Doma::CLI
         raise Doma::ValidationError.new("--first/--builtin require --pick")
       end
 
-      db = Doma::Database.open
-      begin
+      Doma::Database.open do |db|
         entries = collect(db, tags, query, sort, include_expired)
 
         if pick_mode
@@ -166,8 +160,6 @@ module Doma::CLI
         end
 
         emit_text(db, entries, ttl_by_id, group_by_tag, check_existence, include_expired)
-      ensure
-        db.close
       end
     end
 
@@ -435,12 +427,9 @@ module Doma::CLI
 
     # Trim entries the SQL GLOB matched but our stricter rules would
     # reject (single `*` shouldn't cross `/`, etc.). No-op for plain tag
-    # names — `TagGlob.match?` short-circuits to `==` there, but we skip
-    # the per-entry loop entirely as a small optimization for the
-    # common case.
+    # names, where `TagGlob.filter` skips the per-entry loop entirely.
     private def strict_filter(entries : Array(Doma::Entry), pattern : String) : Array(Doma::Entry)
-      return entries unless pattern.includes?('*') || pattern.includes?('?')
-      entries.select { |e| e.tags.any? { |t| Doma::TagGlob.match?(pattern, t) } }
+      Doma::TagGlob.filter(entries, pattern, &.tags)
     end
 
     # Id set for a tag used purely as an intersection filter (the second,
@@ -452,7 +441,7 @@ module Doma::CLI
     # match in Crystal. Worth re-investigating only if globbing in rest
     # position becomes a hot path.
     private def rest_tag_ids(db : Doma::Database, pattern : String, include_expired : Bool) : Set(Int64)
-      if pattern.includes?('*') || pattern.includes?('?')
+      if Doma::TagGlob.pattern?(pattern)
         strict_filter(db.directories(pattern, include_expired: include_expired), pattern).map(&.id).to_set
       else
         db.directory_ids_for_tag(pattern, include_expired: include_expired).to_set
@@ -540,7 +529,7 @@ module Doma::CLI
       catalog = db.tag_names
       known = catalog.to_set
       tags.each do |t|
-        next if t.includes?('*') || t.includes?('?')
+        next if Doma::TagGlob.pattern?(t)
         next if known.includes?(t)
         if hint = Doma::Suggester.tag_hint_for(t, catalog)
           return hint

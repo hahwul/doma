@@ -35,7 +35,12 @@ module Doma
       Replace
     end
 
-    def from_file(db : Doma::Database, path : String, *, mode : Mode = Mode::Merge) : Result
+    # Raised at the end of a dry-run's transaction to force a rollback once
+    # the added/updated/skipped tallies are in. Never escapes `apply`.
+    private class DryRunRollback < Exception
+    end
+
+    def from_file(db : Doma::Database, path : String, *, mode : Mode = Mode::Merge, dry_run : Bool = false) : Result
       raise ImportError.new("import file not found: #{path}") unless File.file?(path)
       content = begin
         File.read(path)
@@ -46,7 +51,7 @@ module Doma
       end
       raise ImportError.new("import file is empty: #{path}") if content.strip.empty?
       snapshot = parse(content, path)
-      apply(db, snapshot, mode)
+      apply(db, snapshot, mode, dry_run)
     end
 
     def parse(content : String, source : String? = nil) : Snapshot
@@ -88,7 +93,7 @@ module Doma
       stripped.starts_with?('{') || stripped.starts_with?('[') ? Format::Json : Format::Yaml
     end
 
-    private def apply(db : Doma::Database, snapshot : Snapshot, mode : Mode) : Result
+    private def apply(db : Doma::Database, snapshot : Snapshot, mode : Mode, dry_run : Bool = false) : Result
       if snapshot.version > Snapshot::SCHEMA_VERSION
         raise ImportError.new(
           "snapshot schema v#{snapshot.version} is newer than supported v#{Snapshot::SCHEMA_VERSION}"
@@ -102,53 +107,65 @@ module Doma
 
       # Single transaction for the whole import — clear + every add — so
       # `--replace` can't half-wipe the database when a later entry fails.
-      db.transaction do |cnn|
-        db.clear_tx(cnn) if mode == Mode::Replace
+      # On a dry-run the very same work runs, then a sentinel raise rolls
+      # it all back so the reported tallies are exact without writing a
+      # single row.
+      begin
+        db.transaction do |cnn|
+          db.clear_tx(cnn) if mode == Mode::Replace
 
-        snapshot.entries.each do |entry|
-          # Classify before writing: was this canonical path already a
-          # row? The check runs on the transaction's own connection so a
-          # path that appears twice in one snapshot counts as added once,
-          # then updated. `add_tx` canonicalizes identically (it uses
-          # `Validator.canonicalize` when `validate_path` is false), so
-          # this lookup matches the row add_tx will touch.
-          abs = Doma::Validator.canonicalize(entry.path)
-          existed = !cnn.query_one?(
-            "SELECT 1 FROM directories WHERE path = ?", abs, as: Int32
-          ).nil?
+          snapshot.entries.each do |entry|
+            # Classify before writing: was this canonical path already a
+            # row? The check runs on the transaction's own connection so a
+            # path that appears twice in one snapshot counts as added once,
+            # then updated. `add_tx` canonicalizes identically (it uses
+            # `Validator.canonicalize` when `validate_path` is false), so
+            # this lookup matches the row add_tx will touch.
+            abs = Doma::Validator.canonicalize(entry.path)
+            existed = !cnn.query_one?(
+              "SELECT 1 FROM directories WHERE path = ?", abs, as: Int32
+            ).nil?
 
-          # Skip path validation: importing across machines is normal,
-          # and the snapshot may legitimately reference paths that don't
-          # exist on this host yet.
-          #
-          # `add_tx` applies a single `expires_at` to every tag in the
-          # call, so when the snapshot carries per-tag TTLs (v2+) we
-          # group tags by their expiry and dispatch one call per
-          # group. v1 snapshots have no `expirations` map → one call,
-          # all permanent, which matches the old behavior.
-          #
-          # An entry with an empty `tags` array is still a valid row —
-          # the user explicitly registered a path with no tags. Dispatch
-          # one zero-tag `add_tx` so the directory row gets created;
-          # without this the importer would silently increment the
-          # `imported` counter while leaving the database unchanged.
-          if entry.tags.empty?
-            db.add_tx(cnn, entry.path, entry.tags, validate_path: false)
-          else
-            ttl_map = entry.expirations || EMPTY_TTL_MAP
-            grouped = Hash(Int64?, Array(String)).new { |h, k| h[k] = [] of String }
-            entry.tags.each do |t|
-              grouped[ttl_map[t]?] << t
+            # Skip path validation: importing across machines is normal,
+            # and the snapshot may legitimately reference paths that don't
+            # exist on this host yet.
+            #
+            # `add_tx` applies a single `expires_at` to every tag in the
+            # call, so when the snapshot carries per-tag TTLs (v2+) we
+            # group tags by their expiry and dispatch one call per
+            # group. v1 snapshots have no `expirations` map → one call,
+            # all permanent, which matches the old behavior.
+            #
+            # An entry with an empty `tags` array is still a valid row —
+            # the user explicitly registered a path with no tags. Dispatch
+            # one zero-tag `add_tx` so the directory row gets created;
+            # without this the importer would silently increment the
+            # `imported` counter while leaving the database unchanged.
+            if entry.tags.empty?
+              db.add_tx(cnn, entry.path, entry.tags, validate_path: false)
+            else
+              ttl_map = entry.expirations || EMPTY_TTL_MAP
+              grouped = Hash(Int64?, Array(String)).new { |h, k| h[k] = [] of String }
+              entry.tags.each do |t|
+                grouped[ttl_map[t]?] << t
+              end
+              grouped.each do |ttl, tag_group|
+                db.add_tx(cnn, entry.path, tag_group, validate_path: false, expires_at: ttl)
+              end
             end
-            grouped.each do |ttl, tag_group|
-              db.add_tx(cnn, entry.path, tag_group, validate_path: false, expires_at: ttl)
-            end
+            existed ? (updated += 1) : (added += 1)
+          rescue ex : Doma::ValidationError
+            skipped += 1
+            skipped_messages << "import: skipped #{entry.path} (#{ex.message})"
           end
-          existed ? (updated += 1) : (added += 1)
-        rescue ex : Doma::ValidationError
-          skipped += 1
-          skipped_messages << "import: skipped #{entry.path} (#{ex.message})"
+
+          # Discard the whole transaction for a preview — every tally above
+          # is already final, so a rollback yields exact counts and zero
+          # writes.
+          raise DryRunRollback.new if dry_run
         end
+      rescue DryRunRollback
+        # Intentional: the dry-run's writes are thrown away; counts stand.
       end
 
       # Defer warnings until after the commit so they don't appear ahead of

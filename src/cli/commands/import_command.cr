@@ -11,10 +11,11 @@ module Doma::CLI
     def run(args : Array(String))
       explicit_mode : Doma::Importer::Mode? = nil
       assume_yes = false
+      dry_run = false
       positional = [] of String
 
       parser = OptionParser.new do |p|
-        p.banner = "Usage: doma import <file> [--merge | --replace] [--yes]"
+        p.banner = "Usage: doma import <file> [--merge | --replace] [--dry-run] [--yes]"
         # Track each flag explicitly so passing both produces a hard
         # error instead of silently letting the second one win.
         p.on("--merge", "Add to existing data (default)") do
@@ -30,6 +31,7 @@ module Doma::CLI
           explicit_mode = Doma::Importer::Mode::Replace
         end
         p.on("-y", "--yes", "Skip the --replace confirmation prompt") { assume_yes = true }
+        p.on("-n", "--dry-run", "Report what would be imported without writing anything") { dry_run = true }
         p.on("-h", "--help", "Show help") do
           puts p
           exit 0
@@ -49,17 +51,25 @@ module Doma::CLI
       # convinces the compiler we're handing `from_file` a plain Mode.
       mode = explicit_mode.nil? ? Doma::Importer::Mode::Merge : explicit_mode.as(Doma::Importer::Mode)
 
-      if mode == Doma::Importer::Mode::Replace && !assume_yes && !Doma::Runtime.assume_yes?
+      # A dry-run writes nothing, so the destructive `--replace` prompt
+      # would be a lie — skip it and let the preview run freely.
+      if mode == Doma::Importer::Mode::Replace && !dry_run && !assume_yes && !Doma::Runtime.assume_yes?
         unless confirm_replace
           Doma::Logger.warn "aborted"
           exit 1
         end
       end
 
-      db = Doma::Database.open
-      begin
-        result = Doma::Importer.from_file(db, file, mode: mode)
-        if result.replaced
+      Doma::Database.open do |db|
+        result = Doma::Importer.from_file(db, file, mode: mode, dry_run: dry_run)
+        if dry_run
+          verb = mode == Doma::Importer::Mode::Replace ? "replace" : "merge"
+          Doma::Logger.info(
+            "[dry-run] would #{verb}: #{result.imported} imported " \
+            "(#{result.added} new, #{result.updated} existing), " \
+            "#{result.skipped} skipped — nothing written"
+          )
+        elsif result.replaced
           # After a wipe every applied entry is new, so the breakdown
           # would just restate the total — keep the terse form.
           Doma::Logger.success "import replaced: #{result.imported} imported, #{result.skipped} skipped"
@@ -71,8 +81,6 @@ module Doma::CLI
             "(#{result.added} new, #{result.updated} existing), #{result.skipped} skipped"
           )
         end
-      ensure
-        db.close
       end
     end
 
