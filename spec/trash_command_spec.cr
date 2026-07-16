@@ -135,6 +135,42 @@ describe "doma trash" do
     end
   end
 
+  it "[restore, no id] undoes the most recent deletion" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      first = File.tempname("doma-undo-1")
+      second = File.tempname("doma-undo-2")
+      FileUtils.mkdir_p(first)
+      FileUtils.mkdir_p(second)
+      begin
+        run(["add", first, "-t", "older"], {"DOMA_HOME" => home})
+        run(["add", second, "-t", "newer"], {"DOMA_HOME" => home})
+        run(["rm", first], {"DOMA_HOME" => home})
+        run(["rm", second], {"DOMA_HOME" => home}) # newest deletion
+
+        r = run(["trash", "restore"], {"DOMA_HOME" => home})
+        r[:status].exit_code.should eq(0)
+        r[:out].should contain("restored")
+
+        # Only the newest (`second`) comes back; `first` stays in trash.
+        run(["list", "-t", "newer", "--paths"], {"DOMA_HOME" => home})[:out].strip.should_not be_empty
+        run(["list", "-t", "older", "--paths"], {"DOMA_HOME" => home})[:out].strip.should be_empty
+      ensure
+        FileUtils.rm_rf(first)
+        FileUtils.rm_rf(second)
+      end
+    end
+  end
+
+  it "[restore, no id, empty trash] errors cleanly" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      r = run(["trash", "restore"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should_not eq(0)
+      r[:err].should contain("trash is empty")
+    end
+  end
+
   it "[restore prefix] resolves a unique short_id prefix" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     with_home do |home|

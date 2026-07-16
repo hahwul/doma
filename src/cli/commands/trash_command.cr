@@ -40,7 +40,7 @@ module Doma::CLI
       puts ""
       puts "Actions:"
       puts "  list [--json]          What's recoverable (newest first); --json for machine-readable"
-      puts "  restore <short_id>     Bring an entry back (use --merge for collisions)"
+      puts "  restore [<short_id>]   Bring an entry back — newest if no id given (--merge for collisions)"
       puts "  empty [--json]         Purge everything in the trash"
       puts "  empty --older DUR      Purge only entries deleted before DUR ago"
       puts ""
@@ -97,7 +97,7 @@ module Doma::CLI
       merge = false
       positional = [] of String
       OptionParser.parse(args) do |p|
-        p.banner = "Usage: doma trash restore <short_id> [--merge]"
+        p.banner = "Usage: doma trash restore [<short_id>] [--merge]   (no id → restore the newest)"
         p.on("--merge", "Merge tags if the path is already registered") { merge = true }
         p.on("-h", "--help", "Show help") do
           puts p
@@ -109,20 +109,28 @@ module Doma::CLI
         end
       end
 
-      if positional.empty?
-        raise Doma::ValidationError.new("short_id is required",
-          "Usage: doma trash restore <short_id> [--merge]")
-      end
-
-      prefix = positional.first.downcase
-      unless prefix.matches?(/\A[0-9a-f]+\z/)
-        raise Doma::ValidationError.new("short_id must be hex: '#{positional.first}'")
-      end
-
-      entry = Doma::Trash.find_by_short_id(prefix)
-      unless entry
-        raise Doma::NotFoundError.new("no trash entry matching '#{prefix}'")
-      end
+      entry =
+        if positional.empty?
+          # Bare `doma trash restore` = undo the most recent deletion,
+          # the overwhelmingly common "I just rm'd the wrong thing" case
+          # (no need to `trash list`, copy a hex id, and retype it).
+          # entries() is newest-first, so the head is the last thing rm'd.
+          newest = Doma::Trash.entries.first?
+          unless newest
+            raise Doma::NotFoundError.new("trash is empty — nothing to restore")
+          end
+          newest
+        else
+          prefix = positional.first.downcase
+          unless prefix.matches?(/\A[0-9a-f]+\z/)
+            raise Doma::ValidationError.new("short_id must be hex: '#{positional.first}'")
+          end
+          found = Doma::Trash.find_by_short_id(prefix)
+          unless found
+            raise Doma::NotFoundError.new("no trash entry matching '#{prefix}'")
+          end
+          found
+        end
 
       db = Doma::Database.open
       begin

@@ -24,13 +24,14 @@ module Doma::CLI
       stop_on_fail = false
       parallel = false
       no_header = false
+      dry_run = false
       jobs : Int32? = nil
       flag_tags = [] of String
       positional_tags = [] of String
       cmd_args = [] of String
 
       parser = OptionParser.new do |p|
-        p.banner = "Usage: doma run (<tag> | -t TAG) [--fail-fast] [--parallel [--jobs N]] [--no-header] -- <cmd> [args...]"
+        p.banner = "Usage: doma run (<tag> | -t TAG) [--fail-fast] [--parallel [--jobs N]] [--no-header] [--dry-run] -- <cmd> [args...]"
         p.on("-t TAG", "--tag=TAG", "Tag selector — single tag, no comma split (alias for positional)") do |t|
           if t.strip.empty?
             raise Doma::ValidationError.new("tag is empty (-t got an empty value)")
@@ -47,6 +48,7 @@ module Doma::CLI
           jobs = parsed
         end
         p.on("--no-header", "Suppress per-directory ▶/✓ markers (failures still surface as ✗)") { no_header = true }
+        p.on("-n", "--dry-run", "Print the target directories and command without running anything") { dry_run = true }
         p.on("-h", "--help", "Show help") do
           puts p
           STDOUT.puts ""
@@ -137,6 +139,23 @@ module Doma::CLI
           "no directories tagged '#{tag}'",
           hint: Doma::Suggester.tag_hint_for(tag, all_tags)
         )
+      end
+
+      # Preview mode: `run <tag> -- <cmd>` fires immediately in every match,
+      # so give users a way to *see* the target set (and confirm the glob
+      # resolved as intended) before committing to a destructive sweep. The
+      # target paths go to stdout, one per line, so a dry-run composes with
+      # the rest of the shell exactly like `list --paths`.
+      if dry_run
+        # Summary on STDERR so STDOUT stays pure paths (pipeable like
+        # `list --paths`); mirrors where `run` prints its ▶/✓ chrome.
+        # Suppressed under -q, which asks for just the machine-readable set.
+        unless Doma::Logger.quiet?
+          noun = paths.size == 1 ? "directory" : "directories"
+          STDERR.puts "[dry-run] would run `#{cmd_args.join(" ")}` in #{paths.size} #{noun} tagged '#{tag}'"
+        end
+        paths.each { |path| puts path }
+        return
       end
 
       cmd = cmd_args.first

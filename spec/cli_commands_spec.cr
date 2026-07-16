@@ -390,6 +390,21 @@ describe "doma run" do
     end
   end
 
+  it "[--dry-run] lists targets and the command without executing" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      # `false` would make a real run exit non-zero; a dry-run must not run
+      # it at all, so exit stays 0 and the command is only echoed.
+      r = run(["run", "shared", "--dry-run", "--", "false"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(0)
+      r[:err].should contain("[dry-run]")
+      r[:err].should contain("would run `false`")
+      # The two seeded target paths print to stdout, one per line.
+      r[:out].lines.count { |l| !l.strip.empty? }.should eq(2)
+    end
+  end
+
   it "[missing cmd] survives without hanging, reports 127" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     with_home do |home|

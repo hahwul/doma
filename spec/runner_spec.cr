@@ -123,6 +123,15 @@ describe "Runner dispatch" do
     r[:out].should contain("tui")
   end
 
+  it "[help banner] documents the DOMA_* environment variables" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    r = run(["--help"])
+    r[:out].should contain("Environment:")
+    %w[DOMA_HOME DOMA_DB DOMA_CONFIG DOMA_YES DOMA_NO_TUI].each do |var|
+      r[:out].should contain(var)
+    end
+  end
+
   it "[doma cd in binary] points at the shell wrapper" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     # Calling `doma cd` against the bare binary (no shell wrapper) must

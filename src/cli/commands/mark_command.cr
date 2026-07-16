@@ -16,11 +16,15 @@ module Doma::CLI
     def run(args : Array(String))
       tags = [] of String
       target_path : String? = nil
+      ttl : String? = nil
 
       parser = OptionParser.new do |p|
-        p.banner = "Usage: doma mark [-p PATH] (<tag> [<tag> ...] | -t TAG [-t TAG ...])"
+        p.banner = "Usage: doma mark [-p PATH] [--ttl DUR] (<tag> [<tag> ...] | -t TAG [-t TAG ...])"
         p.on("-p PATH", "--path=PATH", "Mark this path instead of the current directory") do |v|
           target_path = v
+        end
+        p.on("--ttl DUR", "Expire after DUR (e.g. 30m, 1h, 2w) instead of the 7d default") do |v|
+          ttl = v
         end
         p.on("-t TAG", "--tag=TAG", "Add this tag (alias for positional; repeatable, comma-separated allowed)") do |t|
           if t.strip.empty?
@@ -36,14 +40,14 @@ module Doma::CLI
           puts p
           STDOUT.puts ""
           STDOUT.puts "Marks a directory with one or more temporary tags."
-          STDOUT.puts "Each tag expires after 7 days. Equivalent to:"
+          STDOUT.puts "Each tag expires after 7 days by default. Equivalent to:"
           STDOUT.puts "    doma add <path> -t TAG ... --tmp"
           STDOUT.puts ""
           STDOUT.puts "Tags can be passed positionally (`mark work personal`)"
           STDOUT.puts "or via `-t TAG` (`mark -t work -t personal`); both forms"
           STDOUT.puts "may be mixed. Defaults to the current directory; pass"
-          STDOUT.puts "-p PATH to mark elsewhere. For a custom TTL, use"
-          STDOUT.puts "`doma add --ttl`."
+          STDOUT.puts "-p PATH to mark elsewhere. Pass --ttl DUR for a custom"
+          STDOUT.puts "lifetime (`mark spike --ttl 4h`) instead of the 7d default."
           exit 0
         end
         p.unknown_args do |before, after|
@@ -64,7 +68,16 @@ module Doma::CLI
       # propagates; Crystal won't infer non-nil from `target_path || "."`
       # when the source ivar is nilable.
       path = target_path
-      forwarded = [path.nil? ? "." : path, "--tmp"]
+      forwarded = [path.nil? ? "." : path]
+      # `--ttl DUR` overrides the 7d default; forward it verbatim so
+      # `add` owns the duration grammar and validation (a bad `--ttl xyz`
+      # surfaces the same error it would on `doma add`). Absent it, keep
+      # the historical `--tmp` (7-day) shortcut.
+      if dur = ttl
+        forwarded << "--ttl" << dur
+      else
+        forwarded << "--tmp"
+      end
       tags.each { |t| forwarded << "-t" << t }
       AddCommand.new.run(forwarded)
     end
