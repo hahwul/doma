@@ -49,8 +49,7 @@ module Doma::CLI
     end
 
     private def run_gone(hard : Bool)
-      db = Doma::Database.open
-      begin
+      Doma::Database.open do |db|
         # List first so the user sees what was removed; reporting the
         # count alone leaves them guessing whether anything important
         # got swept up.
@@ -94,14 +93,11 @@ module Doma::CLI
           "trashed #{removed} missing path(s) " \
           "(restore with `doma trash restore #{sample_ids}#{more}`)"
         )
-      ensure
-        db.close
       end
     end
 
     private def run_expired
-      db = Doma::Database.open
-      begin
+      Doma::Database.open do |db|
         removed = db.prune_expired!
         if removed.empty?
           Doma::Logger.info "no expired tags to prune"
@@ -112,8 +108,6 @@ module Doma::CLI
           removed.each { |r| Doma::Logger.info "  #{r.path}\t##{r.tag}" }
           Doma::Logger.success "pruned #{removed.size} expired tag association(s)"
         end
-      ensure
-        db.close
       end
     end
   end

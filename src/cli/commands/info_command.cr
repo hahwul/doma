@@ -39,8 +39,7 @@ module Doma::CLI
 
       raw = positional.first? || "."
 
-      db = Doma::Database.open
-      begin
+      Doma::Database.open do |db|
         # Three input shapes, resolution order:
         #   1. short_id-shaped (hex, no path separators) → resolve via
         #      ShortIdResolver (also checks trash for a restore hint).
@@ -111,8 +110,6 @@ module Doma::CLI
         else
           render_text(info, tags, ttl_map, exists, raw)
         end
-      ensure
-        db.close
       end
     end
 

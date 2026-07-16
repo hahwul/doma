@@ -85,11 +85,8 @@ module Doma::CLI
         )
       end
 
-      db = Doma::Database.open
-      entries, all_tags = begin
+      entries, all_tags = Doma::Database.open do |db|
         {resolve_entries(db, tag), db.tag_names}
-      ensure
-        db.close
       end
 
       if entries.empty?

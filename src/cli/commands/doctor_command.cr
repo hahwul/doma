@@ -81,23 +81,21 @@ module Doma::CLI
 
       kv "size", human_size(File.size(path))
 
-      db : Doma::Database? = nil
       begin
-        db = Doma::Database.open(path)
-        stats = db.stats(top_n: 0, recent_n: 0)
-        kv "directories", stats.total_directories.to_s
-        kv "tags", stats.total_tags.to_s
-        missing = db.dead_paths.size
-        if missing > 0
-          kv "missing on disk", "#{missing} (run `doma prune --gone` to clean up)"
+        Doma::Database.open(path) do |db|
+          stats = db.stats(top_n: 0, recent_n: 0)
+          kv "directories", stats.total_directories.to_s
+          kv "tags", stats.total_tags.to_s
+          missing = db.dead_paths.size
+          if missing > 0
+            kv "missing on disk", "#{missing} (run `doma prune --gone` to clean up)"
+          end
+          user_version = db.db.scalar("PRAGMA user_version").as(Int64).to_i
+          kv "schema", "v#{user_version}"
         end
-        user_version = db.db.scalar("PRAGMA user_version").as(Int64).to_i
-        kv "schema", "v#{user_version}"
       rescue ex
         message = ex.message.presence || ex.class.name
         kv "status", "READ ERROR — #{message}"
-      ensure
-        db.try(&.close)
       end
     end
 

@@ -35,8 +35,7 @@ module Doma::CLI
         )
       end
 
-      db = Doma::Database.open
-      begin
+      Doma::Database.open do |db|
         if raw = output
           path = Doma::Validator.canonicalize(raw)
           validate_output_path!(path)
@@ -45,8 +44,6 @@ module Doma::CLI
         else
           Doma::Exporter.write(db, format, STDOUT)
         end
-      ensure
-        db.close
       end
     end
 

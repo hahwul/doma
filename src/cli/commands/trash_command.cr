@@ -132,13 +132,10 @@ module Doma::CLI
           found
         end
 
-      db = Doma::Database.open
-      begin
+      Doma::Database.open do |db|
         Doma::Trash.restore!(db, entry, merge: merge)
         suffix = merge ? " (merged into existing row)" : ""
         Doma::Logger.success "restored #{entry.path}#{suffix}"
-      ensure
-        db.close
       end
     end
 

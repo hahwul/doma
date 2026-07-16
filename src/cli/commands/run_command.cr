@@ -108,8 +108,7 @@ module Doma::CLI
       raise Doma::ValidationError.new("tag is required") if tag_args.empty?
 
       tag = tag_args.first
-      db = Doma::Database.open
-      paths, all_tags = begin
+      paths, all_tags = Doma::Database.open do |db|
         # Use `directories(tag)` (returns Entry rows with their tag list)
         # rather than `paths_for_tag` so we can post-filter against the
         # strict glob rules. SQL GLOB treats `*` as crossing `/`; we
@@ -118,8 +117,6 @@ module Doma::CLI
         entries = db.directories(tag, sort: Doma::Database::SortBy::Recent)
         entries = Doma::TagGlob.filter(entries, tag, &.tags)
         {entries.map(&.path).uniq!, db.tag_names}
-      ensure
-        db.close
       end
 
       if paths.empty?

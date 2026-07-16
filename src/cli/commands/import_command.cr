@@ -60,8 +60,7 @@ module Doma::CLI
         end
       end
 
-      db = Doma::Database.open
-      begin
+      Doma::Database.open do |db|
         result = Doma::Importer.from_file(db, file, mode: mode, dry_run: dry_run)
         if dry_run
           verb = mode == Doma::Importer::Mode::Replace ? "replace" : "merge"
@@ -82,8 +81,6 @@ module Doma::CLI
             "(#{result.added} new, #{result.updated} existing), #{result.skipped} skipped"
           )
         end
-      ensure
-        db.close
       end
     end
 

@@ -130,8 +130,7 @@ module Doma::CLI
         raise Doma::ValidationError.new("--first/--builtin require --pick")
       end
 
-      db = Doma::Database.open
-      begin
+      Doma::Database.open do |db|
         entries = collect(db, tags, query, sort, include_expired)
 
         if pick_mode
@@ -161,8 +160,6 @@ module Doma::CLI
         end
 
         emit_text(db, entries, ttl_by_id, group_by_tag, check_existence, include_expired)
-      ensure
-        db.close
       end
     end
 

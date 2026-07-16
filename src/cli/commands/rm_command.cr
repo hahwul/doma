@@ -39,9 +39,8 @@ module Doma::CLI
       # rows). Mirrors `add_command`'s validation step.
       cleaned_tags = tags.empty? ? tags : Doma::Validator.tags!(tags)
 
-      db = Doma::Database.open
       missing = 0
-      begin
+      Doma::Database.open do |db|
         positional.each do |raw|
           # Accept the same `list`-printed short_id that `cd` does. Only
           # falls back when the token isn't shaped like a path (no `/`,
@@ -92,8 +91,6 @@ module Doma::CLI
             end
           end
         end
-      ensure
-        db.close
       end
       # NotFoundError exit code (3) — matches `doma info <unknown>` and
       # makes `doma rm <unknown> && next` fail loudly. Successful removes
