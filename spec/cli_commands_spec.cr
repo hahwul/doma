@@ -456,6 +456,19 @@ describe "doma run" do
     end
   end
 
+  it "[multiple positional tags] errors instead of silently sweeping one" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      # `run work personal -- cmd` previously swept only `work`, silently
+      # dropping the rest — mirror `status`, which already rejects this.
+      r = run(["run", "shared", "extra", "--", "echo"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(2)
+      r[:err].should contain("run accepts a single tag")
+      r[:err].should contain("got 2 positional args")
+    end
+  end
+
   it "[-t TAG cmd...] (forgot --) surfaces missing-`--` not double-tag" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     with_home do |home|
@@ -1404,6 +1417,25 @@ describe "doma setup completion" do
     r[:status].exit_code.should eq(0)
     %w[prune info doctor].each do |cmd|
       r[:out].should contain("'#{cmd}:")
+    end
+  end
+
+  it "[zsh] lists the tui command in top_cmds (regression: tui was missing)" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    r = run(["setup", "completion", "zsh"])
+    r[:status].exit_code.should eq(0)
+    r[:out].should contain("'tui:")
+  end
+
+  it "[bash] surfaces flags that had drifted out of COMMAND_SPEC" do
+    # Regression: completion lagged the CLI — `tui`, `add --json`,
+    # `prune --hard`, `stats --group-by-prefix`, and `trash --json` all
+    # existed as real flags/commands but were absent from completion.
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    r = run(["setup", "completion", "bash"])
+    r[:status].exit_code.should eq(0)
+    %w[--json --hard --group-by-prefix].each do |flag|
+      r[:out].should contain(flag)
     end
   end
 

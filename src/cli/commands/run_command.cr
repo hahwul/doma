@@ -99,6 +99,16 @@ module Doma::CLI
           "run accepts a single tag; got #{flag_tags.size} via -t"
         )
       end
+      # Extra positional tags were previously dropped silently — `run work
+      # personal -- cmd` swept only `work` while the user believed both
+      # sets ran. Reject it the way `status` already does, and point at the
+      # glob form for sweeping several tags at once.
+      if positional_tags.size > 1
+        raise Doma::ValidationError.new(
+          "run accepts a single tag; got #{positional_tags.size} positional args",
+          hint: "use a glob like 'work*' to sweep several tags in one run"
+        )
+      end
       tag_args = flag_tags.empty? ? positional_tags : flag_tags
 
       raise Doma::ValidationError.new("tag is required") if tag_args.empty?

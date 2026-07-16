@@ -154,27 +154,42 @@ module Doma
       # Strip global flags from argv in-place and apply them to the Logger.
       # Called before the subcommand sees the args so commands don't need
       # to whitelist `-q` etc. in their own OptionParsers.
+      #
+      # Global flags are honored only *before* a `--` separator. Everything
+      # from the first `--` onward is the wrapped command for
+      # `doma run <tag> -- <cmd> …` and must pass through verbatim —
+      # otherwise `doma run repos -- git commit -q` would strip `-q` from
+      # git *and* silently flip doma into quiet mode. Commands without a
+      # `--` scan their whole argv, exactly as before.
       def self.apply_globals!(argv : Array(String))
-        argv.reject! do |arg|
-          case arg
-          when "-q", "--quiet"
-            Doma::Logger.quiet = true
-            true
-          when "-v", "--verbose", "--debug"
-            Doma::Logger.debug = true
-            true
-          when "--no-color"
-            Doma::Logger.no_color = true
-            true
-          when "--color"
-            Doma::Logger.no_color = false
-            true
-          when "-y", "--yes"
-            Doma::Runtime.assume_yes = true
-            true
-          else
-            false
-          end
+        limit = argv.index("--") || argv.size
+        kept = Array(String).new(argv.size)
+        argv.each_with_index do |arg, i|
+          next if i < limit && consume_global?(arg)
+          kept << arg
+        end
+        argv.replace(kept)
+      end
+
+      private def self.consume_global?(arg : String) : Bool
+        case arg
+        when "-q", "--quiet"
+          Doma::Logger.quiet = true
+          true
+        when "-v", "--verbose", "--debug"
+          Doma::Logger.debug = true
+          true
+        when "--no-color"
+          Doma::Logger.no_color = true
+          true
+        when "--color"
+          Doma::Logger.no_color = false
+          true
+        when "-y", "--yes"
+          Doma::Runtime.assume_yes = true
+          true
+        else
+          false
         end
       end
 

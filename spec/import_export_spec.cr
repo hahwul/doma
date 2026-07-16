@@ -65,6 +65,31 @@ describe "Import/Export" do
     end
   end
 
+  it "assigns a distinct short_id to every entry in a single bulk import" do
+    # Regression: `add_tx` generated short_ids on a pooled connection that
+    # (under WAL) couldn't see rows inserted earlier in the same import
+    # transaction, so a bulk import could mint a duplicate that tripped the
+    # short_id UNIQUE index and rolled the whole import back. Generating on
+    # the transaction's own connection makes in-flight ids visible.
+    with_temp_db do |db|
+      entries = Array.new(50) { |i| Doma::Snapshot::Entry.new("/imported/bulk-#{i}", ["bulk"]) }
+      snapshot = Doma::Snapshot.new(entries)
+      path = File.tempname("doma-bulk-snap") + ".json"
+      File.write(path, snapshot.to_json)
+      begin
+        result = Doma::Importer.from_file(db, path, mode: Doma::Importer::Mode::Merge)
+        result.imported.should eq(50)
+        result.skipped.should eq(0)
+
+        short_ids = db.directories.map(&.short_id)
+        short_ids.size.should eq(50)
+        short_ids.uniq.size.should eq(50) # all distinct — no collision
+      ensure
+        File.delete(path) if File.exists?(path)
+      end
+    end
+  end
+
   it "splits a merge into added (new) vs updated (already present)" do
     with_temp_db do |db|
       # One path already in the db, one brand new in the snapshot.
