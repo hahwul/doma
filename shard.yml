@@ -18,8 +18,13 @@ dependencies:
   sqlite3:
     github: crystal-lang/crystal-sqlite3
   termisu:
-    github: omarluq/termisu
-    version: 0.5.0
+    github: hahwul/termisu
+    branch: main
+    # Temporarily on the fork again. Upstream 0.5.0/0.5.1 still `require`s
+    # `crystal/thread_local_value`, which Crystal 1.21 removed from the stdlib, so
+    # upstream does not compile on 1.21 at all. The fork carries only that fix
+    # (thread-keyed Hash in Termisu::FFI::ErrorState, no API change); it is queued
+    # for upstream. Go back to `omarluq/termisu` once it lands in a release.
 
 development_dependencies:
   ameba:
