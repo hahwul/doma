@@ -233,6 +233,12 @@ class Doma::Database
   # `add` treats a tagless re-add as "make permanent." Runs in one
   # transaction so a failure can't leave a half-merged tag behind.
   def rename_tag(old_name : String, new_name : String) : Symbol
+    # Every other tag-accepting write path (`add -t`, `rm -t`, `mark`,
+    # `list -t`) strips whitespace before use, and stored tag names are
+    # always pre-stripped on insert — so a stray leading/trailing space
+    # here (stray shell quoting, copy-paste) would otherwise silently
+    # miss the stored row and surface as a confusing "tag not found".
+    old_name = old_name.strip
     cleaned = Validator.tag!(new_name)
     return :noop if cleaned == old_name
 

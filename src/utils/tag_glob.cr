@@ -1,3 +1,5 @@
+require "./errors"
+
 module Doma
   # Strict glob matcher for tag patterns passed to `-t` and `run <tag>`.
   #
@@ -23,6 +25,17 @@ module Doma
     # are few and short-lived, so the unbounded map can't grow unboundedly
     # in practice.
     @@regex_cache = {} of String => Regex
+
+    # Comfortably above any real tag glob (`work/**`, `proj-*`, …) but far
+    # below the point where a translated pattern's chain of `.*`/`[^/]*`
+    # tokens makes PCRE2's JIT compiler choke — verified empirically
+    # around ~4500 chained star-tokens (tens of thousands of compiled
+    # chars). Past that, `Regex.new` doesn't raise a catchable timeout —
+    # it raises a raw `ArgumentError` ("Regex JIT compile error: -68")
+    # that only the CLI's generic top-level handler catches, surfacing
+    # as an opaque "internal error" instead of a clean rejection. Reject
+    # early with a real validation error instead.
+    MAX_PATTERN_LEN = 256
 
     # True when `s` carries a glob metacharacter (`*` or `?`) and so needs
     # GLOB matching rather than plain equality. Centralizes the check that
@@ -60,6 +73,11 @@ module Doma
     # so we don't accidentally split it into two single-`*` tokens. The
     # output is anchored on both ends — globs are whole-string matches.
     private def compile_regex(pattern : String) : Regex
+      if pattern.size > MAX_PATTERN_LEN
+        raise Doma::ValidationError.new(
+          "tag pattern is too long (#{pattern.size} chars, max #{MAX_PATTERN_LEN})"
+        )
+      end
       io = IO::Memory.new
       io << "\\A"
       i = 0

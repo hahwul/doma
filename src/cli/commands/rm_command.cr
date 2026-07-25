@@ -3,6 +3,7 @@ require "../../db/database"
 require "../../services/trash"
 require "../../utils/errors"
 require "../../utils/logger"
+require "../../utils/runtime"
 require "../../utils/short_id_resolver"
 require "../../utils/validator"
 
@@ -32,6 +33,16 @@ module Doma::CLI
       parser.parse(args)
 
       raise Doma::ValidationError.new("path is required (use `doma prune --gone | --expired` for bulk cleanup)") if positional.empty?
+
+      # `--hard` skips the trash entirely — typing it at a terminal is
+      # explicit enough consent (same convention as `rm -f`), but an
+      # unattended invocation (cron, a pipe, a wrapper script) has no
+      # other way to signal consent, so refuse rather than silently
+      # deleting something permanently. Same rule as `trash empty`.
+      if hard && Doma::Runtime.non_interactive_without_consent?
+        Doma::Logger.error "--hard requires --yes (or DOMA_YES=1) when stdin is not a TTY"
+        exit 1
+      end
 
       # Validate up front so a misspelled or invalid tag name fails fast
       # with a clear error, instead of silently no-op'ing inside
