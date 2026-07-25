@@ -336,11 +336,15 @@ module Doma::CLI
     end
 
     # zsh `top_cmds` entries — one `'name:desc'` per command. Quotes are
-    # the zsh single-quote form; descriptions don't contain `'` today.
+    # the zsh single-quote form. Unlike fish, zsh has no in-quote escape
+    # for `'` (a bare `\'` just ends the string early — see "info"'s
+    # "entry's" description) — the POSIX way to embed one is to close
+    # the quote, splice in an escaped quote, and reopen: `'\''`.
     private def zsh_top_cmds_body : String
       String.build do |sb|
         COMMAND_SPEC.each do |spec|
-          sb << "    '#{spec.name}:#{spec.desc}'\n"
+          escaped = spec.desc.gsub('\'', "'\\''")
+          sb << "    '#{spec.name}:#{escaped}'\n"
         end
       end
     end

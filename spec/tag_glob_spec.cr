@@ -82,5 +82,24 @@ describe Doma::TagGlob do
       Doma::TagGlob.match?("a?", "xab").should be_false
       Doma::TagGlob.match?("?b", "abc").should be_false
     end
+
+    describe "oversized patterns" do
+      it "rejects a pattern over the length cap with a clean validation error" do
+        # Regression: an unbounded pattern (e.g. `**` repeated thousands
+        # of times) compiled into a Crystal regex large enough that
+        # PCRE2's JIT compiler raised an unhandled ArgumentError instead
+        # of matching or failing to match — surfacing to users as an
+        # opaque "internal error" rather than a rejected input.
+        huge = "*" * (Doma::TagGlob::MAX_PATTERN_LEN + 1)
+        expect_raises(Doma::ValidationError, /too long/) do
+          Doma::TagGlob.match?(huge, "anything")
+        end
+      end
+
+      it "accepts a pattern right at the length cap" do
+        at_cap = "a" * (Doma::TagGlob::MAX_PATTERN_LEN - 1) + "*"
+        Doma::TagGlob.match?(at_cap, "a" * (Doma::TagGlob::MAX_PATTERN_LEN - 1) + "x").should be_true
+      end
+    end
   end
 end

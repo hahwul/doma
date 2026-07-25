@@ -46,10 +46,23 @@ describe "doma rm soft-delete" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     with_home do |home|
       run(["add", "/tmp", "-t", "scratch"], {"DOMA_HOME" => home})
-      r = run(["rm", "/tmp", "--hard"], {"DOMA_HOME" => home})
+      r = run(["rm", "/tmp", "--hard", "--yes"], {"DOMA_HOME" => home})
       r[:status].exit_code.should eq(0)
       r[:out].should contain("permanent")
       File.exists?(File.join(home, "trash.jsonl")).should be_false
+    end
+  end
+
+  it "[--hard, no --yes] refuses non-interactively instead of silently deleting" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      run(["add", "/tmp", "-t", "scratch"], {"DOMA_HOME" => home})
+      r = run(["rm", "/tmp", "--hard"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(1)
+      r[:err].should contain("--hard requires --yes")
+
+      list = run(["list"], {"DOMA_HOME" => home})
+      list[:out].should contain("/private/tmp")
     end
   end
 
@@ -239,10 +252,22 @@ describe "doma trash" do
     with_home do |home|
       run(["add", "/tmp", "-t", "x"], {"DOMA_HOME" => home})
       run(["rm", "/tmp"], {"DOMA_HOME" => home})
-      r = run(["trash", "empty"], {"DOMA_HOME" => home})
+      r = run(["trash", "empty", "--yes"], {"DOMA_HOME" => home})
       r[:status].exit_code.should eq(0)
       r[:out].should contain("purged 1")
       run(["trash", "list"], {"DOMA_HOME" => home})[:out].should contain("trash is empty")
+    end
+  end
+
+  it "[empty, no --yes] refuses non-interactively instead of silently purging" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      run(["add", "/tmp", "-t", "x"], {"DOMA_HOME" => home})
+      run(["rm", "/tmp"], {"DOMA_HOME" => home})
+      r = run(["trash", "empty"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(1)
+      r[:err].should contain("trash empty requires --yes")
+      run(["trash", "list"], {"DOMA_HOME" => home})[:out].should contain("/private/tmp")
     end
   end
 

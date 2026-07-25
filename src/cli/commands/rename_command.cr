@@ -42,7 +42,7 @@ module Doma::CLI
         raise Doma::ValidationError.new("expected exactly two arguments: <old-tag> <new-tag>")
       end
 
-      old_name, new_name = positional[0], positional[1]
+      old_name, new_name = positional[0].strip, positional[1].strip
       Doma::Database.open do |db|
         case db.rename_tag(old_name, new_name)
         when :noop

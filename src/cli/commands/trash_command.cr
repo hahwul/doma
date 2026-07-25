@@ -176,16 +176,18 @@ module Doma::CLI
       # Confirmation gate. `rm <path>` writes to the trash by default
       # (soft delete), so `trash empty` is the moment those snapshots
       # actually become unrecoverable — a quiet purge here is a UX
-      # footgun. Honors -y/--yes and DOMA_YES=1 for the scripted case.
+      # footgun. Honors -y/--yes and DOMA_YES=1 for the scripted case;
+      # non-interactive without either is a hard refusal (see `confirm?`),
+      # matching `import --replace` and `install`.
       noun = pending == 1 ? "entry" : "entries"
       scope_phrase = older.nil? ? "" : " (older than threshold)"
       unless confirm?("Purge #{pending} trash #{noun}#{scope_phrase}? This cannot be undone.")
         if json_mode
           puts %({"aborted":true,"pending":#{pending}})
         else
-          Doma::Logger.info "aborted"
+          Doma::Logger.warn "aborted"
         end
-        return
+        exit 1
       end
 
       removed = Doma::Trash.empty!(older_seconds: older)
@@ -202,13 +204,18 @@ module Doma::CLI
     end
 
     # Yes/no prompt with the standard escape hatches. `-y` / `--yes` /
-    # `DOMA_YES=1` short-circuits to true; a non-TTY without those flags
-    # also short-circuits to true so existing scripts that piped to
-    # `trash empty` keep working — the new gate only fires for genuinely
-    # interactive sessions where the user could be surprised.
+    # `DOMA_YES=1` short-circuits to true. A non-TTY session without
+    # either is a hard "no" rather than an auto-yes — we can't actually
+    # ask, and this purge is unrecoverable, so silently assuming consent
+    # would turn a stray non-interactive invocation (cron, a pipe, a
+    # wrapper script) into permanent data loss. Same rule as `import
+    # --replace` and `install`: an unattended run must opt in with -y.
     private def confirm?(question : String) : Bool
       return true if Doma::Runtime.assume_yes?
-      return true unless STDIN.tty? && STDOUT.tty?
+      unless STDIN.tty? && STDOUT.tty?
+        Doma::Logger.error "trash empty requires --yes (or DOMA_YES=1) when stdin is not a TTY"
+        return false
+      end
       STDOUT.print "#{question} [y/N] "
       STDOUT.flush
       reply = STDIN.gets || ""

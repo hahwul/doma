@@ -3,6 +3,7 @@ require "../../db/database"
 require "../../services/trash"
 require "../../utils/errors"
 require "../../utils/logger"
+require "../../utils/runtime"
 
 module Doma::CLI
   # Bulk-cleanup operations. Conceptually distinct from `rm <path>`:
@@ -41,6 +42,16 @@ module Doma::CLI
       parser.parse(args)
 
       raise Doma::ValidationError.new("prune requires --gone or --expired") unless mode
+
+      # `--hard` (only meaningful with `--gone`) skips the trash and
+      # deletes permanently — typing it at a terminal is explicit
+      # consent, but an unattended run (cron, a pipe, a wrapper script)
+      # can't otherwise signal consent. Same rule as `rm --hard` and
+      # `trash empty`.
+      if mode == :gone && hard && Doma::Runtime.non_interactive_without_consent?
+        Doma::Logger.error "--hard requires --yes (or DOMA_YES=1) when stdin is not a TTY"
+        exit 1
+      end
 
       case mode
       when :gone    then run_gone(hard)

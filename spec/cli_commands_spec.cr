@@ -126,13 +126,30 @@ describe "doma prune" do
       run(["add", vanish, "-t", "doomed"], {"DOMA_HOME" => home})
       FileUtils.rm_rf(vanish)
 
-      r = run(["prune", "--gone", "--hard"], {"DOMA_HOME" => home})
+      r = run(["prune", "--gone", "--hard", "--yes"], {"DOMA_HOME" => home})
       r[:status].exit_code.should eq(0)
       r[:out].should contain("pruned 1 missing path")
       r[:out].should contain("permanent")
 
       tr = run(["trash", "list"], {"DOMA_HOME" => home})
       tr[:out].should contain("trash is empty")
+    end
+  end
+
+  it "[--gone --hard, no --yes] refuses non-interactively instead of silently deleting" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      vanish = File.tempname("doma-prune-hard-vanish")
+      FileUtils.mkdir_p(vanish)
+      run(["add", vanish, "-t", "doomed"], {"DOMA_HOME" => home})
+      FileUtils.rm_rf(vanish)
+
+      r = run(["prune", "--gone", "--hard"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(1)
+      r[:err].should contain("--hard requires --yes")
+
+      list = run(["list"], {"DOMA_HOME" => home})
+      list[:out].should contain(vanish)
     end
   end
 
@@ -1421,6 +1438,8 @@ end
 
 # ---------- setup completion ----------
 
+private ZSH_OK = !Process.find_executable("zsh").nil?
+
 describe "doma setup completion" do
   it "[bash] emits a function and registers it via complete" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
@@ -1496,6 +1515,35 @@ describe "doma setup completion" do
     r[:status].exit_code.should eq(0)
     r[:out].should contain("entry\\'s")
     r[:out].should_not match(/'Show one entry's/)
+  end
+
+  it "[zsh] escapes apostrophes in command descriptions" do
+    # Regression: the "info" command's "entry's" description was
+    # emitted with a bare, unescaped apostrophe inside a zsh
+    # single-quoted `top_cmds` entry. zsh has no in-quote escape for
+    # `'` (unlike fish's `\'`) — the imbalance isn't line-scoped, so it
+    # silently corrupted parsing of the rest of the generated script.
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    r = run(["setup", "completion", "zsh"])
+    r[:status].exit_code.should eq(0)
+    r[:out].should contain("entry'\\''s")
+    r[:out].should_not match(/'info:Show one entry's/)
+  end
+
+  it "[zsh] the generated script is syntactically valid" do
+    # The strongest guard against this whole class of bug: actually
+    # hand the output to zsh's parser rather than asserting on specific
+    # substrings.
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    pending! "zsh not on PATH" unless ZSH_OK
+    r = run(["setup", "completion", "zsh"])
+    r[:status].exit_code.should eq(0)
+
+    script = File.tempname("doma-zsh-completion", ".zsh")
+    File.write(script, r[:out])
+    check = Process.run("zsh", ["-n", script], output: Process::Redirect::Pipe, error: Process::Redirect::Pipe)
+    File.delete(script)
+    check.success?.should be_true
   end
 
   it "[fish] emits trash long-flag completions (regression: --merge/--older missed)" do
