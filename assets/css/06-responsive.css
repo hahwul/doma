@@ -1,0 +1,94 @@
+/* =============================================================================
+   Responsive
+   ============================================================================= */
+
+/* Hide TOC on medium screens */
+@media (max-width: 1200px) {
+    .docs-toc {
+        display: none;
+    }
+
+    .docs-main {
+        margin-right: 0;
+        max-width: calc(100% - var(--sidebar-w));
+    }
+}
+
+@media (max-width: 1024px) {
+    .docs-main {
+        padding: 2.25rem 2rem 3.5rem;
+    }
+}
+
+/* Mobile */
+@media (max-width: 768px) {
+    .docs-header nav {
+        display: none;
+    }
+
+    .mobile-menu-btn {
+        display: flex;
+    }
+
+    .docs-sidebar {
+        left: -100%;
+        width: 290px;
+        z-index: 400;
+        background: var(--board);
+        transition: left 0.28s var(--ease-out);
+        border-right: 1px solid var(--score-strong);
+    }
+
+    .docs-sidebar.is-open {
+        left: 0;
+        box-shadow: 24px 0 60px -24px rgba(36, 30, 21, 0.45);
+    }
+
+    .sidebar-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 300;
+        background: rgba(36, 30, 21, 0.35);
+    }
+
+    .sidebar-overlay.is-visible {
+        display: block;
+    }
+
+    .docs-main,
+    .docs-main.no-toc {
+        margin-left: 0;
+        margin-right: 0;
+        padding: 1.75rem 1.25rem 3rem;
+        max-width: 100%;
+    }
+
+    /* Wide tables scroll inside their own box */
+    .docs-main table {
+        display: block;
+        overflow-x: auto;
+    }
+
+    .docs-footer {
+        flex-direction: column;
+        gap: 0.5rem;
+        text-align: center;
+    }
+
+    .docs-header {
+        padding-left: 1rem;
+        padding-right: 1rem;
+        gap: 1rem;
+    }
+
+    .docs-search-input {
+        max-width: 28vw;
+    }
+}
+
+@media (max-width: 480px) {
+    .docs-main {
+        padding: 1.5rem 1rem 2.5rem;
+    }
+}

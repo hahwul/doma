@@ -1,0 +1,733 @@
+/* =============================================================================
+   Landing — the board itself.
+
+   One long scored surface: hero, note, prep rows, a taste, the word.
+   Every section is separated by a hairline knife score, terminals sit
+   on the board as dark steel slabs, and the lacquer seal signs it.
+   ============================================================================= */
+
+.landing-body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+}
+
+/* --- Header ------------------------------------------------------------- */
+
+.landing-header {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: calc(var(--strip-h) + 0.7rem) max(calc((100vw - 1120px) / 2), 4vw)
+        0.7rem;
+    background: rgba(245, 239, 227, 0.85);
+    backdrop-filter: blur(14px) saturate(1.3);
+    -webkit-backdrop-filter: blur(14px) saturate(1.3);
+    border-bottom: 1px solid var(--score);
+}
+
+.landing-header .logo img {
+    width: 121px;
+}
+
+.landing-header nav {
+    display: flex;
+    align-items: center;
+    gap: 1.1rem;
+}
+
+.landing-header .nav-link {
+    font-size: 0.86rem;
+    font-weight: 500;
+    color: var(--ink-mute);
+    background-image: linear-gradient(var(--lacquer), var(--lacquer));
+    background-repeat: no-repeat;
+    background-position: 0 100%;
+    background-size: 0% 2px;
+    padding: 0.3rem 0.1rem;
+    transition:
+        color var(--transition-fast),
+        background-size 0.25s var(--ease-out);
+}
+
+.landing-header .nav-link:hover {
+    color: var(--ink);
+    background-size: 100% 2px;
+}
+
+/* --- Main column ---------------------------------------------------------- */
+
+.landing-main {
+    width: min(1120px, 92vw);
+    margin-inline: auto;
+    flex: 1;
+}
+
+/* --- Hero ----------------------------------------------------------------- */
+
+.hero {
+    position: relative;
+    display: grid;
+    grid-template-columns: 1.06fr 0.94fr;
+    gap: 3.5rem;
+    align-items: center;
+    padding: 5rem 0 4.5rem;
+}
+
+/* Faint hangul watermark pressed into the board */
+.hero::before {
+    content: "도마";
+    position: absolute;
+    top: 0.35em;
+    right: -1%;
+    z-index: 0;
+    font-family: var(--font-hangul);
+    font-weight: 700;
+    font-size: clamp(150px, 20vw, 250px);
+    line-height: 1;
+    letter-spacing: -0.02em;
+    color: rgba(36, 30, 21, 0.05);
+    pointer-events: none;
+    user-select: none;
+}
+
+.hero-copy {
+    position: relative;
+    z-index: 1;
+}
+
+.hero-eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--ink-mute);
+    margin: 0 0 1.5rem;
+}
+
+.hero-eyebrow::before {
+    content: "";
+    width: 8px;
+    height: 8px;
+    background: var(--lacquer);
+    border-radius: 2px;
+    flex: none;
+}
+
+.hero-title {
+    font-size: clamp(2.5rem, 5.2vw, 3.8rem);
+    font-weight: 800;
+    letter-spacing: -0.026em;
+    line-height: 1.03;
+    color: var(--ink);
+    margin: 0 0 1.4rem;
+    text-wrap: balance;
+}
+
+/* "cutting board" — lacquer, with a score drawn under it on load */
+.hl-cut {
+    color: var(--lacquer);
+    background-image: linear-gradient(var(--lacquer), var(--lacquer));
+    background-repeat: no-repeat;
+    background-position: 0 97%;
+    background-size: 0% 3px;
+    animation: score-in 0.6s var(--ease-out) 0.85s forwards;
+}
+
+@keyframes score-in {
+    to {
+        background-size: 100% 3px;
+    }
+}
+
+.hero-tagline {
+    font-size: 1.1rem;
+    line-height: 1.65;
+    color: var(--ink-soft);
+    max-width: 44ch;
+    margin: 0 0 2.1rem;
+    text-wrap: pretty;
+}
+
+.hero-tagline em {
+    font-style: normal;
+    font-weight: 650;
+    color: var(--ink);
+}
+
+.hero-actions {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.9rem;
+}
+
+.btn-lacquer {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.72rem 1.35rem;
+    background: var(--lacquer);
+    color: var(--board);
+    font-size: 0.95rem;
+    font-weight: 650;
+    border-radius: var(--radius-md);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.15),
+        0 1px 2px rgba(82, 44, 23, 0.35),
+        0 8px 20px -10px rgba(82, 44, 23, 0.55);
+    transition:
+        background-color var(--transition-fast),
+        transform 0.12s ease,
+        box-shadow var(--transition-fast);
+}
+
+.btn-lacquer:hover {
+    background: var(--lacquer-deep);
+    color: var(--board);
+}
+
+.btn-lacquer:active {
+    transform: scale(0.97);
+}
+
+.btn-lacquer svg {
+    width: 14px;
+    height: 14px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.install-chip {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    color: var(--ink-soft);
+    background: var(--board-bright);
+    border: 1px solid var(--score-strong);
+    border-radius: var(--radius-md);
+    padding: 0.66rem 0.95rem;
+    user-select: all;
+    cursor: text;
+}
+
+.install-chip::before {
+    content: "$ ";
+    color: var(--lacquer);
+    user-select: none;
+}
+
+.hero-meta {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.13em;
+    color: var(--ink-faint);
+    margin: 1.6rem 0 0;
+}
+
+/* --- Terminal slab (the blade) ------------------------------------------- */
+
+.term {
+    position: relative;
+    z-index: 1;
+    margin: 0;
+    min-width: 0;
+    background: var(--steel);
+    border-radius: var(--radius-lg);
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.06),
+        0 1px 2px rgba(36, 30, 21, 0.16),
+        0 20px 50px -20px rgba(36, 30, 21, 0.5);
+    overflow: hidden;
+}
+
+.term-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.68rem 1rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.term-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.14);
+}
+
+.term-title {
+    margin-left: auto;
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    letter-spacing: 0.08em;
+    color: var(--steel-mute);
+}
+
+.term-body pre {
+    margin: 0;
+    padding: 1.15rem 1.25rem 1.35rem;
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    line-height: 1.8;
+    color: var(--steel-text);
+    overflow-x: auto;
+}
+
+/* transcript ink */
+.term .c {
+    color: var(--steel-mute);
+}
+
+.term .p {
+    color: var(--steel-prompt);
+    font-weight: 600;
+}
+
+.term .ok {
+    color: #7ec699;
+}
+
+.term .dim {
+    color: var(--steel-mute);
+}
+
+.term .hi {
+    color: #ffffffd9;
+    font-weight: 600;
+}
+
+.term .tag {
+    color: var(--steel-warm);
+    border: 1px solid rgba(217, 169, 118, 0.35);
+    border-radius: var(--radius-sm);
+    padding: 0 0.35em;
+    font-size: 0.92em;
+}
+
+/* --- Note (the "why") ------------------------------------------------------ */
+
+.board-note {
+    border-top: 1px solid var(--score);
+    padding: 4rem 0;
+}
+
+.board-note > * {
+    max-width: 760px;
+}
+
+.note-label {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--lacquer);
+    margin-bottom: 1rem;
+}
+
+.board-note p {
+    font-size: 1.18rem;
+    line-height: 1.8;
+    color: var(--ink-soft);
+    margin: 0;
+    text-wrap: pretty;
+}
+
+.board-note p + p {
+    margin-top: 1rem;
+}
+
+.board-note code {
+    font-family: var(--font-mono);
+    font-size: 0.82em;
+    color: #46392a;
+    background: var(--board-raised);
+    border: 1px solid var(--score);
+    border-radius: var(--radius-sm);
+    padding: 0.1em 0.35em;
+}
+
+/* --- Prep rows (tag / jump / fan out) -------------------------------------- */
+
+.prep {
+    border-top: 1px solid var(--score);
+    padding: 3.75rem 0 1.5rem;
+}
+
+.prep-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    margin-bottom: 1.5rem;
+}
+
+.prep-head h2 {
+    font-size: 1.55rem;
+    font-weight: 800;
+    letter-spacing: -0.015em;
+    margin: 0;
+    color: var(--ink);
+}
+
+.prep-sub {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.13em;
+    color: var(--ink-faint);
+}
+
+.prep-rows {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.prep-row {
+    display: grid;
+    grid-template-columns: 3.5rem 10.5rem 1fr;
+    gap: 2rem;
+    align-items: start;
+    padding: 1.9rem 0;
+    border-top: 1px solid var(--score);
+}
+
+.prep-num {
+    font-family: var(--font-mono);
+    font-size: 0.78rem;
+    color: var(--lacquer);
+    padding-top: 0.5rem;
+}
+
+.prep-row h3 {
+    font-size: 1.7rem;
+    font-weight: 800;
+    letter-spacing: -0.018em;
+    line-height: 1.08;
+    margin: 0;
+    color: var(--ink);
+    transition: color var(--transition-fast);
+}
+
+.prep-row:hover h3 {
+    color: var(--lacquer);
+}
+
+.prep-body {
+    min-width: 0;
+}
+
+.prep-body p {
+    margin: 0 0 0.9rem;
+    font-size: 0.96rem;
+    line-height: 1.7;
+    color: var(--ink-soft);
+    max-width: 52ch;
+    text-wrap: pretty;
+}
+
+/* mini blade — a small steel chip carrying the command */
+.prep-body code {
+    display: inline-block;
+    max-width: 100%;
+    overflow-x: auto;
+    font-family: var(--font-mono);
+    font-size: 0.76rem;
+    line-height: 1.6;
+    color: var(--steel-text);
+    background: var(--steel);
+    border-radius: var(--radius-md);
+    padding: 0.5rem 0.8rem;
+    box-shadow:
+        inset 0 1px 0 rgba(255, 255, 255, 0.05),
+        0 6px 16px -10px rgba(36, 30, 21, 0.45);
+    white-space: nowrap;
+}
+
+.prep-body code .p {
+    color: var(--steel-prompt);
+    font-weight: 600;
+}
+
+/* --- A quick taste ---------------------------------------------------------- */
+
+.taste {
+    border-top: 1px solid var(--score);
+    padding: 3.75rem 0 4.25rem;
+}
+
+.taste-label {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: var(--lacquer);
+    margin-bottom: 1.25rem;
+}
+
+/* --- Spec rail --------------------------------------------------------------- */
+
+.rail {
+    border-top: 1px solid var(--score);
+    padding: 1.5rem 0;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    column-gap: 2.5rem;
+    row-gap: 0.5rem;
+}
+
+.rail span {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--ink-mute);
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+}
+
+.rail span::before {
+    content: "";
+    width: 5px;
+    height: 5px;
+    background: var(--score-strong);
+    border-radius: 1px;
+}
+
+/* --- Meaning (the dictionary entry) ------------------------------------------ */
+
+.meaning {
+    border-top: 1px solid var(--score);
+    padding: 4.25rem 0 4.5rem;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 3.5rem;
+    align-items: center;
+}
+
+.meaning-word {
+    font-family: var(--font-hangul);
+    font-size: 3rem;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--ink);
+}
+
+.meaning-pron {
+    display: block;
+    font-family: var(--font-mono);
+    font-size: 0.76rem;
+    letter-spacing: 0.06em;
+    color: var(--ink-mute);
+    margin: 0.8rem 0 1.1rem;
+}
+
+.meaning-def {
+    font-family: var(--font-hangul);
+    font-size: 1.02rem;
+    line-height: 1.95;
+    color: var(--ink-soft);
+    max-width: 54ch;
+    margin: 0;
+    text-wrap: pretty;
+}
+
+/* The maker's seal — stamped, slightly off square */
+.meaning-seal {
+    display: grid;
+    place-items: center;
+    width: 96px;
+    height: 96px;
+    background: var(--lacquer);
+    color: var(--board);
+    font-family: var(--font-hangul);
+    font-size: 2rem;
+    font-weight: 700;
+    line-height: 1;
+    writing-mode: vertical-rl;
+    text-orientation: upright;
+    letter-spacing: 0.14em;
+    border-radius: 5px;
+    box-shadow:
+        inset 0 0 0 3px rgba(245, 239, 227, 0.3),
+        inset 0 0 0 5px var(--lacquer),
+        inset 0 0 22px rgba(0, 0, 0, 0.18),
+        0 10px 24px -12px rgba(82, 44, 23, 0.6);
+    transform: rotate(-3.5deg);
+    transition: transform 0.25s var(--ease-out);
+}
+
+.meaning-seal:hover {
+    transform: rotate(0deg) scale(1.03);
+}
+
+/* --- Footer -------------------------------------------------------------------- */
+
+.landing-footer {
+    width: min(1120px, 92vw);
+    margin-inline: auto;
+    border-top: 1px solid var(--score-strong);
+    padding: 1.6rem 0 2.1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.02em;
+    color: var(--ink-mute);
+}
+
+.landing-footer a {
+    color: var(--ink-soft);
+    transition: color var(--transition-fast);
+}
+
+.landing-footer a:hover {
+    color: var(--lacquer);
+}
+
+/* --- Entrance ------------------------------------------------------------------- */
+
+@keyframes rise {
+    from {
+        opacity: 0;
+        transform: translateY(16px);
+        filter: blur(5px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+        filter: blur(0);
+    }
+}
+
+.hero-copy > * {
+    animation: rise 0.7s var(--ease-out) backwards;
+}
+
+.hero-copy > *:nth-child(1) {
+    animation-delay: 0.05s;
+}
+
+.hero-copy > *:nth-child(2) {
+    animation-delay: 0.14s;
+}
+
+.hero-copy > *:nth-child(3) {
+    animation-delay: 0.23s;
+}
+
+.hero-copy > *:nth-child(4) {
+    animation-delay: 0.32s;
+}
+
+.hero-copy > *:nth-child(5) {
+    animation-delay: 0.41s;
+}
+
+.hero > .term {
+    animation: rise 0.8s var(--ease-out) 0.3s backwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .hl-cut {
+        animation: none;
+        background-size: 100% 3px;
+    }
+}
+
+/* --- Responsive ------------------------------------------------------------------
+   Lives here (not in 06) so these rules cascade after the base rules above. */
+
+@media (max-width: 768px) {
+    .landing-header {
+        padding-left: 1.25rem;
+        padding-right: 1.25rem;
+    }
+
+    .hero {
+        grid-template-columns: 1fr;
+        gap: 2.5rem;
+        padding: 3.25rem 0 3rem;
+    }
+
+    .hero::before {
+        display: none;
+    }
+
+    .prep-row {
+        grid-template-columns: 2.9rem 1fr;
+        gap: 0.4rem 1rem;
+    }
+
+    .prep-row .prep-body {
+        grid-column: 2;
+    }
+
+    .prep-head {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.3rem;
+    }
+
+    .board-note {
+        padding: 3rem 0;
+    }
+
+    .board-note p {
+        font-size: 1.08rem;
+    }
+
+    .meaning {
+        grid-template-columns: 1fr;
+        gap: 2.25rem;
+    }
+
+    .meaning-seal {
+        justify-self: start;
+    }
+
+    .landing-footer {
+        flex-direction: column;
+        gap: 0.5rem;
+        text-align: center;
+    }
+}
+
+@media (max-width: 480px) {
+    .hero-actions {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .hero-actions .btn-lacquer {
+        justify-content: center;
+    }
+
+    .install-chip {
+        text-align: center;
+    }
+
+    .term-body pre {
+        font-size: 0.7rem;
+    }
+}

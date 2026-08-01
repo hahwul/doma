@@ -1,0 +1,258 @@
+/* =============================================================================
+   Search — a slip of brighter paper
+   ============================================================================= */
+
+.docs-search {
+    position: relative;
+    margin-right: 0.5rem;
+}
+
+.docs-search-input {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 190px;
+    max-width: 32vw;
+    padding: 0.42rem 0.75rem;
+    border: 1px solid var(--score-strong);
+    border-radius: var(--radius-md);
+    background: var(--board-bright);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-size: 0.85rem;
+    transition:
+        border-color var(--transition-fast),
+        box-shadow var(--transition-fast),
+        width 0.25s var(--ease-out);
+}
+
+.docs-search-input::placeholder {
+    color: var(--ink-faint);
+}
+
+.docs-search-input:focus {
+    outline: none;
+    width: 240px;
+    border-color: var(--lacquer);
+    box-shadow: 0 0 0 3px var(--lacquer-tint);
+}
+
+.docs-search-results {
+    position: absolute;
+    top: calc(100% + 0.5rem);
+    right: 0;
+    width: 380px;
+    max-width: min(380px, 90vw);
+    max-height: 60vh;
+    overflow-y: auto;
+    background: var(--board-bright);
+    border: 1px solid var(--score-strong);
+    border-radius: var(--radius-lg);
+    box-shadow:
+        0 1px 2px rgba(36, 30, 21, 0.08),
+        0 16px 40px -16px rgba(36, 30, 21, 0.35);
+    z-index: 150;
+}
+
+.docs-search-results[hidden] {
+    display: none;
+}
+
+.docs-search-result {
+    display: block;
+    padding: 0.65rem 0.9rem;
+    border-bottom: 1px solid var(--score);
+    color: var(--ink);
+    transition: background-color var(--transition-fast);
+}
+
+.docs-search-result:last-child {
+    border-bottom: none;
+}
+
+.docs-search-result:hover,
+.docs-search-result.is-active {
+    background: var(--lacquer-tint);
+}
+
+.docs-search-result-title {
+    display: block;
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--ink);
+    margin-bottom: 0.15rem;
+}
+
+.docs-search-result-snippet {
+    display: block;
+    font-size: 0.8rem;
+    color: var(--ink-mute);
+    line-height: 1.5;
+}
+
+.docs-search-result-snippet mark {
+    background: var(--lacquer-glow);
+    color: var(--ink);
+    padding: 0 0.1em;
+    border-radius: 2px;
+}
+
+.docs-search-empty {
+    padding: 0.8rem 0.9rem;
+    color: var(--ink-mute);
+    font-size: 0.85rem;
+}
+
+/* =============================================================================
+   Info boxes — tinted paper, no shouting
+   ============================================================================= */
+
+.info-box {
+    padding: 0.9rem 1.15rem;
+    margin: 1.5rem 0;
+    border: 1px solid;
+    border-radius: var(--radius-md);
+    font-size: 0.88rem;
+    line-height: 1.7;
+}
+
+.info-box p {
+    margin: 0;
+    color: inherit;
+}
+
+.info-box.note {
+    background: rgba(56, 97, 140, 0.07);
+    border-color: rgba(56, 97, 140, 0.25);
+    color: #33587c;
+}
+
+.info-box.warning {
+    background: rgba(158, 116, 22, 0.09);
+    border-color: rgba(158, 116, 22, 0.3);
+    color: #7c5c12;
+}
+
+.info-box.tip {
+    background: rgba(62, 125, 79, 0.08);
+    border-color: rgba(62, 125, 79, 0.28);
+    color: #35673f;
+}
+
+.info-box.danger {
+    background: var(--lacquer-tint);
+    border-color: rgba(178, 58, 28, 0.3);
+    color: var(--lacquer-deep);
+}
+
+/* =============================================================================
+   Page index — a numbered prep list, not a card grid
+   ============================================================================= */
+
+ul.page-list,
+ul.section-list {
+    list-style: none;
+    padding: 0;
+    margin: 1.5rem 0 2rem;
+    counter-reset: prep;
+}
+
+ul.page-list li,
+ul.section-list li {
+    counter-increment: prep;
+    display: flex;
+    align-items: baseline;
+    gap: 1rem;
+    padding: 0.75rem 0.4rem;
+    border-bottom: 1px solid var(--score);
+    transition: background-color var(--transition-fast);
+}
+
+ul.page-list li::before,
+ul.section-list li::before {
+    content: counter(prep, decimal-leading-zero);
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--lacquer);
+    min-width: 2ch;
+}
+
+ul.page-list li:hover,
+ul.section-list li:hover {
+    background: var(--board-raised);
+}
+
+ul.page-list li a,
+ul.section-list li a {
+    flex: 1;
+    font-weight: 550;
+    font-size: 0.92rem;
+    color: var(--ink);
+}
+
+ul.page-list li a:hover,
+ul.section-list li a:hover {
+    color: var(--lacquer-deep);
+}
+
+/* =============================================================================
+   Docs footer
+   ============================================================================= */
+
+.docs-footer {
+    margin-top: 4.5rem;
+    padding-top: 1.4rem;
+    border-top: 1px solid var(--score-strong);
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.02em;
+    color: var(--ink-mute);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.docs-footer a {
+    color: var(--ink-soft);
+    transition: color var(--transition-fast);
+}
+
+.docs-footer a:hover {
+    color: var(--lacquer);
+}
+
+/* hahwul mark — Built with Love (matches dalfox docs footer) */
+.footer-mark {
+    text-align: center;
+    margin-top: 1.5rem;
+    width: 100%;
+}
+
+.footer-mark a {
+    display: inline-block;
+    line-height: 0;
+}
+
+.footer-mark .hahwul-img {
+    display: inline-block;
+    width: 80px;
+    height: 80px;
+    /* Recolor the logo to the footer text tone by masking with its alpha. */
+    background-color: var(--ink-mute);
+    -webkit-mask: url("../../images/hahwul.webp") center / contain no-repeat;
+    mask: url("../../images/hahwul.webp") center / contain no-repeat;
+    transition: background-color 0.3s ease;
+}
+
+.footer-mark .hahwul-img:hover {
+    background-color: var(--ink);
+}
+
+.footer-love {
+    margin-top: 0.85rem;
+    color: var(--ink-mute);
+    font-family: "Bradley Hand", "Snell Roundhand", "Apple Chancery", cursive;
+    font-size: 0.95rem;
+    letter-spacing: 0.02em;
+}
