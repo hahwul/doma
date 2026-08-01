@@ -107,7 +107,7 @@ doma list [<query>] [-t TAG] [--by path|recent|tag]
     - Combining with `-t TAG` filters which entries appear, but each surviving entry still renders under every tag it carries (not only `TAG`).
 - `--check`: annotate entries whose path is gone with `[gone]`.
 - `--include-expired`: include tag rows whose TTL has elapsed.
-- `--json` / `--paths` / `-0`: machine-readable forms (see [Pipelines](../../usage/pipelines/)).
+- `--json` / `--paths` / `-0`: machine-readable forms (see [Pipelines](../../usage/pipelines/)). JSON rows carry `short_id`, `path`, `basename`, `tags`, `created_at`, and `last_used_at` (epoch seconds; `last_used_at` is `0` when the entry has never been picked), plus `expirations` for TTL'd tags and `exists` under `--check`.
 - `--pick`: resolve to a single path on stdout. `--first` for deterministic auto-pick, `--builtin` to force the picker even off-TTY.
 
 ## `info`
@@ -118,13 +118,21 @@ doma info [<path-or-short-id>] [--json]
 
 Defaults to `.`. Accepts either a path or a short_id (full or unique prefix). Prints short_id, canonical path, tags (with TTL or `~expired` suffix), `created_at`, `last_used_at`, and an `exists` check. Exits 3 when not registered. If the entry is in the trash, surfaces the trash short_id and a restore hint.
 
+With `--json`, *every* outcome is a JSON object on stdout — a hit is `{"found": true, …}`, a miss is `{"found": false, "input", "error", "hint"}` — so a caller can branch on `found` instead of parsing stderr. Exit codes are unchanged (3 for a miss, 2 for an ambiguous bare-name match).
+
 ## `run`
 
 ```
-doma run (<tag> | -t TAG) [--fail-fast] [--parallel] -- <cmd> [args...]
+doma run (<tag> | -t TAG) [--fail-fast] [--parallel [--jobs N]] [--no-header]
+                          [-n | --dry-run] [--json] -- <cmd> [args...]
 ```
 
 `--` is required. `--fail-fast` is sequential-only. The tag can be passed positionally or via `-t/--tag` (alias) — pick one. A single tag is accepted; commas are not split, but glob patterns (`*`, `?`) match across multiple tags.
+
+- `--jobs N`: cap concurrency under `--parallel` (default: CPU count).
+- `--no-header`: drop the `▶`/`✓` chrome; failures still surface.
+- `-n`, `--dry-run`: print the target directories without running anything.
+- `--json`: capture each directory's streams and emit one row per directory — `{"path", "exit_code", "stdout", "stderr", "dry_run"}` — in stable input order even under `--parallel`. Implies `--no-header`. See [Bulk run](../../usage/run/).
 
 ## `status`
 
@@ -185,3 +193,23 @@ doma doctor
 ```
 
 Reports paths (home / config / DB), config-file status, and database stats (directories, tags, missing-on-disk count, schema version).
+
+## Exit codes
+
+Each failure class has its own code, so scripts can branch on the status rather than match against error text (which is human-facing and may be reworded between releases).
+
+| Code | Means | Typical cause |
+|---|---|---|
+| 0 | Success — including an empty result set | `list -t X` matched nothing |
+| 1 | Generic failure | unknown flag or command; `run` had at least one directory exit non-zero |
+| 2 | Validation | invalid tag name, conflicting output flags, `add` given a non-directory |
+| 3 | Not found | `info` / `rm` on an unregistered path; `list --pick` matched nothing |
+| 4 | Conflict / ambiguous | `list --pick` matched several directories with no TTY and no `--first` |
+| 5 | Config | unreadable or invalid `config.yml`, bad `DOMA_*` variable |
+| 6 | Import | malformed snapshot file |
+| 130 | Cancelled | Ctrl-C in an interactive picker |
+| 141 | Broken pipe | the reader closed early, e.g. `doma list \| head -1` |
+
+An empty result is a **success**, not an error: `doma list -t nothing` exits 0 with a one-line note on stderr (and `[]` on stdout under `--json`). Check for empty output before iterating rather than relying on the exit code.
+
+Destructive commands that can't be undone — `rm --hard`, `prune --gone --hard`, `import --replace`, `trash empty` — exit 1 rather than proceeding when stdin isn't a TTY and neither `-y`/`--yes` nor `DOMA_YES=1` was given. An unattended caller has no other way to signal consent.

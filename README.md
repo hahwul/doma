@@ -46,7 +46,7 @@ doma mark spike                # bookmark cwd for 7 days
 ### Navigation & operations
 - `tui` — full-screen fuzzy finder over your registered directories, and the default when you run `doma` with no subcommand. Fuzzy match on paths with match highlighting, narrow with a small query syntax (`tag:crystal`, `-tag:archived`, `id:0d`, `path:src`), register a directory with `Ctrl-A` or copy a path with `Ctrl-Y` without leaving it. Enter prints the path so the shell wrapper `cd`s into it
 - `list --pick` resolves to a single path (Crystal-native picker, no fzf dependency); the `doma cd <tag>` shell wrapper from `doma setup install` builds on it
-- `run <tag> -- <cmd>` to execute a command in every tagged directory; `--parallel` (with `--jobs N`, default CPU count) and `--fail-fast` available
+- `run <tag> -- <cmd>` to execute a command in every tagged directory; `--parallel` (with `--jobs N`, default CPU count), `--fail-fast`, and `--dry-run` available. `--json` captures each directory's stdout/stderr/exit code into its own row — in stable input order even under `--parallel`
 - `status <tag>` for a one-glance git dashboard across a tagged set — branch, ahead/behind, dirty count; `--dirty` to show only repos with uncommitted work, `--json` for scripting
 - `move` to follow a path that moved on disk; tags carry over
 - `rename` to merge or relabel tags
@@ -58,7 +58,8 @@ doma mark spike                # bookmark cwd for 7 days
 ### Pipelines & scripting
 - `list -t TAG --paths` — newline-separated paths for `while read` / `xargs`
 - `list -t TAG -0` — NUL-separated for `xargs -0`, safe for paths with spaces
-- `list --json`, `tags --json`, `stats --json`, `export --json|--yaml`
+- `list --json`, `tags --json`, `stats --json`, `status --json`, `run --json`, `info --json`, `export --json|--yaml`
+- Distinct exit codes per failure class (2 validation, 3 not found, 4 conflict, 5 config, 6 import) so callers branch on status rather than error text
 - "Did you mean ..." hints (Levenshtein) for typos
 - Output stays color-free when piped; SIGPIPE-safe
 
@@ -151,6 +152,10 @@ doma list -t 'work/*' -0 | xargs -0 -I{} sh -c 'cd "{}" && git status -s | head'
 # Structured access via jq
 doma list --json | jq -r '.[] | "\(.short_id)\t\(.path)\t\(.tags|join(","))"'
 
+# Which tagged repos failed to build? (per-directory rows, parallel-safe)
+doma run crystal --parallel --json -- shards build \
+  | jq -r '.[] | select(.exit_code != 0) | .path'
+
 # Ad-hoc bookmarks during a code review session
 doma mark auth-review
 # ... cd around ...
@@ -159,7 +164,7 @@ doma list -t auth-review --paths
 
 ## AI agents
 
-doma ships a [Claude Code skill](skills/doma/SKILL.md) that teaches an agent when to query the database for a path list ("update CI for all my Crystal projects") and when to register or bookmark a directory ("track this", "remember this for later").
+doma ships a [Claude Code skill](skills/doma/SKILL.md) that teaches an agent when to query the database for a path list ("update CI for all my Crystal projects") and when to register or bookmark a directory ("track this", "remember this for later"). It also documents the pieces that make doma safe to drive unattended: the exit-code table, `run --json` for attributable per-directory results, and the guards that make destructive commands refuse to run without a TTY.
 
 Install via [Vercel Skills](https://github.com/vercel-labs/skills):
 

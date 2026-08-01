@@ -1,4 +1,5 @@
 require "option_parser"
+require "json"
 require "colorize"
 require "../../db/database"
 require "../../utils/errors"
@@ -12,18 +13,28 @@ module Doma::CLI
   #
   #   doma run <tag> -- <cmd> [args...]
   class RunCommand
+    # One directory's outcome. Under `--json` the child's streams are
+    # captured into strings so every byte can be attributed to the
+    # directory that produced it; in streaming mode the child writes
+    # straight through to the terminal and both fields stay empty.
+    private record RunResult,
+      exit_code : Int32,
+      stdout : String,
+      stderr : String
+
     def run(args : Array(String))
       stop_on_fail = false
       parallel = false
       no_header = false
       dry_run = false
+      json_mode = false
       jobs : Int32? = nil
       flag_tags = [] of String
       positional_tags = [] of String
       cmd_args = [] of String
 
       parser = OptionParser.new do |p|
-        p.banner = "Usage: doma run (<tag> | -t TAG) [--fail-fast] [--parallel [--jobs N]] [--no-header] [--dry-run] -- <cmd> [args...]"
+        p.banner = "Usage: doma run (<tag> | -t TAG) [--fail-fast] [--parallel [--jobs N]] [--no-header] [--dry-run] [--json] -- <cmd> [args...]"
         p.on("-t TAG", "--tag=TAG", "Tag selector — single tag, no comma split (alias for positional)") do |t|
           if t.strip.empty?
             raise Doma::ValidationError.new("tag is empty (-t got an empty value)")
@@ -41,6 +52,7 @@ module Doma::CLI
         end
         p.on("--no-header", "Suppress per-directory ▶/✓ markers (failures still surface as ✗)") { no_header = true }
         p.on("-n", "--dry-run", "Print the target directories and command without running anything") { dry_run = true }
+        p.on("--json", "Capture per-directory output as JSON (one row per directory)") { json_mode = true }
         p.on("-h", "--help", "Show help") do
           puts p
           STDOUT.puts ""
@@ -49,6 +61,12 @@ module Doma::CLI
           STDOUT.puts "`-t TAG` (`run -t work -- cmd`), but not both. Only a"
           STDOUT.puts "single tag is accepted; glob patterns (`*`, `?`) still"
           STDOUT.puts "match across multiple tags."
+          STDOUT.puts ""
+          STDOUT.puts "--json captures each child's stdout/stderr instead of"
+          STDOUT.puts "streaming them, and emits one row per directory:"
+          STDOUT.puts "  [{\"path\":…,\"exit_code\":0,\"stdout\":…,\"stderr\":…,\"dry_run\":false}]"
+          STDOUT.puts "Rows keep the input directory order even under --parallel,"
+          STDOUT.puts "which is the only way to tell whose output is whose."
           exit 0
         end
         p.unknown_args do |before, after|
@@ -64,7 +82,10 @@ module Doma::CLI
         raise Doma::ValidationError.new("--jobs requires --parallel")
       end
       # Global -q already implies --no-header — both want a quieter run.
-      no_header ||= Doma::Logger.quiet?
+      # So does --json: the rows carry every exit code, so a parallel ✓/✗
+      # stream on stderr would just be a second, less precise report of
+      # what stdout already says.
+      no_header ||= Doma::Logger.quiet? || json_mode
 
       # Check the missing-command case first: if the user typed
       # `run -t shared echo hi` (no separator), `echo`/`hi` land in
@@ -132,6 +153,16 @@ module Doma::CLI
       # target paths go to stdout, one per line, so a dry-run composes with
       # the rest of the shell exactly like `list --paths`.
       if dry_run
+        if json_mode
+          # Preview rows carry no exit code — nothing ran. `dry_run` is
+          # always present (in both modes) so a consumer can tell a
+          # preview from a result without inspecting which keys exist.
+          rows = paths.map do |path|
+            {"path" => JSON::Any.new(path), "dry_run" => JSON::Any.new(true)}
+          end
+          puts rows.to_json
+          return
+        end
         # Summary on STDERR so STDOUT stays pure paths (pipeable like
         # `list --paths`); mirrors where `run` prints its ▶/✓ chrome.
         # Suppressed under -q, which asks for just the machine-readable set.
@@ -148,8 +179,13 @@ module Doma::CLI
       color = Doma::Logger.color_enabled?
       failures = 0
 
-      if parallel
-        Doma::Logger.warn "--fail-fast is ignored in --parallel mode" if stop_on_fail
+      # Hoisted above the mode split so the JSON path warns too — the
+      # flag is just as inert there.
+      Doma::Logger.warn "--fail-fast is ignored in --parallel mode" if parallel && stop_on_fail
+
+      if json_mode
+        failures = run_json(paths, cmd, cmd_rest, parallel, jobs, stop_on_fail)
+      elsif parallel
         # Bounded fan-out (see Doma::Parallel): without a cap, one fiber
         # per directory is fine for a `pwd` sweep but a foot-gun for
         # `git fetch` / `npm install` — 200 simultaneous network jobs
@@ -164,7 +200,7 @@ module Doma::CLI
         requested_jobs = j || Doma::Parallel.default_jobs
         Doma::Parallel.each_completed(
           paths, requested_jobs,
-          ->(path : String) { run_one(cmd, cmd_rest, path, attach_stdin: false) }
+          ->(path : String) { run_one(cmd, cmd_rest, path, attach_stdin: false, capture: false).exit_code }
         ) do |path, code|
           announce(path, code, color, no_header)
           failures += 1 unless code == 0
@@ -175,7 +211,7 @@ module Doma::CLI
             header = "▶ #{path}"
             STDERR.puts(color ? header.colorize(:cyan).bold.to_s : header)
           end
-          code = run_one(cmd, cmd_rest, path, attach_stdin: true)
+          code = run_one(cmd, cmd_rest, path, attach_stdin: true, capture: false).exit_code
           announce(path, code, color, no_header)
           unless code == 0
             failures += 1
@@ -202,10 +238,61 @@ module Doma::CLI
       "usage: doma run <tag> -- <cmd>"
     end
 
+    # `--json` sweep: capture each directory's streams and emit one row
+    # per directory in INPUT order, so a consumer can attribute every
+    # byte to the directory that produced it. That attribution is the
+    # whole point of the mode — the streaming path merges N children onto
+    # one terminal, and under `--parallel` there is no way left to tell
+    # whose line is whose.
+    private def run_json(paths : Array(String), cmd : String, cmd_rest : Array(String), parallel : Bool, jobs : Int32?, stop_on_fail : Bool) : Int32
+      results = if parallel
+                  # `map`, not `each_completed`: it slots each result back
+                  # at the item's original index, so out-of-order
+                  # completion still produces an input-ordered array.
+                  # Nothing here wants live progress — the rows only get
+                  # serialized once the whole sweep is in.
+                  j = jobs || Doma::Parallel.default_jobs
+                  Doma::Parallel.map(paths, j) do |path|
+                    run_one(cmd, cmd_rest, path, attach_stdin: false, capture: true)
+                  end
+                else
+                  collected = [] of RunResult
+                  paths.each do |path|
+                    # stdin stays closed even sequentially: a captured run
+                    # is consumed by a machine, so letting a child inherit
+                    # the terminal would let it block on input nobody is
+                    # watching for.
+                    result = run_one(cmd, cmd_rest, path, attach_stdin: false, capture: true)
+                    collected << result
+                    break if stop_on_fail && result.exit_code != 0
+                  end
+                  collected
+                end
+
+      # `--fail-fast` truncates `results` to a prefix of `paths`, so
+      # zipping by index stays correct — the array just ends early, and
+      # the missing directories are the ones that never ran.
+      rows = results.map_with_index do |result, i|
+        {
+          "path"      => JSON::Any.new(paths[i]),
+          "exit_code" => JSON::Any.new(result.exit_code.to_i64),
+          "stdout"    => JSON::Any.new(result.stdout),
+          "stderr"    => JSON::Any.new(result.stderr),
+          "dry_run"   => JSON::Any.new(false),
+        }
+      end
+      puts rows.to_json
+      results.count { |r| r.exit_code != 0 }
+    end
+
     # Runs a single instance, translating spawn/exec failures (missing
     # binary, unreadable chdir, etc.) into a sentinel exit code so the
     # parallel reaper never blocks waiting for a fiber that crashed.
-    private def run_one(cmd : String, args : Array(String), path : String, *, attach_stdin : Bool) : Int32
+    #
+    # `capture` swaps the child's stdout/stderr from the terminal to
+    # in-memory buffers; the caller picks based on whether it's about to
+    # render JSON or stream.
+    private def run_one(cmd : String, args : Array(String), path : String, *, attach_stdin : Bool, capture : Bool) : RunResult
       # A missing `chdir:` target and a missing *command* both surface as
       # File::NotFoundError, and the runtime's message names the command
       # ("Error executing process: 'true': No such file or directory") —
@@ -213,22 +300,42 @@ module Doma::CLI
       # binary that plainly exists. Check the directory first and say what
       # actually went wrong, pointing at the cleanup command for dead paths.
       unless Dir.exists?(path)
-        STDERR.puts "✗ #{path}: directory no longer exists (run `doma prune --gone` to drop dead paths)"
-        return 127
+        return fail_result(path, "directory no longer exists (run `doma prune --gone` to drop dead paths)", 127, capture)
       end
       input = attach_stdin ? STDIN : Process::Redirect::Close
-      status = Process.run(cmd, args: args, chdir: path, output: STDOUT, error: STDERR, input: input)
-      status.exit_code
+      unless capture
+        status = Process.run(cmd, args: args, chdir: path, output: STDOUT, error: STDERR, input: input)
+        return RunResult.new(status.exit_code, "", "")
+      end
+      # Fresh buffers per call: under --parallel this method runs on N
+      # fibers at once, and a shared sink would splice two children's
+      # bytes into one directory's record.
+      # Named `out_io`/`err_io` because a bare `out` is a Crystal keyword
+      # (the C-binding out-parameter form) and can't be used as an
+      # argument value.
+      out_io = IO::Memory.new
+      err_io = IO::Memory.new
+      status = Process.run(cmd, args: args, chdir: path, output: out_io, error: err_io, input: input)
+      RunResult.new(status.exit_code, out_io.to_s, err_io.to_s)
     rescue ex : File::NotFoundError
-      STDERR.puts "✗ #{path}: #{ex.message}"
-      127
+      fail_result(path, ex.message || "command not found", 127, capture)
     rescue ex
       # Catch-all, not just the expected spawn failures: under
       # --parallel an unrescued exception kills the worker fiber and the
       # reaper's `results.receive` then blocks forever. A weird failure
       # must degrade to a failed directory, never a hang.
-      STDERR.puts "✗ #{path}: #{ex.message || ex.class.name}"
-      126
+      fail_result(path, ex.message || ex.class.name, 126, capture)
+    end
+
+    # A failure with no child streams to report — doma itself is the one
+    # explaining what went wrong. In capture mode the reason becomes the
+    # row's `stderr` so the JSON consumer learns why the directory
+    # failed; otherwise it goes to the terminal in the same ✗ form
+    # `announce` uses.
+    private def fail_result(path : String, reason : String, code : Int32, capture : Bool) : RunResult
+      return RunResult.new(code, "", reason) if capture
+      STDERR.puts "✗ #{path}: #{reason}"
+      RunResult.new(code, "", "")
     end
 
     private def announce(path : String, code : Int32, color : Bool, no_header : Bool)

@@ -510,11 +510,19 @@ module Doma::CLI
     # Build one JSON row for an entry, matching the export/import schema.
     # Used by both the flat and grouped JSON render paths.
     private def json_row(e : Doma::Entry, ttl_by_id : Hash(Int64, Hash(String, Int64)), check_existence : Bool) : Hash(String, JSON::Any)
+      # `created_at` / `last_used_at` are epoch seconds, matching
+      # `info --json`. They're here so a consumer can apply its own
+      # recency window ("touched in the last 7 days") instead of being
+      # limited to the relative ordering `--by recent` provides.
+      # `last_used_at == 0` means never used — same sentinel `info`
+      # renders as "never".
       row = {
-        "short_id" => JSON::Any.new(e.short_id),
-        "path"     => JSON::Any.new(e.path),
-        "basename" => JSON::Any.new(e.basename),
-        "tags"     => JSON::Any.new(e.tags.map { |t| JSON::Any.new(t) }),
+        "short_id"     => JSON::Any.new(e.short_id),
+        "path"         => JSON::Any.new(e.path),
+        "basename"     => JSON::Any.new(e.basename),
+        "tags"         => JSON::Any.new(e.tags.map { |t| JSON::Any.new(t) }),
+        "created_at"   => JSON::Any.new(e.created_at),
+        "last_used_at" => JSON::Any.new(e.last_used_at),
       }
       if ttl_map = ttl_by_id[e.id]?
         row["expirations"] = JSON::Any.new(ttl_map.transform_values { |v| JSON::Any.new(v) })
