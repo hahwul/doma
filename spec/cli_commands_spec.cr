@@ -463,7 +463,7 @@ describe "doma run" do
     with_home do |home|
       seed_home(home)
       sequential = run(["run", "shared", "--json", "--", "pwd"], {"DOMA_HOME" => home})
-      seq_paths = JSON.parse(sequential[:out]).as_a.map { |r| r["path"].as_s }
+      seq_paths = JSON.parse(sequential[:out]).as_a.map(&.["path"].as_s)
       # Deliberately make the *first* directory the slow one, so a
       # completion-ordered implementation would be forced to emit it
       # last. Rows must still land in the same order the sequential run
@@ -473,7 +473,7 @@ describe "doma run" do
       parallel = run(["run", "shared", "--parallel", "--json", "--",
                       "sh", "-c", "[ \"$(pwd)\" = \"#{slow}\" ] && sleep 0.4; pwd"],
         {"DOMA_HOME" => home})
-      par_paths = JSON.parse(parallel[:out]).as_a.map { |r| r["path"].as_s }
+      par_paths = JSON.parse(parallel[:out]).as_a.map(&.["path"].as_s)
       par_paths.should eq(seq_paths)
     end
   end
