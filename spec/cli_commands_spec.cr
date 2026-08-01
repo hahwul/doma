@@ -422,6 +422,106 @@ describe "doma run" do
     end
   end
 
+  it "[--json] attributes each directory's stdout to its own row" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      r = run(["run", "shared", "--json", "--", "pwd"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(0)
+      rows = JSON.parse(r[:out]).as_a
+      rows.size.should eq(2)
+      rows.each do |row|
+        row["exit_code"].as_i.should eq(0)
+        row["dry_run"].as_bool.should be_false
+        # The whole point of the mode: the captured stdout belongs to
+        # the directory named in the same row, not to the sweep at large.
+        row["stdout"].as_s.strip.should eq(row["path"].as_s)
+        row["stderr"].as_s.should eq("")
+      end
+    end
+  end
+
+  it "[--json] separates a child's stderr from its stdout and keeps the exit code" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      r = run(["run", "shared", "--json", "--", "sh", "-c", "echo o; echo e >&2; exit 3"],
+        {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(1) # at least one directory failed
+      rows = JSON.parse(r[:out]).as_a
+      rows.size.should eq(2)
+      rows.each do |row|
+        row["exit_code"].as_i.should eq(3)
+        row["stdout"].as_s.should eq("o\n")
+        row["stderr"].as_s.should eq("e\n")
+      end
+    end
+  end
+
+  it "[--json --parallel] keeps input order despite out-of-order completion" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      sequential = run(["run", "shared", "--json", "--", "pwd"], {"DOMA_HOME" => home})
+      seq_paths = JSON.parse(sequential[:out]).as_a.map { |r| r["path"].as_s }
+      # Deliberately make the *first* directory the slow one, so a
+      # completion-ordered implementation would be forced to emit it
+      # last. Rows must still land in the same order the sequential run
+      # produced — that stability is what lets a caller zip two sweeps
+      # together or diff them.
+      slow = seq_paths.first
+      parallel = run(["run", "shared", "--parallel", "--json", "--",
+                      "sh", "-c", "[ \"$(pwd)\" = \"#{slow}\" ] && sleep 0.4; pwd"],
+        {"DOMA_HOME" => home})
+      par_paths = JSON.parse(parallel[:out]).as_a.map { |r| r["path"].as_s }
+      par_paths.should eq(seq_paths)
+    end
+  end
+
+  it "[--json] reports a dead path as a failed row rather than terminal noise" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      gone = File.tempname("doma-gone")
+      FileUtils.mkdir_p(gone)
+      run(["add", gone, "-t", "vanish"], {"DOMA_HOME" => home})
+      FileUtils.rm_rf(gone)
+
+      r = run(["run", "vanish", "--json", "--", "pwd"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(1)
+      rows = JSON.parse(r[:out]).as_a
+      rows.size.should eq(1)
+      rows[0]["exit_code"].as_i.should eq(127)
+      # doma's own explanation lands in the row's stderr — a JSON
+      # consumer shouldn't have to scrape the terminal to learn why.
+      rows[0]["stderr"].as_s.should contain("no longer exists")
+    end
+  end
+
+  it "[--json --dry-run] previews without an exit code" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      r = run(["run", "shared", "--json", "--dry-run", "--", "false"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(0)
+      rows = JSON.parse(r[:out]).as_a
+      rows.size.should eq(2)
+      rows.each do |row|
+        row["dry_run"].as_bool.should be_true
+        row["exit_code"]?.should be_nil # nothing ran, so there is none
+      end
+    end
+  end
+
+  it "[--json] emits no ▶/✓ chrome — the rows already carry the status" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      r = run(["run", "shared", "--json", "--", "true"], {"DOMA_HOME" => home})
+      r[:err].should_not contain("▶")
+      r[:err].should_not contain("(exit 0)")
+    end
+  end
+
   it "[missing cmd] survives without hanging, reports 127" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     with_home do |home|
@@ -660,6 +760,34 @@ describe "doma list output flags" do
       seed_home(home)
       r = run(["list", "--paths", "-0"], {"DOMA_HOME" => home})
       r[:status].exit_code.should eq(0)
+    end
+  end
+
+  it "[--json] carries created_at / last_used_at so callers can window by time" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      run(["add", "/tmp", "-t", "demo"], {"DOMA_HOME" => home})
+      r = run(["list", "--json"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(0)
+      row = JSON.parse(r[:out]).as_a.first.as_h
+      row["created_at"].as_i.should be > 0
+      # Never picked → the schema's "never used" sentinel, same one
+      # `info` renders as "never".
+      row["last_used_at"].as_i.should eq(0)
+    end
+  end
+
+  it "[--json] reflects a recency bump in last_used_at" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      run(["add", "/tmp", "-t", "solo"], {"DOMA_HOME" => home})
+      # A single-match --pick resolves without a prompt and stamps
+      # recency on the way out — the same bump the shell `cd` wrapper
+      # produces in normal use.
+      run(["list", "-t", "solo", "--pick"], {"DOMA_HOME" => home})
+      r = run(["list", "-t", "solo", "--json"], {"DOMA_HOME" => home})
+      row = JSON.parse(r[:out]).as_a.first.as_h
+      row["last_used_at"].as_i.should be > 0
     end
   end
 end
@@ -1895,6 +2023,47 @@ describe "doma info" do
       h["created_at"].as_i.should be > 0
       h["last_used_at"].as_i.should eq(0)
       h["exists"].as_bool.should be_true
+      h["found"].as_bool.should be_true
+    end
+  end
+
+  it "[--json, unregistered] still emits JSON on stdout and keeps exit 3" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      run(["add", "/tmp", "-t", "demo"], {"DOMA_HOME" => home})
+      r = run(["info", "/var", "--json"], {"DOMA_HOME" => home})
+      # Exit code is unchanged — the JSON is additive, so `&&` chains
+      # and error branches behave exactly as they did before.
+      r[:status].exit_code.should eq(3)
+      h = JSON.parse(r[:out]).as_h
+      h["found"].as_bool.should be_false
+      h["input"].as_s.should eq("/var")
+      h["error"].as_s.should contain("not registered")
+      # The steer the text path prints survives into the payload.
+      h["hint"].as_s.should contain("doma add /var")
+    end
+  end
+
+  it "[--json, trashed] carries the restore hint into the payload" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      run(["add", "/tmp", "-t", "demo"], {"DOMA_HOME" => home})
+      run(["rm", "/tmp"], {"DOMA_HOME" => home})
+      r = run(["info", "/tmp", "--json"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(3)
+      h = JSON.parse(r[:out]).as_h
+      h["found"].as_bool.should be_false
+      h["hint"].as_s.should contain("trash restore")
+    end
+  end
+
+  it "[unregistered, no --json] keeps the human error on stderr" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      r = run(["info", "/var"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(3)
+      r[:out].should eq("") # nothing structured leaks into the text path
+      r[:err].should contain("not registered")
     end
   end
 

@@ -28,8 +28,8 @@ class Doma::Database
              # audit the full set.
              expired_pred = include_expired ? "1=1" : NOT_EXPIRED_DT
              @db.query_all(
-               <<-SQL, tag, as: {Int64, String, String, String, String?}
-                 SELECT DISTINCT d.id, d.short_id, d.path, d.basename, #{tag_select}
+               <<-SQL, tag, as: ENTRY_ROW
+                 SELECT DISTINCT #{ENTRY_COLUMNS}, #{tag_select}
                  FROM directories d
                  INNER JOIN directory_tags dt ON dt.directory_id = d.id
                  INNER JOIN tags t ON t.id = dt.tag_id
@@ -40,8 +40,8 @@ class Doma::Database
              )
            else
              @db.query_all(
-               <<-SQL, as: {Int64, String, String, String, String?}
-                 SELECT d.id, d.short_id, d.path, d.basename, #{tag_select}
+               <<-SQL, as: ENTRY_ROW
+                 SELECT #{ENTRY_COLUMNS}, #{tag_select}
                  FROM directories d
                  #{order}
                  SQL
@@ -123,8 +123,8 @@ class Doma::Database
   def directories_by_short_id_prefix(prefix : String) : Array(Entry)
     pattern = "#{prefix}%"
     rows = @db.query_all(
-      <<-SQL, pattern, as: {Int64, String, String, String, String?}
-        SELECT d.id, d.short_id, d.path, d.basename, #{TAGS_GROUP_CONCAT_ACTIVE}
+      <<-SQL, pattern, as: ENTRY_ROW
+        SELECT #{ENTRY_COLUMNS}, #{TAGS_GROUP_CONCAT_ACTIVE}
         FROM directories d
         WHERE d.short_id LIKE ? ESCAPE '\\'
         ORDER BY d.short_id
@@ -205,8 +205,8 @@ class Doma::Database
     #   2. Tag-name hit — only counts when the tag row is still
     #      active, unless --include-expired is set.
     rows = @db.query_all(
-      <<-SQL, term, term, term, as: {Int64, String, String, String, String?}
-        SELECT d.id, d.short_id, d.path, d.basename, #{tag_select}
+      <<-SQL, term, term, term, as: ENTRY_ROW
+        SELECT #{ENTRY_COLUMNS}, #{tag_select}
         FROM directories d
         WHERE d.id IN (
           SELECT id FROM directories
@@ -357,10 +357,10 @@ class Doma::Database
     end
   end
 
-  private def build_entry(row : {Int64, String, String, String, String?}) : Entry
-    id, short_id, path, basename, joined = row
+  private def build_entry(row : EntryRow) : Entry
+    id, short_id, path, basename, created_at, last_used_at, joined = row
     tags = joined ? joined.split('\u001f').reject(&.empty?) : [] of String
-    Entry.new(id, short_id, path, basename, tags)
+    Entry.new(id, short_id, path, basename, tags, created_at, last_used_at)
   end
 
   # SQLite LIKE uses '\' as the configured escape character below. We wrap

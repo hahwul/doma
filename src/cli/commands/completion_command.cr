@@ -99,7 +99,7 @@ module Doma::CLI
       CmdSpec.new("status", "Git status across tagged repos",
         %w[-t --tag --dirty --jobs --json -h --help], [] of String),
       CmdSpec.new("run", "Run a command in every tagged directory",
-        %w[-t --tag --fail-fast --parallel --jobs --no-header -n --dry-run -h --help], [] of String),
+        %w[-t --tag --fail-fast --parallel --jobs --no-header -n --dry-run --json -h --help], [] of String),
       CmdSpec.new("export", "Dump the database",
         %w[--json --yaml -o --output -h --help], [] of String),
       CmdSpec.new("import", "Load a snapshot",

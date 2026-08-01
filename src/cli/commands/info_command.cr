@@ -39,6 +39,20 @@ module Doma::CLI
 
       raw = positional.first? || "."
 
+      # Under `--json` every outcome — found, not registered, ambiguous —
+      # leaves a JSON object on stdout, so a consumer never has to fall
+      # back to scraping the human error text off stderr. The exit code
+      # still carries the class of failure (3 not found, 2 ambiguous),
+      # so `&&` chains behave exactly as before.
+      begin
+        lookup(raw, json_mode)
+      rescue ex : Doma::Error
+        raise ex unless json_mode
+        emit_error_json(raw, ex)
+      end
+    end
+
+    private def lookup(raw : String, json_mode : Bool)
       Doma::Database.open do |db|
         # Three input shapes, resolution order:
         #   1. short_id-shaped (hex, no path separators) → resolve via
@@ -90,6 +104,24 @@ module Doma::CLI
 
         render_entry(db, info, json_mode, raw)
       end
+    end
+
+    # Failure counterpart to `render_json`. Carries the same `found`
+    # discriminator so a consumer can branch on one key, plus the hint
+    # the text path would have printed — that's where the "it's in the
+    # trash, restore with …" steer lives, and it's too useful to drop
+    # just because the caller asked for JSON.
+    private def emit_error_json(raw : String, ex : Doma::Error)
+      payload = {
+        "input" => JSON::Any.new(raw),
+        "found" => JSON::Any.new(false),
+        "error" => JSON::Any.new(ex.message || "not registered"),
+      } of String => JSON::Any
+      if hint = ex.hint
+        payload["hint"] = JSON::Any.new(hint)
+      end
+      puts payload.to_json
+      exit ex.exit_code
     end
 
     # Fetch the entry's tags/TTLs/existence and emit it — shared by the
@@ -169,6 +201,9 @@ module Doma::CLI
 
     private def render_json(info : Doma::Database::PathInfo, tags : Array(String), ttl_map : Hash(String, Int64), exists : Bool)
       payload = {
+        # Always present, in both the hit and miss shapes, so a consumer
+        # branches on one key instead of probing for `short_id`.
+        "found"        => JSON::Any.new(true),
         "short_id"     => JSON::Any.new(info.short_id),
         "path"         => JSON::Any.new(info.path),
         "basename"     => JSON::Any.new(info.basename),

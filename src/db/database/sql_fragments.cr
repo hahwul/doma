@@ -24,6 +24,27 @@ class Doma::Database
   IS_EXPIRED_DT = "(dt.expires_at IS NOT NULL AND dt.expires_at <= #{NOW_EPOCH})"
   IS_EXPIRED    = "(expires_at IS NOT NULL AND expires_at <= #{NOW_EPOCH})"
 
+  # The scalar column list every Entry-hydrating read selects, in the
+  # exact order `build_entry` destructures. Centralized so adding a
+  # column to `Entry` is one edit here plus one in `build_entry`,
+  # rather than four SELECTs drifting apart. Always followed by a
+  # TAGS_GROUP_CONCAT_* variant as the trailing column. Assumes the
+  # `directories` table is aliased `d`.
+  ENTRY_COLUMNS = "d.id, d.short_id, d.path, d.basename, d.created_at, d.last_used_at"
+
+  # The row shape matching `ENTRY_COLUMNS` plus the trailing
+  # GROUP_CONCAT column (nullable — a directory with no tags
+  # concatenates to NULL). Kept beside the column list so the two can't
+  # fall out of sync.
+  #
+  # Two spellings of the same thing because they're used in two
+  # different positions: crystal-db's `as:` takes a *value* (a tuple of
+  # class objects), while a method's type restriction takes a *type*.
+  # An alias can't stand in for the former, so both live here rather
+  # than one being re-typed at each call site.
+  ENTRY_ROW = {Int64, String, String, String, Int64, Int64, String?}
+  alias EntryRow = {Int64, String, String, String, Int64, Int64, String?}
+
   # Tags are joined with the unit-separator (0x1f) rather than a comma
   # so that a tag containing a comma — which our validator rejects
   # today, but might allow in a future schema bump — wouldn't tear the

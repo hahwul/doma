@@ -33,7 +33,7 @@ tag, and silent emptiness is worse than asking.
 |---|---|---|
 | One path per line, for `while read` / `xargs` | `doma list -t TAG --paths` | The default newline-separated form |
 | NUL-separated, paths with spaces | `doma list -t TAG -0` | Pipe to `xargs -0`. Safer than `--paths` when paths might contain spaces |
-| Structured JSON (`short_id`, `path`, `basename`, `tags`) | `doma list -t TAG --json` | TTL'd tags add an `expirations` map (`tag → unix epoch`); `--check` adds a boolean `exists` |
+| Structured JSON (`short_id`, `path`, `basename`, `tags`, `created_at`, `last_used_at`) | `doma list -t TAG --json` | Timestamps are unix epoch seconds — filter your own recency window instead of relying on `--by recent` ordering (`last_used_at == 0` means never used). TTL'd tags add an `expirations` map (`tag → unix epoch`); `--check` adds a boolean `exists` |
 | Substring across path/basename/tag | `doma list <query>` | Single substring match. Combines with `-t` for intersection. Multiple positional args are joined by a space — they are *not* AND-ed |
 | Sorted by recency | `doma list --by recent` | Most-recently-used first; aliases: `used`, `recency`. Useful when "the project I was just working on" is in scope |
 | Mark missing paths inline | `doma list --check` | Tags entries whose path is gone with `[gone]`. Without it, the footer just counts them |
@@ -113,16 +113,67 @@ doma list -t crystal -0 | xargs -0 -I{} sh -c 'cd "{}" && grep -l TODO **/*.cr'
 **Pattern B — let doma run a command per directory:**
 
 ```bash
-doma run crystal -- shards build              # sequential, stops on Ctrl-C
-doma run crystal --parallel -- ...            # concurrent, output interleaves
+doma run crystal --json -- shards build       # per-directory results, attributable (prefer this)
+doma run crystal -- shards build              # sequential, streams to the terminal
+doma run crystal --parallel -- ...            # concurrent; without --json the output interleaves
 doma run crystal --parallel --jobs 4 -- ...   # cap concurrency (default: CPU count)
 doma run crystal --fail-fast -- ...           # halt on first non-zero exit (sequential only)
+doma run crystal --dry-run -- rm -rf build    # print the target set without running anything
 doma run crystal --no-header -- pwd           # suppress ▶/✓ chrome (failures still surface)
 ```
+
+**Prefer `--json` in an agent.** Without it, every directory's output
+lands on one shared stream, and under `--parallel` there is no way left
+to tell which repo produced which line. `--json` captures each child
+separately and emits one row per directory, in the same order as
+`list --paths`, whether or not the sweep ran in parallel:
+
+```json
+[{"path":"/a","exit_code":0,"stdout":"ok\n","stderr":"","dry_run":false},
+ {"path":"/b","exit_code":1,"stdout":"","stderr":"boom\n","dry_run":false}]
+```
+
+Answering "which of my repos failed?" is then `jq '.[] | select(.exit_code != 0) | .path'`
+rather than a guess at interleaved text. The process exit code is still
+1 if any directory failed, so the old `&&` semantics hold. Notes:
+
+- `--json` suppresses the `▶`/`✓` chrome; the rows carry the status.
+- `--json --dry-run` previews as `[{"path":…,"dry_run":true}]` — no
+  `exit_code` key, because nothing ran. Reach for it before any
+  destructive sweep to confirm the tag resolved to what you expect.
+- `--fail-fast` truncates the array to the directories that actually
+  ran; the rest are simply absent.
+- A dead path becomes a row with `exit_code: 127` and doma's
+  explanation in `stderr`, not a hard error.
 
 Use `doma run` only when the operation is uniform enough to express as
 a single shell command. For per-directory logic that involves reading
 files or making decisions, Pattern A keeps the work in your hands.
+
+## Exit codes
+
+Every failure class has its own code, so you can branch on the status
+instead of matching on error text (which is human-facing and will be
+reworded).
+
+| Code | Means | Typical cause |
+|---|---|---|
+| 0 | Success — **including an empty result set** | `list -t X` matched nothing |
+| 1 | Generic failure | bad flag; `run` had at least one directory exit non-zero |
+| 2 | Validation | invalid tag name, conflicting output flags, `add` given a non-directory |
+| 3 | Not found | `info`/`rm` on an unregistered path; `list --pick` matched nothing |
+| 4 | Conflict / ambiguous | `list --pick` matched N directories with no TTY and no `--first` |
+| 5 | Config | unreadable or invalid `config.yml` |
+| 6 | Import | malformed snapshot file |
+| 130 | Cancelled | user hit Ctrl-C in an interactive picker |
+
+Two of these matter most in practice:
+
+- **0 with empty stdout is a real, successful outcome** — not an error.
+  Check for empty output before iterating.
+- **4 from `--pick` means "I refuse to guess"** — narrow the filter,
+  pass `--first`, or use `list -t TAG --paths` if you actually wanted
+  every match.
 
 ## Pitfalls
 
@@ -139,6 +190,19 @@ files or making decisions, Pattern A keeps the work in your hands.
       interactive picker even without a TTY.
 
   When you need every path, use `doma list -t TAG --paths`.
+
+- **Never invoke bare `doma` or `doma tui`.** With a terminal attached
+  they open a full-screen interactive finder and wait for a keypress —
+  which will hang you if your shell runs on a pty. Set `DOMA_NO_TUI=1`
+  if you need bare `doma` to be safe (it prints help instead), and use
+  `doma list` for everything you'd otherwise browse.
+
+- **Destructive ops refuse to run unattended.** `rm --hard`,
+  `prune --gone --hard`, `import --replace`, and `trash empty` exit 1
+  with "requires --yes" when there's no TTY. That guard is deliberate:
+  treat it as a signal to go back to the user for confirmation, not as
+  something to defeat by adding `-y` / `DOMA_YES=1` on your own
+  initiative.
 
 - **Symlinks are resolved.** doma stores the canonical real path, so a
   registered `/var/foo` will surface as `/private/var/foo` on macOS.
@@ -178,8 +242,10 @@ files or making decisions, Pattern A keeps the work in your hands.
 | "Check git status across my work repos" | `doma list -t 'work/*' --paths` (glob applies to `list -t` and `run`) |
 | "Find that bookmarked thing about auth" | `doma list -t bookmark auth` (tag filter ∩ substring `auth`) |
 | "What was I working on last?" | `doma list --by recent` (top entries are most-recent cd targets) |
-| "Is this directory registered? with what tags?" | `doma info` (cwd), `doma info <path>`, `doma info <short_id>`, or `doma info <name>` (substring fallback). Surfaces last-used + relative time; exits 3 if not registered (with a trash hint when applicable) |
-| "Run specs across all the Crystal projects in parallel" | `doma run crystal --parallel -- crystal spec` (cap concurrency with `--jobs N`; suppress per-dir headers with `--no-header`) |
+| "Is this directory registered? with what tags?" | `doma info --json` (cwd), or with `<path>` / `<short_id>` / `<name>` (substring fallback). Always emits JSON — `{"found":true,…}` or `{"found":false,"error":…,"hint":…}` with exit 3. Branch on `found`; no need to scrape stderr |
+| "Run specs across all the Crystal projects in parallel" | `doma run crystal --parallel --json -- crystal spec` (`--json` is what makes each repo's output attributable; cap concurrency with `--jobs N`) |
+| "Which of my Crystal projects fail to build?" | `doma run crystal --json -- shards build \| jq -r '.[] \| select(.exit_code != 0) \| .path'` |
+| "What have I touched in the last week?" | `doma list --json` → filter `.last_used_at` against your own epoch cutoff |
 | "I'll be working on this project for a while" | `doma add . -t <category>` (use `--json` to capture the new short_id immediately) |
 | "Bookmark this so I come back later" | `doma mark <name>` |
 | "Mark these dirs for the auth review" | `doma mark -p <each-path> auth-review` (no need to cd around) |
