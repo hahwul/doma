@@ -49,7 +49,7 @@ jobs:
         # static — no glibc/sqlite version pinning surprises on user systems.
         run: |
           mkdir -p build
-          docker run --rm -v $(pwd):/doma -w /doma --entrypoint="" crystallang/crystal:1.20.0-alpine sh -c "
+          docker run --rm -v $(pwd):/doma -w /doma --entrypoint="" crystallang/crystal:1.22.0-alpine sh -c "
             apk add --no-cache yaml-dev sqlite-dev sqlite-static git curl &&
             shards install --release --no-debug --production &&
             mkdir -p build &&
