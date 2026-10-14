@@ -45,6 +45,9 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libsqlite3-dev
       - name: Install shards
         run: shards install
+      # CLI specs spawn bin/doma and go pending without it.
+      - name: Build
+        run: shards build
       - name: Run specs
         run: crystal spec
 
