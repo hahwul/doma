@@ -35,9 +35,12 @@ module Doma
       # `--ttl 7d` entry comes back with the original deadline (not a
       # fresh 7-day clock).
       property expirations : Hash(String, Int64)
+      # nil for entries trashed before this field existed; restore then
+      # falls back to "now".
+      property created_at : Int64?
 
       def initialize(@deleted_at, @short_id, @path, @basename,
-                     @last_used_at, @tags, @expirations)
+                     @last_used_at, @tags, @expirations, @created_at = nil)
       end
 
       # 7-char display form of the short id — what `trash list` prints
@@ -75,6 +78,7 @@ module Doma
         last_used_at: info.last_used_at,
         tags: tags,
         expirations: expirations,
+        created_at: info.created_at,
       )
     end
 
@@ -170,7 +174,7 @@ module Doma
             cnn.exec(
               "INSERT INTO directories (path, basename, short_id, created_at, last_used_at) " \
               "VALUES (?, ?, ?, ?, ?)",
-              entry.path, entry.basename, entry.short_id, now, entry.last_used_at
+              entry.path, entry.basename, entry.short_id, entry.created_at || now, entry.last_used_at
             )
             cnn.scalar("SELECT id FROM directories WHERE path = ?", entry.path).as(Int64)
           end

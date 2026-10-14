@@ -37,8 +37,15 @@ module Doma
       # resolve to the cwd via `File.expand_path("")`, breaking every
       # subsequent command with "DOMA_DB points at a directory". Treat
       # blanks as unset on both sources.
-      explicit = ENV["DOMA_DB"]?.presence || Settings.current.db_path.try(&.presence)
-      return Validator.expand_home(explicit) if explicit
+      if env = ENV["DOMA_DB"]?.presence
+        return Validator.expand_home(env)
+      end
+      if cfg = Settings.current.db_path.try(&.presence)
+        # A relative `db_path` is relative to the config file, not the
+        # cwd — otherwise every directory silently gets its own empty db.
+        cfg = File.join(File.dirname(config_path), cfg) unless cfg.starts_with?('/') || cfg.starts_with?('~')
+        return Validator.expand_home(cfg)
+      end
       File.join(home, "doma.db")
     end
 

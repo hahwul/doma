@@ -164,7 +164,8 @@ module Doma::CLI
         _doma() {
           local cur prev words cword
           if declare -F _init_completion >/dev/null 2>&1; then
-            _init_completion || return
+            # `-n :` keeps `lang:crystal` one word (`:` is in COMP_WORDBREAKS).
+            _init_completion -n : || return
           else
             cur="${COMP_WORDS[COMP_CWORD]}"
             prev="${COMP_WORDS[COMP_CWORD-1]}"
@@ -188,6 +189,7 @@ module Doma::CLI
               local tags
               tags=$(command doma tags --names 2>/dev/null)
               COMPREPLY=( $(compgen -W "$tags" -- "$cur") )
+              declare -F __ltrim_colon_completions >/dev/null 2>&1 && __ltrim_colon_completions "$cur"
               return
               ;;
             --by)
@@ -210,6 +212,7 @@ module Doma::CLI
                 local tags
                 tags=$(command doma tags --names 2>/dev/null)
                 COMPREPLY=( $(compgen -W "$tags" -- "$cur") )
+                declare -F __ltrim_colon_completions >/dev/null 2>&1 && __ltrim_colon_completions "$cur"
                 return
                 ;;
               #{PATH_FIRST_ARG.join('|')})
@@ -227,6 +230,12 @@ module Doma::CLI
           # Second positional after `config <action>` → key name.
           if [ "$cword" -eq 3 ] && [ "$cmd" = "config" ]; then
             COMPREPLY=( $(compgen -W "#{CONFIG_KEYS.join(' ')}" -- "$cur") )
+            return
+          fi
+
+          # `setup <action>` → shell name (every setup action takes one).
+          if [ "$cword" -eq 3 ] && [ "$cmd" = "setup" ]; then
+            COMPREPLY=( $(compgen -W "#{ShellArg::SUPPORTED.join(' ')}" -- "$cur") )
             return
           fi
 
@@ -331,7 +340,13 @@ module Doma::CLI
           (( ${#flags} )) && compadd -a flags
         }
 
-        compdef _doma doma
+        # Autoloaded from fpath, this file *is* `_doma`'s body: call it so
+        # the first TAB completes. Sourced directly, register it instead.
+        if [ "$funcstack[1]" = "_doma" ]; then
+          _doma "$@"
+        else
+          compdef _doma doma
+        fi
         ZSH
     end
 
@@ -426,7 +441,7 @@ module Doma::CLI
         lines << "complete -c doma -n '__fish_seen_subcommand_from #{spec.name}; and not __fish_seen_subcommand_from #{actions_str}' " \
                  "-a '#{actions_str}' -d '#{spec.name} action'"
       end
-      lines << "complete -c doma -n '__fish_seen_subcommand_from get set unset' " \
+      lines << "complete -c doma -n '__fish_seen_subcommand_from config; and __fish_seen_subcommand_from get set unset' " \
                "-a '#{CONFIG_KEYS.join(' ')}' -d 'config key'"
       lines << ""
 
