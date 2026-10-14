@@ -123,7 +123,7 @@ module Doma
             # this lookup matches the row add_tx will touch.
             # Snapshots only ever hold absolute paths; a blank or relative
             # one would otherwise canonicalize against the importer's cwd.
-            unless entry.path.starts_with?('/') || entry.path.starts_with?('~')
+            unless entry.path.starts_with?('/') || entry.path == "~" || entry.path.starts_with?("~/")
               raise Doma::ValidationError.new("path is not absolute: '#{entry.path}'")
             end
             abs = Doma::Validator.canonicalize(entry.path)

@@ -122,13 +122,15 @@ module Doma
     #   git@github.com:owner/repo.git
     #   ssh://git@github.com/owner/repo
     private def parse_remote(url : String) : NamedTuple(host: String?, owner: String?, repo: String?)
-      stripped = url.strip
+      stripped = url.strip.rstrip('/')
       stripped = stripped.rchop(".git") if stripped.ends_with?(".git")
 
-      if m = stripped.match(/\A[a-z]+:\/\/(?:[^@\/]+@)?([^\/]+)\/(.+?)\/([^\/]+)\z/i)
+      # Host excludes any `:port` so ssh://host:2222 and git@host: tag alike.
+      if m = stripped.match(/\A[a-z]+:\/\/(?:[^@\/]+@)?([^\/:]+)(?::\d+)?\/(.+?)\/([^\/]+)\z/i)
         return {host: host_label(m[1]), owner: m[2], repo: m[3]}
       end
-      if m = stripped.match(/\A(?:[^@]+)@([^:]+):(.+?)\/([^\/]+)\z/)
+      # scp-like, with or without `user@` (`github.com:o/r`).
+      if m = stripped.match(/\A(?:[^@\/]+@)?([^:\/]+):(?!\/\/)(.+?)\/([^\/]+)\z/)
         return {host: host_label(m[1]), owner: m[2], repo: m[3]}
       end
       {host: nil, owner: nil, repo: nil}
@@ -138,13 +140,11 @@ module Doma
     # unchanged so users on self-hosted Forgejo/Gitea/etc still get a tag.
     private def host_label(host : String) : String
       h = host.downcase
-      case
-      when h.includes?("github.com")    then "github"
-      when h.includes?("gitlab.com")    then "gitlab"
-      when h.includes?("bitbucket.org") then "bitbucket"
-      when h.includes?("codeberg.org")  then "codeberg"
-      else                                   h
-      end
+      # Exact host or subdomain — a substring check mislabels enterprise
+      # hosts like `github.company.com`.
+      known = {"github.com" => "github", "gitlab.com" => "gitlab", "bitbucket.org" => "bitbucket", "codeberg.org" => "codeberg"}
+      known.each { |domain, label| return label if h == domain || h.ends_with?(".#{domain}") }
+      h
     end
   end
 end

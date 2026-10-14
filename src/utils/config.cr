@@ -43,7 +43,7 @@ module Doma
       if cfg = Settings.current.db_path.try(&.presence)
         # A relative `db_path` is relative to the config file, not the
         # cwd — otherwise every directory silently gets its own empty db.
-        cfg = File.join(File.dirname(config_path), cfg) unless cfg.starts_with?('/') || cfg.starts_with?('~')
+        cfg = File.join(File.dirname(config_path), cfg) unless cfg.starts_with?('/') || cfg == "~" || cfg.starts_with?("~/")
         return Validator.expand_home(cfg)
       end
       File.join(home, "doma.db")

@@ -7,8 +7,11 @@ module Doma
     @@quiet : Bool = false
     @@debug : Bool = false
     # `NO_COLOR` (https://no-color.org/) is honored by default; the runner
-    # can flip this on/off via `--no-color` / `--color`.
-    @@no_color : Bool = ENV["NO_COLOR"]? != nil
+    # can flip this on/off via `--no-color` / `--color`. Per the spec, an
+    # empty `NO_COLOR=` doesn't count.
+    @@no_color : Bool = !ENV["NO_COLOR"]?.presence.nil?
+    # `--color`: color even when stdout isn't a TTY (e.g. `| less -R`).
+    @@force_color : Bool = false
 
     def quiet=(value : Bool)
       @@quiet = value
@@ -30,11 +33,17 @@ module Doma
       @@no_color = value
     end
 
+    def force_color=(value : Bool)
+      @@force_color = value
+      # Colorize strips escapes on its own when not on a TTY.
+      Colorize.enabled = true if value
+    end
+
     # Color is keyed off STDOUT specifically, even for stderr-bound calls,
     # because mixing colored stderr with non-tty stdout in a pipeline tends
     # to leak escape codes into grep/jq more often than the reverse.
     def color_enabled? : Bool
-      !@@no_color && STDOUT.tty?
+      !@@no_color && (@@force_color || STDOUT.tty?)
     end
 
     def info(msg : String)

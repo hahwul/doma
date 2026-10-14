@@ -137,4 +137,31 @@ describe "bug sweep regressions" do
       File.exists?(File.join(elsewhere, "rel.db")).should be_false
     end
   end
+
+  it "opens DOMA_DB paths containing URI-special characters verbatim" do
+    pending! "binary not built" unless File.exists?(BUG_SWEEP_BIN)
+    with_sweep_home do |home|
+      %w[a#b c?d e+f g%20h].each do |name|
+        dir = File.join(home, name).tap { |d| Dir.mkdir(d) }
+        db = File.join(dir, "doma.db")
+        sweep(["add", home, "-t", "x"], home, env: {"DOMA_DB" => db})[:status].success?.should be_true
+        File.exists?(db).should be_true
+      end
+    end
+  end
+
+  it "status --json prints [] on an empty db" do
+    pending! "binary not built" unless File.exists?(BUG_SWEEP_BIN)
+    with_sweep_home do |home|
+      sweep(["status", "--json"], home)[:out].strip.should eq("[]")
+    end
+  end
+
+  it "--color forces color off a TTY; an empty NO_COLOR doesn't disable it" do
+    pending! "binary not built" unless File.exists?(BUG_SWEEP_BIN)
+    with_sweep_home do |home|
+      sweep(["--color", "add", home, "-t", "x"], home, env: {"NO_COLOR" => ""})[:out].should contain("\e[")
+      sweep(["add", home, "-t", "y"], home)[:out].should_not contain("\e[")
+    end
+  end
 end

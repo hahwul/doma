@@ -181,9 +181,11 @@ module Doma
           true
         when "--no-color"
           Doma::Logger.no_color = true
+          Doma::Logger.force_color = false
           true
         when "--color"
           Doma::Logger.no_color = false
+          Doma::Logger.force_color = true
           true
         when "-y", "--yes"
           Doma::Runtime.assume_yes = true

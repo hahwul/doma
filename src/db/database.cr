@@ -129,7 +129,9 @@ module Doma
       loop do
         attempt += 1
         begin
-          return DB.open("sqlite3://#{target}?foreign_keys=on&journal_mode=wal&busy_timeout=5000")
+          # crystal-sqlite3 URI-decodes the filename (`#`/`?` cut it, `+`
+          # becomes a space), so encode it; `/` stays literal.
+          return DB.open("sqlite3://#{URI.encode_www_form(target).gsub("%2F", "/")}?foreign_keys=on&journal_mode=wal&busy_timeout=5000")
         rescue ex : DB::ConnectionRefused
           raise wrap_open_error(target, ex) if attempt >= OPEN_MAX_ATTEMPTS
           sleep OPEN_BACKOFF
