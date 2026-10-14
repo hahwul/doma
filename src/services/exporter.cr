@@ -59,9 +59,15 @@ module Doma
       # directory when it has a future-dated TTL, so a missing id maps to
       # nil, exactly matching the old `empty? ? nil : map` branch and
       # keeping permanent-only snapshots byte-identical to before.
-      ttl_by_id = db.tag_expirations_bulk(entries.map(&.id))
+      #
+      # `include_past: true` because `directories` already dropped expired
+      # tags; re-filtering here on a fresh clock would strip the TTL from a
+      # tag that lapsed between the two queries and export it as permanent.
+      # The per-entry `select` drops TTLs of tags `directories` filtered out.
+      ttl_by_id = db.tag_expirations_bulk(entries.map(&.id), include_past: true)
       snapshot_entries = entries.map do |e|
-        Snapshot::Entry.new(e.path, e.tags, e.basename, ttl_by_id[e.id]?)
+        ttls = ttl_by_id[e.id]?.try(&.select { |name, _| e.tags.includes?(name) })
+        Snapshot::Entry.new(e.path, e.tags, e.basename, ttls.try { |t| t.empty? ? nil : t })
       end
       Snapshot.new(snapshot_entries)
     end

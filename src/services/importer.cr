@@ -144,6 +144,11 @@ module Doma
             if entry.tags.empty?
               db.add_tx(cnn, entry.path, entry.tags, validate_path: false)
             else
+              # Validate every tag before the first write: the per-TTL
+              # groups below each hit `add_tx`, so a bad tag in a later
+              # group would otherwise skip the entry after earlier groups
+              # (and the directory row) were already written.
+              Doma::Validator.tags!(entry.tags)
               ttl_map = entry.expirations || EMPTY_TTL_MAP
               grouped = Hash(Int64?, Array(String)).new { |h, k| h[k] = [] of String }
               entry.tags.each do |t|
