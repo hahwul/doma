@@ -69,7 +69,15 @@ module Doma::CLI
             # silently becomes a hard one.
             entry = hard ? nil : Doma::Trash.snapshot(db, abs)
             entry.try { |e| Doma::Trash.add!(e) }
-            if db.remove_path(path)
+            removed = begin
+              db.remove_path(path)
+            rescue ex
+              entry.try { |e| Doma::Trash.discard!(e) }
+              raise ex
+            end
+            # Lost a race with another `rm`: drop our now-orphan entry.
+            entry.try { |e| Doma::Trash.discard!(e) } unless removed
+            if removed
               if hard
                 Doma::Logger.success "removed #{abs} (permanent)"
               elsif entry

@@ -148,18 +148,11 @@ module Doma
       with_lock do
         now = Time.utc.to_unix
         db.transaction do |cnn|
-          # Resolve `existing` inside the transaction to collapse the
-          # check/write window. `db.transaction` uses SQLite's default
-          # `BEGIN DEFERRED`, so this doesn't strictly atomicize with the
-          # INSERT below — a concurrent writer can still slip in. What
-          # makes the path correct is the `UNIQUE(path)` constraint on
-          # `directories`: if a racer wins the INSERT after our SELECT,
-          # our INSERT fails cleanly with SQLITE_CONSTRAINT (rolled back
-          # with the rest of the transaction) instead of producing a
-          # phantom duplicate or a misleading ConflictError on a path that
-          # no longer exists. Before this change the SELECT was on
-          # `db.db`, opening a much wider race window across pool
-          # connections.
+          # Resolve `existing` inside the transaction: `db.transaction`
+          # takes the write lock up front (`BEGIN IMMEDIATE`, see
+          # database.cr), so no other writer can slip in between this
+          # SELECT and the INSERT below. `UNIQUE(path)` stays as the
+          # backstop.
           existing = cnn.query_one?(
             "SELECT id FROM directories WHERE path = ?", entry.path, as: Int64
           )
@@ -262,6 +255,11 @@ module Doma
         rewrite!(kept)
         pruned.size
       end
+    end
+
+    # Drops one entry — used to undo an `add!` whose row delete then failed.
+    def discard!(entry : Entry)
+      with_lock { remove_from_file!(entry) }
     end
 
     private def with_lock(&)

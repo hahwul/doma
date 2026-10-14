@@ -30,6 +30,9 @@ module Doma
     # Returns the input duration converted to seconds.
     def parse_seconds!(raw : String) : Int64
       m = raw.strip.match(PATTERN)
+      if !m && raw.strip.ends_with?('M')
+        raise ValidationError.new("invalid duration '#{raw}': 'M' is ambiguous (use m for minutes, d/w for longer)")
+      end
       raise ValidationError.new("invalid duration '#{raw}' (use like 30s, 5m, 1h, 7d, 2w)") unless m
       # `to_i64?` returns nil on overflow rather than raising; a 20-digit
       # number reaches us here just because the regex passed.

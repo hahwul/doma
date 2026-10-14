@@ -311,7 +311,7 @@ module Doma
         @termisu.set_cell(0, y, marker, fg: Termisu::Color.cyan, attr: base)
 
         hint = scored.entry.tags.empty? ? "" : Picker.sanitize(scored.entry.tags.map { |t| "##{t}" }.join(" "))
-        hint_room = hint.empty? ? 0 : Math.min(text_width(hint), (@width // 3).clamp(8, 60))
+        hint_room = hint.empty? ? 0 : Math.min(Picker.display_width(hint), (@width // 3).clamp(8, 60))
         label_limit = @width - (hint.empty? ? 1 : hint_room + 3)
 
         draw_path(2, y, scored, base, selected, label_limit)
@@ -370,7 +370,7 @@ module Doma
           end
 
         start = draw_text(0, y, prompt, fg: Termisu::Color.cyan, attr: Termisu::Attribute::Bold, max_x: @width)
-        cursor_col = draw_text(start, y, tail_fit(Picker.sanitize(text), @width - 1 - start), fg: Termisu::Color.default, max_x: @width)
+        cursor_col = draw_text(start, y, Picker.tail_fit(Picker.sanitize(text), @width - 1 - start), fg: Termisu::Color.default, max_x: @width)
         @termisu.set_cursor(Math.min(cursor_col, @width - 1), y, true)
       end
 
@@ -422,25 +422,6 @@ module Doma
           col += w
         end
         col
-      end
-
-      # The longest suffix of `text` that fits in `room` columns, so the end
-      # being typed (and the cursor after it) stays visible.
-      private def tail_fit(text : String, room : Int32) : String
-        chars = text.chars
-        col = 0
-        i = chars.size
-        while i > 0
-          w = char_width(chars[i - 1])
-          break if col + w > room
-          col += w
-          i -= 1
-        end
-        chars[i..].join
-      end
-
-      private def text_width(text : String) : Int32
-        text.each_char.sum { |ch| char_width(ch) }
       end
 
       private def char_width(ch : Char) : Int32

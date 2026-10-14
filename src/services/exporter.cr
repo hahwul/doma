@@ -55,10 +55,8 @@ module Doma
       entries = db.directories
       # One round trip for every directory's TTLs instead of a
       # per-entry `tag_expirations` query — the same N+1 → bulk fix the
-      # list render loop already uses. `tag_expirations_bulk` only keys a
-      # directory when it has a future-dated TTL, so a missing id maps to
-      # nil, exactly matching the old `empty? ? nil : map` branch and
-      # keeping permanent-only snapshots byte-identical to before.
+      # list render loop already uses. A directory with no live TTL maps
+      # to nil, keeping permanent-only snapshots byte-identical to before.
       #
       # `include_past: true` because `directories` already dropped expired
       # tags; re-filtering here on a fresh clock would strip the TTL from a

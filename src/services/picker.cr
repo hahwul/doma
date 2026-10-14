@@ -64,6 +64,21 @@ module Doma
       text.each_char.sum { |c| Termisu::UnicodeWidth.codepoint_width(c.ord).to_i }
     end
 
+    # The longest suffix of `text` that fits in `room` columns, so the end
+    # being typed (and the cursor after it) stays visible.
+    def tail_fit(text : String, room : Int) : String
+      chars = text.chars
+      col = 0
+      i = chars.size
+      while i > 0
+        w = Termisu::UnicodeWidth.codepoint_width(chars[i - 1].ord).to_i
+        break if col + w > room
+        col += w
+        i -= 1
+      end
+      chars[i..].join
+    end
+
     # Cuts `text` to at most `width` display columns, ending in `…` when
     # anything was dropped (and there's room for it).
     def truncate(text : String, width : Int) : String
@@ -211,7 +226,10 @@ module Doma
         io << "\e[" << (@rows + 1) << "A\r\e[J"
 
         count_label = "#{filtered.size}/#{@items.size}"
-        io << "\e[1;36m" << @prompt << "›\e[0m " << @query
+        # Header must stay one line or the fixed cursor-up redraw drifts:
+        # show only the query's tail when it doesn't fit.
+        room = @width - Picker.display_width(@prompt) - count_label.size - 5
+        io << "\e[1;36m" << @prompt << "›\e[0m " << Picker.tail_fit(Picker.sanitize(@query), Math.max(room, 0))
         io << "  \e[2m" << count_label << "\e[0m\n"
 
         end_idx = Math.min(@offset + @rows, filtered.size)

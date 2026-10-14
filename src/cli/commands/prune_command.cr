@@ -98,7 +98,12 @@ module Doma::CLI
         end
         # Trash first (see `rm`): a failed trash write must not lose rows.
         pending.each { |(_, snap)| Doma::Trash.add!(snap) }
-        removed = db.remove_ids!(pending.map { |(id, _)| id })
+        removed = begin
+          db.remove_ids!(pending.map { |(id, _)| id })
+        rescue ex
+          pending.each { |(_, snap)| Doma::Trash.discard!(snap) }
+          raise ex
+        end
         sample_ids = pending.first(3).map { |(_, snap)| snap.display_id }.join(", ")
         more = pending.size > 3 ? ", ..." : ""
         Doma::Logger.success(

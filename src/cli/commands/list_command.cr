@@ -137,6 +137,7 @@ module Doma::CLI
       end
 
       Doma::Database.open do |db|
+        # `.as?` narrows the closure-captured var (a plain `||` doesn't).
         by = sort.as?(Doma::Database::SortBy) || (pick_mode ? Doma::Database::SortBy::Recent : Doma::Database::SortBy::Path)
         entries = collect(db, tags, query, by, include_expired)
 
