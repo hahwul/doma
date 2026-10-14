@@ -7,13 +7,13 @@ end
 describe "TUI / picker regressions" do
   describe "Fuzzy with case-expanding characters" do
     it "keeps positions aligned when a char lowercases to two (İ)" do
-      m = Doma::TUI::Fuzzy.score("d", "İİİİd").not_nil!
+      m = Doma::TUI::Fuzzy.score("d", "İİİİd").should_not be_nil
       m.positions.should eq([4])
     end
 
     it "matches past an İ without raising" do
       target = "/x/İstanbul/Kod"
-      m = Doma::TUI::Fuzzy.score("kod", target).not_nil!
+      m = Doma::TUI::Fuzzy.score("kod", target).should_not be_nil
       m.positions.map { |i| target.char_at(i) }.join.should eq("Kod")
     end
   end

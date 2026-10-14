@@ -17,7 +17,7 @@ require "./migrations"
 # write lock up front lets concurrent `doma add`/`rm` wait their turn.
 class SQLite3::Connection
   def perform_begin_transaction
-    self.prepared.exec "BEGIN IMMEDIATE"
+    prepared.exec "BEGIN IMMEDIATE"
   end
 end
 

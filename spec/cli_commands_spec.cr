@@ -1361,7 +1361,7 @@ describe "doma list --pick" do
       run(["add", "/tmp", "-t", "single"], {"DOMA_HOME" => home})
       r = run(["list", "-t", "single", "--pick"], {"DOMA_HOME" => home})
       r[:status].exit_code.should eq(0)
-      r[:out].strip.should eq("/private/tmp")
+      r[:out].strip.should eq(REAL_TMP)
     end
   end
 
@@ -1990,7 +1990,7 @@ describe "doma info" do
       r = run(["info", "/tmp"], {"DOMA_HOME" => home})
       r[:status].exit_code.should eq(0)
       # Path canonicalized; both tags rendered as #-prefixed.
-      r[:out].should contain("/private/tmp")
+      r[:out].should contain(REAL_TMP)
       r[:out].should contain("#demo")
       r[:out].should contain("#scratch")
       r[:out].should contain("basename")
@@ -2017,7 +2017,7 @@ describe "doma info" do
       r[:status].exit_code.should eq(0)
       h = JSON.parse(r[:out]).as_h
       h["short_id"].as_s.size.should eq(7)
-      h["path"].as_s.should eq("/private/tmp")
+      h["path"].as_s.should eq(REAL_TMP)
       h["basename"].as_s.should eq("tmp")
       h["tags"].as_a.map(&.as_s).should eq(["demo"])
       h["created_at"].as_i.should be > 0
@@ -2103,7 +2103,7 @@ describe "doma info advanced" do
 
       r = run(["info", sid], {"DOMA_HOME" => home})
       r[:status].exit_code.should eq(0)
-      r[:out].should contain("/private/tmp")
+      r[:out].should contain(REAL_TMP)
       r[:out].should contain("#demo")
     end
   end
@@ -2116,7 +2116,7 @@ describe "doma info advanced" do
 
       r = run(["info", sid[0, 4]], {"DOMA_HOME" => home})
       r[:status].exit_code.should eq(0)
-      r[:out].should contain("/private/tmp")
+      r[:out].should contain(REAL_TMP)
     end
   end
 

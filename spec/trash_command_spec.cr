@@ -37,7 +37,6 @@ describe "doma rm soft-delete" do
       File.exists?(File.join(home, "trash.jsonl")).should be_true
 
       list = run(["list"], {"DOMA_HOME" => home})
-      list[:out].should_not contain("/private/tmp")
       list[:out].should_not contain("/tmp")
     end
   end
@@ -62,7 +61,7 @@ describe "doma rm soft-delete" do
       r[:err].should contain("--hard requires --yes")
 
       list = run(["list"], {"DOMA_HOME" => home})
-      list[:out].should contain("/private/tmp")
+      list[:out].should contain(REAL_TMP)
     end
   end
 
@@ -94,7 +93,7 @@ describe "doma trash" do
       run(["rm", "/tmp"], {"DOMA_HOME" => home})
       r = run(["trash", "list"], {"DOMA_HOME" => home})
       r[:status].exit_code.should eq(0)
-      r[:out].should contain("/private/tmp")
+      r[:out].should contain(REAL_TMP)
       r[:out].should contain("scratch")
       r[:out].should contain("demo")
     end
@@ -135,7 +134,7 @@ describe "doma trash" do
 
       # Pull the short_id out of trash list (column 1).
       list = run(["trash", "list"], {"DOMA_HOME" => home})
-      data_line = list[:out].lines.find!(&.includes?("/private/tmp"))
+      data_line = list[:out].lines.find!(&.includes?(REAL_TMP))
       sid = data_line.split.first
 
       r = run(["trash", "restore", sid], {"DOMA_HOME" => home})
@@ -191,7 +190,7 @@ describe "doma trash" do
       run(["rm", "/tmp"], {"DOMA_HOME" => home})
 
       list = run(["trash", "list"], {"DOMA_HOME" => home})
-      data_line = list[:out].lines.find!(&.includes?("/private/tmp"))
+      data_line = list[:out].lines.find!(&.includes?(REAL_TMP))
       sid = data_line.split.first
       prefix = sid[0..2]
 
@@ -208,7 +207,7 @@ describe "doma trash" do
       run(["add", "/tmp", "-t", "fresh"], {"DOMA_HOME" => home})
 
       list = run(["trash", "list"], {"DOMA_HOME" => home})
-      data_line = list[:out].lines.find!(&.includes?("/private/tmp"))
+      data_line = list[:out].lines.find!(&.includes?(REAL_TMP))
       sid = data_line.split.first
 
       r = run(["trash", "restore", sid], {"DOMA_HOME" => home})
@@ -226,7 +225,7 @@ describe "doma trash" do
       run(["add", "/tmp", "-t", "fresh"], {"DOMA_HOME" => home})
 
       list = run(["trash", "list"], {"DOMA_HOME" => home})
-      data_line = list[:out].lines.find!(&.includes?("/private/tmp"))
+      data_line = list[:out].lines.find!(&.includes?(REAL_TMP))
       sid = data_line.split.first
 
       r = run(["trash", "restore", sid, "--merge"], {"DOMA_HOME" => home})
@@ -267,7 +266,7 @@ describe "doma trash" do
       r = run(["trash", "empty"], {"DOMA_HOME" => home})
       r[:status].exit_code.should eq(1)
       r[:err].should contain("trash empty requires --yes")
-      run(["trash", "list"], {"DOMA_HOME" => home})[:out].should contain("/private/tmp")
+      run(["trash", "list"], {"DOMA_HOME" => home})[:out].should contain(REAL_TMP)
     end
   end
 
@@ -279,7 +278,7 @@ describe "doma trash" do
       r = run(["trash", "empty", "--older", "1d"], {"DOMA_HOME" => home})
       r[:status].exit_code.should eq(0)
       r[:out].should contain("nothing to purge")
-      run(["trash", "list"], {"DOMA_HOME" => home})[:out].should contain("/private/tmp")
+      run(["trash", "list"], {"DOMA_HOME" => home})[:out].should contain(REAL_TMP)
     end
   end
 

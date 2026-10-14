@@ -30,7 +30,11 @@ module Doma
     def relative_past(epoch : Int64, color : Bool = false) : String
       # Only a hugely negative (corrupt) epoch can overflow here; it's as
       # far in the past as it gets.
-      delta = (Time.utc.to_unix - epoch rescue Int64::MAX)
+      delta = begin
+        Time.utc.to_unix - epoch
+      rescue OverflowError
+        Int64::MAX
+      end
       text = if delta < 0
                # Clock skew or a timestamp imported from a machine whose
                # clock was ahead leaves `delta` negative; without this guard

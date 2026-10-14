@@ -2,6 +2,9 @@ require "spec"
 require "file_utils"
 require "../src/doma"
 
+# What `/tmp` canonicalizes to: `/private/tmp` on macOS, `/tmp` on Linux.
+REAL_TMP = File.realpath("/tmp")
+
 # Each spec gets a fresh sqlite file under a tmp dir so they can run in parallel
 # without trampling each other's state.
 #
