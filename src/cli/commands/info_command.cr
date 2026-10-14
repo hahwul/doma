@@ -66,16 +66,6 @@ module Doma::CLI
         canonical, info = resolve_target(db, raw)
 
         unless info
-          if Doma::ShortIdResolver.looks_like?(raw)
-            msg = "no entry with short_id '#{raw}'"
-            if trashed = Doma::Trash.find_by_short_id(raw.downcase)
-              raise Doma::NotFoundError.new(msg, hint: Doma::Trash.restore_hint(trashed))
-            end
-            # short_id input that didn't resolve: caller-friendly message
-            # without an `add` hint (the user typed an id, not a path).
-            raise Doma::NotFoundError.new(msg)
-          end
-
           # Bare-name fallback: when the user types `doma info doma`,
           # they almost certainly mean "show me the entry whose path
           # or tag contains `doma`", not "look up `<cwd>/doma` as a
@@ -84,9 +74,21 @@ module Doma::CLI
           # didn't resolve as a short_id, and isn't `.` (which always
           # means cwd). Exactly one hit → show it. Multiple →
           # disambiguate with short_ids so the user can re-issue.
+          # Runs before the short_id miss below so hex-looking names
+          # (`cafe`, `added`) still find their directory.
           if name_like?(raw) && (info = resolve_by_search(db, raw))
             render_entry(db, info, json_mode, raw)
             return
+          end
+
+          if Doma::ShortIdResolver.looks_like?(raw)
+            msg = "no entry with short_id '#{raw}'"
+            if trashed = Doma::Trash.find_by_short_id(raw.downcase)
+              raise Doma::NotFoundError.new(msg, hint: Doma::Trash.restore_hint(trashed))
+            end
+            # short_id input that didn't resolve: caller-friendly message
+            # without an `add` hint (the user typed an id, not a path).
+            raise Doma::NotFoundError.new(msg)
           end
 
           if trashed = Doma::Trash.find_by_path(canonical)

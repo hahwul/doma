@@ -64,12 +64,15 @@ module Doma::CLI
             # Snapshot first so a soft-delete can restore the row
             # exactly. `--hard` skips the snapshot; bulk cleanup paths
             # (`doma prune --gone | --expired`) skip it on their own.
+            # Write the trash entry *before* the delete: if the trash
+            # write fails the row must survive, otherwise a soft `rm`
+            # silently becomes a hard one.
             entry = hard ? nil : Doma::Trash.snapshot(db, abs)
+            entry.try { |e| Doma::Trash.add!(e) }
             if db.remove_path(path)
               if hard
                 Doma::Logger.success "removed #{abs} (permanent)"
               elsif entry
-                Doma::Trash.add!(entry)
                 Doma::Logger.success "trashed #{abs} (recover with `doma trash restore #{entry.short_id[0..6]}`)"
               else
                 Doma::Logger.success "removed #{abs}"

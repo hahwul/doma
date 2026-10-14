@@ -8,7 +8,9 @@ module Doma
   module Duration
     extend self
 
-    PATTERN = /\A(\d+)([smhdw])\z/i
+    # Case-insensitive except `M`: read as "months" by most people, it
+    # would otherwise silently mean minutes.
+    PATTERN = /\A(\d+)([smhdwSHDW])\z/
 
     SECONDS_PER_UNIT = {
       "s" => 1_i64,

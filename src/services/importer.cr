@@ -121,6 +121,11 @@ module Doma
             # then updated. `add_tx` canonicalizes identically (it uses
             # `Validator.canonicalize` when `validate_path` is false), so
             # this lookup matches the row add_tx will touch.
+            # Snapshots only ever hold absolute paths; a blank or relative
+            # one would otherwise canonicalize against the importer's cwd.
+            unless entry.path.starts_with?('/') || entry.path.starts_with?('~')
+              raise Doma::ValidationError.new("path is not absolute: '#{entry.path}'")
+            end
             abs = Doma::Validator.canonicalize(entry.path)
             existed = !cnn.query_one?(
               "SELECT 1 FROM directories WHERE path = ?", abs, as: Int32

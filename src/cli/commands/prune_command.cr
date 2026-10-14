@@ -96,8 +96,9 @@ module Doma::CLI
           snap = Doma::Trash.snapshot(db, e.path)
           snap ? {e.id, snap} : nil
         end
-        removed = db.remove_ids!(pending.map { |(id, _)| id })
+        # Trash first (see `rm`): a failed trash write must not lose rows.
         pending.each { |(_, snap)| Doma::Trash.add!(snap) }
+        removed = db.remove_ids!(pending.map { |(id, _)| id })
         sample_ids = pending.first(3).map { |(_, snap)| snap.display_id }.join(", ")
         more = pending.size > 3 ? ", ..." : ""
         Doma::Logger.success(

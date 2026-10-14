@@ -42,7 +42,9 @@ module Doma::CLI
       pick_override : Doma::Settings::SelectorMode? = nil
       check_existence = false
       include_expired = false
-      sort = Doma::Database::SortBy::Path
+      # nil = no `--by`: path order for listings, most-recent for `--pick`
+      # (what its non-TTY / `--first` fallback promises).
+      sort : Doma::Database::SortBy? = nil
       group_by_tag = false
       positional = [] of String
 
@@ -135,7 +137,8 @@ module Doma::CLI
       end
 
       Doma::Database.open do |db|
-        entries = collect(db, tags, query, sort, include_expired)
+        by = sort.as?(Doma::Database::SortBy) || (pick_mode ? Doma::Database::SortBy::Recent : Doma::Database::SortBy::Path)
+        entries = collect(db, tags, query, by, include_expired)
 
         if pick_mode
           run_pick(db, entries, pick_query, pick_override, tags, query)
@@ -341,8 +344,8 @@ module Doma::CLI
         # get a heuristic choice they didn't expect.
         unless Doma::Logger.quiet?
           Doma::Logger.warn(
-            "#{pick_context(tags)} matches #{items.size} directories; picked first. " \
-            "Pass --by recent or refine the filter to disambiguate."
+            "#{pick_context(tags)} matches #{items.size} directories; picked the first in sort order. " \
+            "Refine the filter (or --by) to disambiguate."
           )
         end
         emit_choice(db, items.first.value)

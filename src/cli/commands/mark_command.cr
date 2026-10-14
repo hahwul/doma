@@ -62,7 +62,7 @@ module Doma::CLI
       # propagates; Crystal won't infer non-nil from `target_path || "."`
       # when the source ivar is nilable.
       path = target_path
-      forwarded = [path.nil? ? "." : path]
+      forwarded = [] of String
       # `--ttl DUR` overrides the 7d default; forward it verbatim so
       # `add` owns the duration grammar and validation (a bad `--ttl xyz`
       # surfaces the same error it would on `doma add`). Absent it, keep
@@ -73,6 +73,9 @@ module Doma::CLI
         forwarded << "--tmp"
       end
       tags.each { |t| forwarded << "-t" << t }
+      # Path last, behind `--`, so a dash-prefixed `-p -n` isn't parsed
+      # by `add` as a flag.
+      forwarded << "--" << (path || ".")
       AddCommand.new.run(forwarded)
     end
   end

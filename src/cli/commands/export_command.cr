@@ -22,6 +22,14 @@ module Doma::CLI
           puts p
           exit 0
         end
+        # `doma export FILE` (mirroring `import FILE`) used to drop FILE
+        # and dump to stdout with exit 0 — a backup that was never written.
+        p.unknown_args do |before, after|
+          stray = before + after
+          unless stray.empty?
+            raise Doma::ValidationError.new("unexpected argument '#{stray.first}' (use -o FILE to write to a file)")
+          end
+        end
       end
       parser.parse(args)
 
