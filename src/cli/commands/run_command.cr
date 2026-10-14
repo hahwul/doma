@@ -305,7 +305,7 @@ module Doma::CLI
       input = attach_stdin ? STDIN : Process::Redirect::Close
       unless capture
         status = Process.run(cmd, args: args, chdir: path, output: STDOUT, error: STDERR, input: input)
-        return RunResult.new(status.exit_code, "", "")
+        return RunResult.new(exit_code_of(status), "", "")
       end
       # Fresh buffers per call: under --parallel this method runs on N
       # fibers at once, and a shared sink would splice two children's
@@ -316,7 +316,7 @@ module Doma::CLI
       out_io = IO::Memory.new
       err_io = IO::Memory.new
       status = Process.run(cmd, args: args, chdir: path, output: out_io, error: err_io, input: input)
-      RunResult.new(status.exit_code, out_io.to_s, err_io.to_s)
+      RunResult.new(exit_code_of(status), out_io.to_s, err_io.to_s)
     rescue ex : File::NotFoundError
       fail_result(path, ex.message || "command not found", 127, capture)
     rescue ex
@@ -325,6 +325,13 @@ module Doma::CLI
       # reaper's `results.receive` then blocks forever. A weird failure
       # must degrade to a failed directory, never a hang.
       fail_result(path, ex.message || ex.class.name, 126, capture)
+    end
+
+    # `Process::Status#exit_code` raises for a signal-killed child; report
+    # the shell's 128+N instead so the failure (and captured output)
+    # survives rather than turning into a fake 126.
+    private def exit_code_of(status : Process::Status) : Int32
+      status.exit_code? || 128 + (status.exit_signal?.try(&.value) || 0)
     end
 
     # A failure with no child streams to report — doma itself is the one

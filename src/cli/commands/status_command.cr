@@ -96,7 +96,8 @@ module Doma::CLI
             hint: Doma::Suggester.tag_hint_for(tag, all_tags)
           )
         else
-          Doma::Logger.info "nothing tracked yet — `doma add <path> -t <tag>` to start"
+          # Keep `--json` parseable, like `list --json` on an empty db.
+          json_mode ? puts("[]") : Doma::Logger.info("nothing tracked yet — `doma add <path> -t <tag>` to start")
           return
         end
       end

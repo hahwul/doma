@@ -40,6 +40,10 @@ class Doma::Database
   # cleanup.
   def prune_expired! : Array(ExpiredAssoc)
     removed = [] of ExpiredAssoc
+    # One clock read shared by the SELECT and the DELETE: with
+    # `strftime('%s','now')` in each, a row expiring on the second that
+    # ticks between them would be deleted without being reported.
+    now = Time.utc.to_unix
     @db.transaction do |tx|
       cnn = tx.connection
       # Capture the (path, tag) pairs *before* the DELETE so we can
@@ -47,19 +51,19 @@ class Doma::Database
       # would lose them; the JOIN is cheap because the WHERE filters
       # to already-expired rows only.
       rows = cnn.query_all(
-        <<-SQL, as: {String, String}
+        <<-SQL, now, as: {String, String}
           SELECT d.path, t.name
           FROM directory_tags dt
           INNER JOIN directories d ON d.id = dt.directory_id
           INNER JOIN tags t ON t.id = dt.tag_id
-          WHERE #{IS_EXPIRED_DT}
+          WHERE dt.expires_at IS NOT NULL AND dt.expires_at <= ?
           ORDER BY d.path, t.name
           SQL
       )
       rows.each { |row| removed << ExpiredAssoc.new(row[0], row[1]) }
 
       cnn.exec(
-        "DELETE FROM directory_tags WHERE #{IS_EXPIRED}"
+        "DELETE FROM directory_tags WHERE expires_at IS NOT NULL AND expires_at <= ?", now
       )
       cleanup_orphans_tx(cnn)
     end

@@ -45,8 +45,12 @@ module Doma
       # `IO::Error` when there's no controlling terminal — the caller turns
       # that into a clean user-facing error.
       def initialize(@db : Doma::Database, @entries : Array(Doma::Entry), query : String = "")
-        @termisu = Termisu.new
+        # Filter before Termisu.new: an exception after raw mode / alt screen
+        # is entered would leave the terminal broken (run's ensure isn't
+        # reached yet).
         @query = query
+        @scored = Query.filter(@entries, Query.parse(@query))
+        @termisu = Termisu.new
         @cursor = 0
         @offset = 0
         @width = 0
@@ -63,7 +67,6 @@ module Doma
         # to; without it, Enter only *prints* the path — so the footer must
         # not promise `cd`.
         @shell_integration = !!ENV["DOMA_CD_FILE"]?.presence
-        @scored = Query.filter(@entries, Query.parse(@query))
       end
 
       # Runs the event loop until the user selects (Enter) or cancels
@@ -308,7 +311,7 @@ module Doma
         @termisu.set_cell(0, y, marker, fg: Termisu::Color.cyan, attr: base)
 
         hint = scored.entry.tags.empty? ? "" : Picker.sanitize(scored.entry.tags.map { |t| "##{t}" }.join(" "))
-        hint_room = hint.empty? ? 0 : Math.min(text_width(hint), (@width // 3).clamp(8, 60))
+        hint_room = hint.empty? ? 0 : Math.min(Picker.display_width(hint), (@width // 3).clamp(8, 60))
         label_limit = @width - (hint.empty? ? 1 : hint_room + 3)
 
         draw_path(2, y, scored, base, selected, label_limit)
@@ -319,7 +322,8 @@ module Doma
       end
 
       private def draw_path(x : Int32, y : Int32, scored : Query::Scored, base : Termisu::Attribute, selected : Bool, limit : Int32)
-        path = Picker.sanitize(scored.entry.path)
+        # NFC, like Query.filter, so highlight positions line up.
+        path = Picker.sanitize(scored.entry.path.unicode_normalize(:nfc))
         positions = scored.positions
         col = x
         index = 0
@@ -366,7 +370,7 @@ module Doma
           end
 
         start = draw_text(0, y, prompt, fg: Termisu::Color.cyan, attr: Termisu::Attribute::Bold, max_x: @width)
-        cursor_col = draw_text(start, y, Picker.sanitize(text), fg: Termisu::Color.default, max_x: @width)
+        cursor_col = draw_text(start, y, Picker.tail_fit(Picker.sanitize(text), @width - 1 - start), fg: Termisu::Color.default, max_x: @width)
         @termisu.set_cursor(Math.min(cursor_col, @width - 1), y, true)
       end
 
@@ -418,10 +422,6 @@ module Doma
           col += w
         end
         col
-      end
-
-      private def text_width(text : String) : Int32
-        text.each_char.sum { |ch| char_width(ch) }
       end
 
       private def char_width(ch : Char) : Int32

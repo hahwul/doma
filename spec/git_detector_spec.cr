@@ -92,6 +92,23 @@ describe Doma::GitDetector do
     end
   end
 
+  it "normalizes ports, trailing slashes, user-less scp and enterprise hosts" do
+    {
+      "ssh://git@git.example.com:2222/o/r.git" => {"git.example.com", "r"},
+      "https://git.example.com:8443/o/r"       => {"git.example.com", "r"},
+      "https://github.com/o/r.git/"            => {"github", "r"},
+      "github.com:o/r.git"                     => {"github", "r"},
+      "https://github.company.com/o/r.git"     => {"github.company.com", "r"},
+      "https://notgithub.com/o/r"              => {"notgithub.com", "r"},
+    }.each do |url, (host, repo)|
+      with_fake_repo(url) do |dir|
+        info = Doma::GitDetector.detect(dir)
+        info.host.should eq(host)
+        info.repo.should eq(repo)
+      end
+    end
+  end
+
   it "walks up to find the git root" do
     with_fake_repo("https://github.com/x/y.git") do |dir|
       sub = File.join(dir, "deep", "sub", "tree")

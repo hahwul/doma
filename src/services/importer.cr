@@ -121,6 +121,11 @@ module Doma
             # then updated. `add_tx` canonicalizes identically (it uses
             # `Validator.canonicalize` when `validate_path` is false), so
             # this lookup matches the row add_tx will touch.
+            # Snapshots only ever hold absolute paths; a blank or relative
+            # one would otherwise canonicalize against the importer's cwd.
+            unless entry.path.starts_with?('/') || entry.path == "~" || entry.path.starts_with?("~/")
+              raise Doma::ValidationError.new("path is not absolute: '#{entry.path}'")
+            end
             abs = Doma::Validator.canonicalize(entry.path)
             existed = !cnn.query_one?(
               "SELECT 1 FROM directories WHERE path = ?", abs, as: Int32
@@ -144,6 +149,11 @@ module Doma
             if entry.tags.empty?
               db.add_tx(cnn, entry.path, entry.tags, validate_path: false)
             else
+              # Validate every tag before the first write: the per-TTL
+              # groups below each hit `add_tx`, so a bad tag in a later
+              # group would otherwise skip the entry after earlier groups
+              # (and the directory row) were already written.
+              Doma::Validator.tags!(entry.tags)
               ttl_map = entry.expirations || EMPTY_TTL_MAP
               grouped = Hash(Int64?, Array(String)).new { |h, k| h[k] = [] of String }
               entry.tags.each do |t|

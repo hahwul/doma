@@ -1,4 +1,5 @@
 require "db"
+require "file_utils"
 require "sqlite3"
 require "../models/entry"
 require "../utils/config"
@@ -8,6 +9,17 @@ require "../utils/suggester"
 require "../utils/tag_glob"
 require "../utils/validator"
 require "./migrations"
+
+# crystal-sqlite3 opens every transaction with a plain deferred `BEGIN`.
+# All of doma's transactions read then write, so under WAL a concurrent
+# commit between the two makes the lock upgrade fail with SQLITE_BUSY
+# immediately — `busy_timeout` never applies to that case. Taking the
+# write lock up front lets concurrent `doma add`/`rm` wait their turn.
+class SQLite3::Connection
+  def perform_begin_transaction
+    prepared.exec "BEGIN IMMEDIATE"
+  end
+end
 
 module Doma
   # Thin wrapper over the SQLite handle. All multi-statement writes run inside
@@ -45,10 +57,25 @@ module Doma
         unless File::Info.writable?(target)
           raise Doma::ConfigError.new("database file is not writable: #{target}")
         end
+        # A non-SQLite file only surfaces as an opaque
+        # `DB::ConnectionRefused`, which the retry loop below would
+        # mistake for lock contention and spin on for ~2.5s.
+        unless sqlite_file?(target)
+          raise Doma::ConfigError.new("not a SQLite database: #{target}")
+        end
       else
         parent = File.dirname(target)
         if Dir.exists?(parent) && !File::Info.writable?(parent)
           raise Doma::ConfigError.new("cannot create database in non-writable directory: #{parent}")
+        end
+        # Same opaque-error trap for a missing parent (`DOMA_DB` /
+        # `db_path` pointing into a directory that doesn't exist yet).
+        unless Dir.exists?(parent)
+          begin
+            FileUtils.mkdir_p(parent)
+          rescue ex
+            raise Doma::ConfigError.new("cannot create database directory (#{parent}): #{ex.message}")
+          end
         end
       end
 
@@ -88,6 +115,12 @@ module Doma
       end
     end
 
+    # An empty file is fine — SQLite initializes it on first write.
+    private def self.sqlite_file?(path : String) : Bool
+      return true if File.size(path).zero?
+      File.open(path) { |f| f.read_string(Math.min(16, File.size(path)).to_i) } == "SQLite format 3\0"
+    end
+
     private OPEN_MAX_ATTEMPTS = 25
     private OPEN_BACKOFF      = 100.milliseconds
 
@@ -96,7 +129,9 @@ module Doma
       loop do
         attempt += 1
         begin
-          return DB.open("sqlite3://#{target}?foreign_keys=on&journal_mode=wal&busy_timeout=5000")
+          # crystal-sqlite3 URI-decodes the filename (`#`/`?` cut it, `+`
+          # becomes a space), so encode it; `/` stays literal.
+          return DB.open("sqlite3://#{URI.encode_www_form(target).gsub("%2F", "/")}?foreign_keys=on&journal_mode=wal&busy_timeout=5000")
         rescue ex : DB::ConnectionRefused
           raise wrap_open_error(target, ex) if attempt >= OPEN_MAX_ATTEMPTS
           sleep OPEN_BACKOFF

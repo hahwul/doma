@@ -12,13 +12,13 @@ module Doma
     # which `Time#to_s` default isn't (locale-dependent on some libcs).
     #
     # `Time.unix` raises `ArgumentError` for epochs outside the supported
-    # year 1–9999 range. Those only arrive via corrupted rows or a
-    # hand-crafted import JSON, but a stack trace on display is the wrong
-    # failure mode — fall back to a legible marker so one bad row doesn't
-    # take down `list`/`info`/`stats`.
+    # year 1–9999 range (`OverflowError` near the Int64 extremes). Those
+    # only arrive via corrupted rows or a hand-crafted import JSON, but a
+    # stack trace on display is the wrong failure mode — fall back to a
+    # legible marker so one bad row doesn't take down `list`/`info`/`stats`.
     def absolute(epoch : Int64) : String
       Time.unix(epoch).to_local.to_s("%Y-%m-%d %H:%M")
-    rescue ArgumentError
+    rescue ArgumentError | OverflowError
       "(invalid date)"
     end
 
@@ -28,7 +28,13 @@ module Doma
     # `y` but this is display-only. Rendered dim so the absolute
     # timestamp stays the visual anchor.
     def relative_past(epoch : Int64, color : Bool = false) : String
-      delta = Time.utc.to_unix - epoch
+      # Only a hugely negative (corrupt) epoch can overflow here; it's as
+      # far in the past as it gets.
+      delta = begin
+        Time.utc.to_unix - epoch
+      rescue OverflowError
+        Int64::MAX
+      end
       text = if delta < 0
                # Clock skew or a timestamp imported from a machine whose
                # clock was ahead leaves `delta` negative; without this guard

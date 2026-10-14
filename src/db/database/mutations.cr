@@ -240,7 +240,6 @@ class Doma::Database
     # miss the stored row and surface as a confusing "tag not found".
     old_name = old_name.strip
     cleaned = Validator.tag!(new_name)
-    return :noop if cleaned == old_name
 
     old_id = @db.query_one?("SELECT id FROM tags WHERE name = ?", old_name, as: Int64)
     unless old_id
@@ -249,6 +248,7 @@ class Doma::Database
         hint: Suggester.hint_for(old_name, tag_names)
       )
     end
+    return :noop if cleaned == old_name
 
     result = :renamed
     @db.transaction do |tx|

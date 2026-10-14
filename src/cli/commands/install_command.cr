@@ -33,7 +33,7 @@ module Doma::CLI
 
       effective = shell || Doma::Installer.detect_shell
       raise Doma::ValidationError.new(
-        "couldn't detect shell from $SHELL — pass it explicitly: `doma install zsh`"
+        "couldn't detect shell from $SHELL — pass it explicitly: `doma setup install zsh`"
       ) unless effective
 
       plan = Doma::Installer.plan(effective)

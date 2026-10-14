@@ -1,3 +1,5 @@
+require "termisu"
+
 module Doma
   # In-process interactive picker. Replaces the fzf shell-out with a
   # Crystal-native termios + ANSI implementation so doma keeps the "single
@@ -47,10 +49,50 @@ module Doma
     # Filter logic exposed for testing without a TTY.
     def filter(items : Array(Item), query : String) : Array(Item)
       return items if query.empty?
-      q = query.downcase
+      # NFC both sides: macOS paths come back decomposed (NFD), typed
+      # queries composed, and the two never compare equal otherwise.
+      q = query.unicode_normalize(:nfc).downcase
       items.select do |it|
-        it.label.downcase.includes?(q) ||
-          it.hint.try(&.downcase.includes?(q))
+        it.label.unicode_normalize(:nfc).downcase.includes?(q) ||
+          it.hint.try(&.unicode_normalize(:nfc).downcase.includes?(q))
+      end
+    end
+
+    # Terminal columns `text` occupies (CJK/Hangul take two, combining
+    # marks none) — `String#size` counts codepoints, which wraps rows.
+    def display_width(text : String) : Int32
+      text.each_char.sum { |c| Termisu::UnicodeWidth.codepoint_width(c.ord).to_i }
+    end
+
+    # The longest suffix of `text` that fits in `room` columns, so the end
+    # being typed (and the cursor after it) stays visible.
+    def tail_fit(text : String, room : Int) : String
+      chars = text.chars
+      col = 0
+      i = chars.size
+      while i > 0
+        w = Termisu::UnicodeWidth.codepoint_width(chars[i - 1].ord).to_i
+        break if col + w > room
+        col += w
+        i -= 1
+      end
+      chars[i..].join
+    end
+
+    # Cuts `text` to at most `width` display columns, ending in `…` when
+    # anything was dropped (and there's room for it).
+    def truncate(text : String, width : Int) : String
+      return text if display_width(text) <= width
+      room = width < 4 ? width : width - 1
+      String.build do |io|
+        col = 0
+        text.each_char do |c|
+          w = Termisu::UnicodeWidth.codepoint_width(c.ord).to_i
+          break if col + w > room
+          io << c
+          col += w
+        end
+        io << '…' unless width < 4
       end
     end
 
@@ -98,7 +140,7 @@ module Doma
       @cursor : Int32 = 0
       @offset : Int32 = 0
       @rows : Int32 = DEFAULT_VIEWPORT_ROWS
-      @width : Int32 = 100
+      @width : Int32 = 80
       # Memoized filter result for the current @query. render/move/enter
       # all need it, often for the same keystroke — recomputing per call
       # would re-downcase every label each time. Reset whenever @query
@@ -106,7 +148,17 @@ module Doma
       @filtered : Array(Item)?
 
       def initialize(@items : Array(Item), @prompt : String, @tty : IO::FileDescriptor)
-        @width = (ENV["COLUMNS"]?.try(&.to_i?) || 100).clamp(20, 240)
+        @width = terminal_width.clamp(20, 240)
+      end
+
+      # Shells don't export COLUMNS, so ask the tty itself; COLUMNS and 80
+      # are only fallbacks for when the ioctl fails.
+      private def terminal_width : Int32
+        ws = uninitialized LibC::Winsize
+        if LibC.ioctl(@tty.fd, LibC::TIOCGWINSZ, pointerof(ws)) == 0 && ws.ws_col > 0
+          return ws.ws_col.to_i32
+        end
+        ENV["COLUMNS"]?.try(&.to_i?) || 80
       end
 
       def run : Result
@@ -114,8 +166,10 @@ module Doma
         with_raw_mode do
           # Reserve render area below the prompt line so we don't smear
           # over whatever was on screen before.
+          # The cursor stays parked below the area: render moves up
+          # @rows + 1 itself, so moving up here too would draw the first
+          # frame over the user's earlier terminal output.
           (@rows + 1).times { @tty.print('\n') }
-          @tty.print("\e[#{@rows + 1}A")
 
           loop do
             render
@@ -172,7 +226,10 @@ module Doma
         io << "\e[" << (@rows + 1) << "A\r\e[J"
 
         count_label = "#{filtered.size}/#{@items.size}"
-        io << "\e[1;36m" << @prompt << "›\e[0m " << @query
+        # Header must stay one line or the fixed cursor-up redraw drifts:
+        # show only the query's tail when it doesn't fit.
+        room = @width - Picker.display_width(@prompt) - count_label.size - 5
+        io << "\e[1;36m" << @prompt << "›\e[0m " << Picker.tail_fit(Picker.sanitize(@query), Math.max(room, 0))
         io << "  \e[2m" << count_label << "\e[0m\n"
 
         end_idx = Math.min(@offset + @rows, filtered.size)
@@ -201,22 +258,18 @@ module Doma
       # path-style label on the left, optional gray hint on the right,
       # truncated to fit terminal width.
       private def render_line(item : Item) : String
-        label = Picker.sanitize(item.label)
-        hint = item.hint.try { |h| Picker.sanitize(h) }
+        label = Picker.sanitize(item.label.unicode_normalize(:nfc))
+        hint = item.hint.try { |h| Picker.sanitize(h.unicode_normalize(:nfc)) }
         if hint.nil? || hint.empty?
-          truncate(label, @width - 4)
+          Picker.truncate(label, @width - 4)
         else
           # Reserve roughly a third for the hint, two-thirds for the label.
           hint_room = (@width // 3).clamp(12, 80)
           label_room = @width - hint_room - 6
-          "#{truncate(label, label_room).ljust(label_room)}  \e[2m#{truncate(hint, hint_room)}\e[0m"
+          cut = Picker.truncate(label, label_room)
+          pad = " " * Math.max(0, label_room - Picker.display_width(cut))
+          "#{cut}#{pad}  \e[2m#{Picker.truncate(hint, hint_room)}\e[0m"
         end
-      end
-
-      private def truncate(text : String, width : Int) : String
-        return text if text.size <= width
-        return text[0, width] if width < 4
-        "#{text[0, width - 1]}…"
       end
 
       private def cleanup
@@ -258,18 +311,27 @@ module Doma
         with_brief_timeout do
           n = @tty.read_char
           return :cancel if n.nil?
-          if n == '['
-            arrow = @tty.read_char
-            return if arrow.nil?
-            case arrow
+          case n
+          when '['
+            # CSI: read params up to the final byte (0x40..0x7E) so unknown
+            # keys (Delete `\e[3~`, Ctrl-Up `\e[1;5A`, …) are swallowed
+            # whole instead of leaking their tail into the query.
+            params = ""
+            while (c = @tty.read_char) && !('@'..'~').includes?(c)
+              params += c
+            end
+            return if c.nil?
+            case {params, c}
+            when {"", 'A'}  then :up
+            when {"", 'B'}  then :down
+            when {"5", '~'} then :page_up
+            when {"6", '~'} then :page_down
+            end
+          when 'O'
+            # SS3 (application cursor mode): ESC O A / ESC O B.
+            case @tty.read_char
             when 'A' then :up
             when 'B' then :down
-            when '5'
-              @tty.read_char # consume trailing '~'
-              :page_up
-            when '6'
-              @tty.read_char
-              :page_down
             end
           end
         end

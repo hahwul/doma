@@ -8,7 +8,9 @@ module Doma
   module Duration
     extend self
 
-    PATTERN = /\A(\d+)([smhdw])\z/i
+    # Case-insensitive except `M`: read as "months" by most people, it
+    # would otherwise silently mean minutes.
+    PATTERN = /\A(\d+)([smhdwSHDW])\z/
 
     SECONDS_PER_UNIT = {
       "s" => 1_i64,
@@ -28,6 +30,9 @@ module Doma
     # Returns the input duration converted to seconds.
     def parse_seconds!(raw : String) : Int64
       m = raw.strip.match(PATTERN)
+      if !m && raw.strip.ends_with?('M')
+        raise ValidationError.new("invalid duration '#{raw}': 'M' is ambiguous (use m for minutes, d/w for longer)")
+      end
       raise ValidationError.new("invalid duration '#{raw}' (use like 30s, 5m, 1h, 7d, 2w)") unless m
       # `to_i64?` returns nil on overflow rather than raising; a 20-digit
       # number reaches us here just because the regex passed.
@@ -62,8 +67,10 @@ module Doma
     # a glance what's about to lapse. Past expirations come back as
     # "expired" rather than a negative number.
     def humanize_remaining(expires_at : Int64) : String
-      delta = expires_at - Time.utc.to_unix
-      return "expired" if delta <= 0
+      now = Time.utc.to_unix
+      # Compare before subtracting: `Int64::MIN - now` would overflow.
+      return "expired" if expires_at <= now
+      delta = expires_at - now
       if delta < 60
         "#{delta}s"
       elsif delta < 3600

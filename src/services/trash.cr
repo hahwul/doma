@@ -35,9 +35,12 @@ module Doma
       # `--ttl 7d` entry comes back with the original deadline (not a
       # fresh 7-day clock).
       property expirations : Hash(String, Int64)
+      # nil for entries trashed before this field existed; restore then
+      # falls back to "now".
+      property created_at : Int64?
 
       def initialize(@deleted_at, @short_id, @path, @basename,
-                     @last_used_at, @tags, @expirations)
+                     @last_used_at, @tags, @expirations, @created_at = nil)
       end
 
       # 7-char display form of the short id — what `trash list` prints
@@ -75,6 +78,7 @@ module Doma
         last_used_at: info.last_used_at,
         tags: tags,
         expirations: expirations,
+        created_at: info.created_at,
       )
     end
 
@@ -144,18 +148,11 @@ module Doma
       with_lock do
         now = Time.utc.to_unix
         db.transaction do |cnn|
-          # Resolve `existing` inside the transaction to collapse the
-          # check/write window. `db.transaction` uses SQLite's default
-          # `BEGIN DEFERRED`, so this doesn't strictly atomicize with the
-          # INSERT below — a concurrent writer can still slip in. What
-          # makes the path correct is the `UNIQUE(path)` constraint on
-          # `directories`: if a racer wins the INSERT after our SELECT,
-          # our INSERT fails cleanly with SQLITE_CONSTRAINT (rolled back
-          # with the rest of the transaction) instead of producing a
-          # phantom duplicate or a misleading ConflictError on a path that
-          # no longer exists. Before this change the SELECT was on
-          # `db.db`, opening a much wider race window across pool
-          # connections.
+          # Resolve `existing` inside the transaction: `db.transaction`
+          # takes the write lock up front (`BEGIN IMMEDIATE`, see
+          # database.cr), so no other writer can slip in between this
+          # SELECT and the INSERT below. `UNIQUE(path)` stays as the
+          # backstop.
           existing = cnn.query_one?(
             "SELECT id FROM directories WHERE path = ?", entry.path, as: Int64
           )
@@ -170,7 +167,7 @@ module Doma
             cnn.exec(
               "INSERT INTO directories (path, basename, short_id, created_at, last_used_at) " \
               "VALUES (?, ?, ?, ?, ?)",
-              entry.path, entry.basename, entry.short_id, now, entry.last_used_at
+              entry.path, entry.basename, entry.short_id, entry.created_at || now, entry.last_used_at
             )
             cnn.scalar("SELECT id FROM directories WHERE path = ?", entry.path).as(Int64)
           end
@@ -258,6 +255,11 @@ module Doma
         rewrite!(kept)
         pruned.size
       end
+    end
+
+    # Drops one entry — used to undo an `add!` whose row delete then failed.
+    def discard!(entry : Entry)
+      with_lock { remove_from_file!(entry) }
     end
 
     private def with_lock(&)

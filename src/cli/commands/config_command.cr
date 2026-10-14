@@ -145,7 +145,10 @@ module Doma::CLI
       path = Doma::Config.config_path
       # Seed an empty file so $EDITOR doesn't open a non-existent path
       # (Vim/etc handle it, but seeding makes intent obvious).
-      File.write(path, "") unless File.exists?(path)
+      unless File.exists?(path)
+        Dir.mkdir_p(File.dirname(path))
+        File.write(path, "")
+      end
 
       editor = ENV["VISUAL"]? || ENV["EDITOR"]?
       if editor.nil? || editor.strip.empty?
@@ -154,7 +157,7 @@ module Doma::CLI
         )
       end
       status = Process.run(editor, [path], shell: true, input: STDIN, output: STDOUT, error: STDERR)
-      exit(status.exit_code) unless status.success?
+      exit(status.exit_code? || 128 + (status.exit_signal?.try(&.value) || 0)) unless status.success?
 
       # Validate the post-edit file so users learn about syntax errors
       # immediately instead of on the next `doma <cmd>`.
@@ -295,6 +298,10 @@ module Doma::CLI
     private def write_yaml(data : YamlMap)
       Doma::Config.ensure_home!
       path = Doma::Config.config_path
+      # Write through a symlinked config (dotfiles) instead of replacing
+      # the link, and make sure a custom DOMA_CONFIG's directory exists.
+      path = File.realpath(path) if File.symlink?(path) && File.exists?(path)
+      Dir.mkdir_p(File.dirname(path))
       yaml = wrap_map(data).to_yaml
       # Write atomically so a crash mid-write doesn't truncate the file.
       tmp = "#{path}.tmp"
