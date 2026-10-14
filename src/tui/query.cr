@@ -41,7 +41,7 @@ module Doma
         id_prefixes = [] of String
         terms = [] of Term
 
-        raw.split.each do |tok|
+        raw.unicode_normalize(:nfc).split.each do |tok|
           if v = strip_prefix(tok, "tag:")
             tag_includes << v unless v.empty?
           elsif v = strip_prefix(tok, "-tag:") || strip_prefix(tok, "!tag:")
@@ -71,8 +71,12 @@ module Doma
           total = 0
           positions = [] of Int32
           ok = true
+          # macOS hands back decomposed (NFD) Hangul/accents; match against
+          # NFC so typed queries hit. The TUI draws the same NFC string, so
+          # `positions` index into what's on screen.
+          path = entry.path.unicode_normalize(:nfc)
           parsed.terms.each do |term|
-            match = Fuzzy.score(term.text, entry.path, basename_bonus: !term.path_only)
+            match = Fuzzy.score(term.text, path, basename_bonus: !term.path_only)
             unless match
               ok = false
               break

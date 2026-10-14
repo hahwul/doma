@@ -45,8 +45,12 @@ module Doma
       # `IO::Error` when there's no controlling terminal — the caller turns
       # that into a clean user-facing error.
       def initialize(@db : Doma::Database, @entries : Array(Doma::Entry), query : String = "")
-        @termisu = Termisu.new
+        # Filter before Termisu.new: an exception after raw mode / alt screen
+        # is entered would leave the terminal broken (run's ensure isn't
+        # reached yet).
         @query = query
+        @scored = Query.filter(@entries, Query.parse(@query))
+        @termisu = Termisu.new
         @cursor = 0
         @offset = 0
         @width = 0
@@ -63,7 +67,6 @@ module Doma
         # to; without it, Enter only *prints* the path — so the footer must
         # not promise `cd`.
         @shell_integration = !!ENV["DOMA_CD_FILE"]?.presence
-        @scored = Query.filter(@entries, Query.parse(@query))
       end
 
       # Runs the event loop until the user selects (Enter) or cancels
@@ -319,7 +322,8 @@ module Doma
       end
 
       private def draw_path(x : Int32, y : Int32, scored : Query::Scored, base : Termisu::Attribute, selected : Bool, limit : Int32)
-        path = Picker.sanitize(scored.entry.path)
+        # NFC, like Query.filter, so highlight positions line up.
+        path = Picker.sanitize(scored.entry.path.unicode_normalize(:nfc))
         positions = scored.positions
         col = x
         index = 0
@@ -366,7 +370,7 @@ module Doma
           end
 
         start = draw_text(0, y, prompt, fg: Termisu::Color.cyan, attr: Termisu::Attribute::Bold, max_x: @width)
-        cursor_col = draw_text(start, y, Picker.sanitize(text), fg: Termisu::Color.default, max_x: @width)
+        cursor_col = draw_text(start, y, tail_fit(Picker.sanitize(text), @width - 1 - start), fg: Termisu::Color.default, max_x: @width)
         @termisu.set_cursor(Math.min(cursor_col, @width - 1), y, true)
       end
 
@@ -418,6 +422,21 @@ module Doma
           col += w
         end
         col
+      end
+
+      # The longest suffix of `text` that fits in `room` columns, so the end
+      # being typed (and the cursor after it) stays visible.
+      private def tail_fit(text : String, room : Int32) : String
+        chars = text.chars
+        col = 0
+        i = chars.size
+        while i > 0
+          w = char_width(chars[i - 1])
+          break if col + w > room
+          col += w
+          i -= 1
+        end
+        chars[i..].join
       end
 
       private def text_width(text : String) : Int32

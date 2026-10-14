@@ -64,8 +64,10 @@ module Doma
     # a glance what's about to lapse. Past expirations come back as
     # "expired" rather than a negative number.
     def humanize_remaining(expires_at : Int64) : String
-      delta = expires_at - Time.utc.to_unix
-      return "expired" if delta <= 0
+      now = Time.utc.to_unix
+      # Compare before subtracting: `Int64::MIN - now` would overflow.
+      return "expired" if expires_at <= now
+      delta = expires_at - now
       if delta < 60
         "#{delta}s"
       elsif delta < 3600

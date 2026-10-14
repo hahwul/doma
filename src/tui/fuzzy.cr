@@ -46,9 +46,11 @@ module Doma
       def score(query : String, target : String, *, basename_bonus : Bool = true) : Match?
         return Match.new(0, [] of Int32) if query.empty?
 
-        q = query.downcase.chars
+        # Lowercase per char, not per string: `"İ".downcase` is two chars, so
+        # a whole-string downcase would shift every later index.
+        q = query.chars.map(&.downcase)
         original = target.chars
-        lowered = target.downcase.chars
+        lowered = original.map(&.downcase)
 
         positions = [] of Int32
         total = 0
