@@ -22,7 +22,7 @@ describe "Database#rename_tag" do
 
         db.rename_tag("scratch", "tmp").should eq(:merged)
         db.all_tags.map(&.name).should eq(["tmp"])
-        db.paths_for_tag("tmp").size.should eq(2)
+        db.directories("tmp", sort: Doma::Database::SortBy::Recent).map(&.path).size.should eq(2)
       ensure
         FileUtils.rm_rf(tmp_a)
         FileUtils.rm_rf(tmp_b)

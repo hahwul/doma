@@ -1,4 +1,5 @@
 require "colorize"
+require "./duration"
 
 module Doma
   # Shared timestamp formatters for CLI output. Centralizes the
@@ -38,22 +39,12 @@ module Doma
       text = if delta < 0
                # Clock skew or a timestamp imported from a machine whose
                # clock was ahead leaves `delta` negative; without this guard
-               # the first branch prints a nonsensical "-5000s ago". Mirrors
+               # `compact` prints a nonsensical "-5000s ago". Mirrors
                # `Duration.humanize_remaining`'s "expired" guard. (delta == 0
                # is the just-added present moment — it renders as "0s ago".)
                "just now"
-             elsif delta < 60
-               "#{delta}s ago"
-             elsif delta < 3600
-               "#{delta // 60}m ago"
-             elsif delta < 86_400
-               "#{delta // 3600}h ago"
-             elsif delta < 604_800
-               "#{delta // 86_400}d ago"
-             elsif delta < 31_557_600 # ~365.25d
-               "#{delta // 604_800}w ago"
              else
-               "#{delta // 31_557_600}y ago"
+               "#{Doma::Duration.compact(delta, years: true)} ago"
              end
       color ? text.colorize(:dark_gray).to_s : text
     end

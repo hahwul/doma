@@ -226,14 +226,10 @@ module Doma::CLI
     # Helpers
     # ------------------------------------------------------------------
 
-    # Compact age renderer: "3d", "5h", "12m", "now". Mirrors the style
-    # of `Doma::Duration.humanize_remaining` so the columns in `trash
-    # list` and `list --include-expired` look the same.
+    # Compact age ("3d", "5h", "now") in the same `Nu` form as TTLs, so
+    # `trash list` and `list --include-expired` read alike.
     private def humanize_age(seconds : Int64) : String
-      return "now" if seconds < 60
-      return "#{seconds // 60}m" if seconds < 3600
-      return "#{seconds // 3600}h" if seconds < 86_400
-      "#{seconds // 86_400}d"
+      seconds < 60 ? "now" : Doma::Duration.compact(seconds)
     end
   end
 end

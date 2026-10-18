@@ -5,15 +5,7 @@ module Doma
   module Runtime
     extend self
 
-    @@assume_yes : Bool = ENV["DOMA_YES"]? == "1"
-
-    def assume_yes=(value : Bool)
-      @@assume_yes = value
-    end
-
-    def assume_yes? : Bool
-      @@assume_yes
-    end
+    class_property? assume_yes : Bool = ENV["DOMA_YES"]? == "1"
 
     # True when nobody has actually consented to a destructive action:
     # no -y/--yes, no DOMA_YES=1, and there's no human at a TTY to ask

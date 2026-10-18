@@ -78,21 +78,21 @@ describe "TTL: Database.add with expires_at" do
       begin
         db.add(tmp, ["temp"], expires_at: future)
         # Active immediately — query reflects it.
-        db.paths_for_tag("temp").size.should eq(1)
+        db.directories("temp", sort: Doma::Database::SortBy::Recent).map(&.path).size.should eq(1)
       ensure
         FileUtils.rm_rf(tmp)
       end
     end
   end
 
-  it "filters out expired rows from paths_for_tag" do
+  it "filters out expired rows from directories(tag)" do
     with_temp_db do |db|
       tmp = File.tempname("doma-ttl-past")
       FileUtils.mkdir_p(tmp)
       past = Time.utc.to_unix - 60
       begin
         db.add(tmp, ["stale"], expires_at: past)
-        db.paths_for_tag("stale").should be_empty
+        db.directories("stale", sort: Doma::Database::SortBy::Recent).map(&.path).should be_empty
       ensure
         FileUtils.rm_rf(tmp)
       end
@@ -122,16 +122,16 @@ describe "TTL: Database.add with expires_at" do
       past = Time.utc.to_unix - 60
       begin
         db.add(tmp, ["bookmark"], expires_at: past)
-        db.paths_for_tag("bookmark").should be_empty
+        db.directories("bookmark", sort: Doma::Database::SortBy::Recent).map(&.path).should be_empty
 
         # Re-tag with future expiration → should become active again.
         future = Time.utc.to_unix + 3600
         db.add(tmp, ["bookmark"], expires_at: future)
-        db.paths_for_tag("bookmark").size.should eq(1)
+        db.directories("bookmark", sort: Doma::Database::SortBy::Recent).map(&.path).size.should eq(1)
 
         # Re-tag without --ttl → reverts to permanent (NULL expiry).
         db.add(tmp, ["bookmark"])
-        db.paths_for_tag("bookmark").size.should eq(1)
+        db.directories("bookmark", sort: Doma::Database::SortBy::Recent).map(&.path).size.should eq(1)
       ensure
         FileUtils.rm_rf(tmp)
       end
@@ -243,7 +243,7 @@ describe "doma mark CLI alias" do
       status.success?.should be_true
 
       Doma::Database.open(File.join(home, "doma.db")).tap do |db|
-        db.paths_for_tag("reading").size.should eq(1)
+        db.directories("reading", sort: Doma::Database::SortBy::Recent).map(&.path).size.should eq(1)
         # The tag must have a TTL — that's the whole point of mark.
         # Re-query the row directly to confirm expires_at != NULL.
         row = db.db.query_one?(
@@ -313,9 +313,9 @@ describe "doma mark CLI alias" do
       )
 
       Doma::Database.open(File.join(home, "doma.db")).tap do |db|
-        db.paths_for_tag("spike").size.should eq(1)
-        db.paths_for_tag("skim").size.should eq(1)
-        db.paths_for_tag("review").size.should eq(1)
+        db.directories("spike", sort: Doma::Database::SortBy::Recent).map(&.path).size.should eq(1)
+        db.directories("skim", sort: Doma::Database::SortBy::Recent).map(&.path).size.should eq(1)
+        db.directories("review", sort: Doma::Database::SortBy::Recent).map(&.path).size.should eq(1)
       ensure
         db.close
       end

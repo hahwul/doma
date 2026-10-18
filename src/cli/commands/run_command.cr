@@ -7,6 +7,7 @@ require "../../utils/logger"
 require "../../utils/parallel"
 require "../../utils/suggester"
 require "../../utils/tag_glob"
+require "./sweep_args"
 
 module Doma::CLI
   # Runs a shell command in every directory matching the given tag.
@@ -36,19 +37,12 @@ module Doma::CLI
       parser = OptionParser.new do |p|
         p.banner = "Usage: doma run (<tag> | -t TAG) [--fail-fast] [--parallel [--jobs N]] [--no-header] [--dry-run] [--json] -- <cmd> [args...]"
         p.on("-t TAG", "--tag=TAG", "Tag selector — single tag, no comma split (alias for positional)") do |t|
-          if t.strip.empty?
-            raise Doma::ValidationError.new("tag is empty (-t got an empty value)")
-          end
-          flag_tags << t
+          flag_tags << SweepArgs.flag_tag!(t)
         end
         p.on("--fail-fast", "Stop on first failure") { stop_on_fail = true }
         p.on("--parallel", "Run commands in parallel (best-effort, output interleaves)") { parallel = true }
         p.on("--jobs N", "Max concurrent invocations under --parallel (default: CPU count)") do |n|
-          parsed = n.to_i?
-          if parsed.nil? || parsed < 1
-            raise Doma::ValidationError.new("--jobs must be a positive integer, got '#{n}'")
-          end
-          jobs = parsed
+          jobs = SweepArgs.jobs!(n)
         end
         p.on("--no-header", "Suppress per-directory ▶/✓ markers (failures still surface as ✗)") { no_header = true }
         p.on("-n", "--dry-run", "Print the target directories and command without running anything") { dry_run = true }
@@ -104,36 +98,13 @@ module Doma::CLI
         )
       end
 
-      if !flag_tags.empty? && !positional_tags.empty?
-        raise Doma::ValidationError.new(
-          "tag specified both positionally and via -t; pick one"
-        )
-      end
-      if flag_tags.size > 1
-        raise Doma::ValidationError.new(
-          "run accepts a single tag; got #{flag_tags.size} via -t"
-        )
-      end
-      # Extra positional tags were previously dropped silently — `run work
-      # personal -- cmd` swept only `work` while the user believed both
-      # sets ran. Reject it the way `status` already does, and point at the
-      # glob form for sweeping several tags at once.
-      if positional_tags.size > 1
-        raise Doma::ValidationError.new(
-          "run accepts a single tag; got #{positional_tags.size} positional args",
-          hint: "use a glob like 'work*' to sweep several tags in one run"
-        )
-      end
-      tag_args = flag_tags.empty? ? positional_tags : flag_tags
+      tag = SweepArgs.single_tag!("run", flag_tags, positional_tags)
+      raise Doma::ValidationError.new("tag is required") unless tag
 
-      raise Doma::ValidationError.new("tag is required") if tag_args.empty?
-
-      tag = tag_args.first
       paths, all_tags = Doma::Database.open do |db|
-        # Use `directories(tag)` (returns Entry rows with their tag list)
-        # rather than `paths_for_tag` so we can post-filter against the
-        # strict glob rules. SQL GLOB treats `*` as crossing `/`; we
-        # reimpose shell-glob semantics in Crystal so `run 'a/*' -- ...`
+        # `directories(tag)` returns Entry rows with their tag list so we
+        # can post-filter against the strict glob rules. SQL GLOB treats
+        # `*` as crossing `/`; we reimpose shell-glob semantics in Crystal so `run 'a/*' -- ...`
         # doesn't end up running in `a/b/c/d`.
         entries = db.directories(tag, sort: Doma::Database::SortBy::Recent)
         entries = Doma::TagGlob.filter(entries, tag, &.tags)
@@ -158,7 +129,7 @@ module Doma::CLI
           # always present (in both modes) so a consumer can tell a
           # preview from a result without inspecting which keys exist.
           rows = paths.map do |path|
-            {"path" => JSON::Any.new(path), "dry_run" => JSON::Any.new(true)}
+            {path: path, dry_run: true}
           end
           puts rows.to_json
           return
@@ -273,13 +244,7 @@ module Doma::CLI
       # zipping by index stays correct — the array just ends early, and
       # the missing directories are the ones that never ran.
       rows = results.map_with_index do |result, i|
-        {
-          "path"      => JSON::Any.new(paths[i]),
-          "exit_code" => JSON::Any.new(result.exit_code.to_i64),
-          "stdout"    => JSON::Any.new(result.stdout),
-          "stderr"    => JSON::Any.new(result.stderr),
-          "dry_run"   => JSON::Any.new(false),
-        }
+        {path: paths[i], exit_code: result.exit_code, stdout: result.stdout, stderr: result.stderr, dry_run: false}
       end
       puts rows.to_json
       results.count { |r| r.exit_code != 0 }

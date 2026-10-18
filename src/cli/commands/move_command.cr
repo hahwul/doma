@@ -68,7 +68,7 @@ module Doma::CLI
         # made move look like it touched a different path than it stored.
         old_abs = Doma::Validator.canonicalize(old_path)
         new_abs = Doma::Validator.canonicalize(new_path)
-        unless db.find_path_info(old_abs)
+        unless db.find_entry(old_abs)
           raise Doma::NotFoundError.new(
             "path not registered: #{old_abs}",
             hint: Doma::Suggester.hint_for(old_abs, db.directories.map(&.path))

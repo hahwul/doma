@@ -11,7 +11,6 @@ module Doma
     record Info,
       git : Bool,
       host : String?,
-      owner : String?,
       repo : String? do
       # Tags worth attaching when --git-tag is on. Host + repo: enough
       # selectivity to be useful as a filter. Owner is intentionally
@@ -21,26 +20,19 @@ module Doma
       # filtering signal — `auto_tag.git=true` users would just see
       # `#git` everywhere — so it's left off.
       def to_tags : Array(String)
-        out = [] of String
-        if host = self.host
-          out << host
-        end
-        if repo = self.repo
-          out << repo
-        end
-        out.uniq!
+        [host, repo].compact.uniq!
       end
     end
 
-    EMPTY = Info.new(false, nil, nil, nil)
+    EMPTY = Info.new(false, nil, nil)
 
     def detect(path : String) : Info
       git_dir = locate_git_dir(Doma::Validator.expand_home(path))
       return EMPTY unless git_dir
       url = read_origin_url(git_dir)
-      return Info.new(true, nil, nil, nil) unless url
+      return Info.new(true, nil, nil) unless url
       parsed = parse_remote(url)
-      Info.new(true, parsed[:host], parsed[:owner], parsed[:repo])
+      Info.new(true, parsed[:host], parsed[:repo])
     rescue IO::Error
       # An unreadable `.git` file / `config` / `commondir` anywhere along
       # the walk-up (permission-restricted parent repos included) must not
@@ -121,19 +113,19 @@ module Doma
     #   https://github.com/owner/repo.git
     #   git@github.com:owner/repo.git
     #   ssh://git@github.com/owner/repo
-    private def parse_remote(url : String) : NamedTuple(host: String?, owner: String?, repo: String?)
+    private def parse_remote(url : String) : NamedTuple(host: String?, repo: String?)
       stripped = url.strip.rstrip('/')
       stripped = stripped.rchop(".git") if stripped.ends_with?(".git")
 
       # Host excludes any `:port` so ssh://host:2222 and git@host: tag alike.
       if m = stripped.match(/\A[a-z]+:\/\/(?:[^@\/]+@)?([^\/:]+)(?::\d+)?\/(.+?)\/([^\/]+)\z/i)
-        return {host: host_label(m[1]), owner: m[2], repo: m[3]}
+        return {host: host_label(m[1]), repo: m[3]}
       end
       # scp-like, with or without `user@` (`github.com:o/r`).
       if m = stripped.match(/\A(?:[^@\/]+@)?([^:\/]+):(?!\/\/)(.+?)\/([^\/]+)\z/)
-        return {host: host_label(m[1]), owner: m[2], repo: m[3]}
+        return {host: host_label(m[1]), repo: m[3]}
       end
-      {host: nil, owner: nil, repo: nil}
+      {host: nil, repo: nil}
     end
 
     # Map raw hostnames to short, friendly labels. Unknown hosts pass through

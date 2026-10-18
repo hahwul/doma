@@ -12,6 +12,8 @@ require "../../utils/validator"
 
 module Doma::CLI
   class AddCommand
+    private alias JsonRow = Hash(String, String | Bool | Int64 | Array(String))
+
     def run(args : Array(String))
       raw_tags = [] of String
       auto_basename : Bool? = nil
@@ -86,7 +88,7 @@ module Doma::CLI
         # pre-validation hint. Same rationale as the non-dry-run branch.
         failures = 0
         Doma::Database.open do |preview_db|
-          results = [] of Hash(String, JSON::Any)
+          results = [] of JsonRow
           failures = process_each(positional, json_mode ? results : nil) do |path|
             short_id_redirect_hint(preview_db, path)
             abs = Doma::Validator.path!(path)
@@ -96,12 +98,12 @@ module Doma::CLI
             summary = applied.empty? ? "(no tags)" : "tags: #{applied.join(", ")}"
             summary += " (#{ttl_label})" if ttl_label
             if json_mode
-              results << {
-                "input"     => JSON::Any.new(path),
-                "path"      => JSON::Any.new(abs),
-                "tags"      => JSON::Any.new(applied.map { |t| JSON::Any.new(t) }),
-                "dry_run"   => JSON::Any.new(true),
-                "unchanged" => JSON::Any.new(false),
+              results << JsonRow{
+                "input"     => path,
+                "path"      => abs,
+                "tags"      => applied,
+                "dry_run"   => true,
+                "unchanged" => false,
               }
             else
               Doma::Logger.info "[dry-run] would add #{abs} #{summary}"
@@ -114,7 +116,7 @@ module Doma::CLI
       end
 
       Doma::Database.open do |db|
-        results = [] of Hash(String, JSON::Any)
+        results = [] of JsonRow
         failures = process_each(positional, json_mode ? results : nil) do |path|
           # Catch the common "user pasted a `list` short_id into `add`"
           # mistake before path validation. Without this, `add c6b7d5d`
@@ -141,11 +143,11 @@ module Doma::CLI
           # what we're about to apply is enough to flag both
           # "all tags already present, same TTL" and
           # "no tags passed and path is already registered."
-          prev_info = db.find_path_info(abs)
+          prev_info = db.find_entry(abs)
           prev_tags = Set(String).new
           prev_exp = {} of String => Int64
           if pi = prev_info
-            prev_tags = db.tags_for(pi.id).to_set
+            prev_tags = pi.tags.to_set
             prev_exp = db.tag_expirations(pi.id, include_past: true)
           end
 
@@ -159,24 +161,22 @@ module Doma::CLI
           summary += " (#{ttl_label})" if ttl_label
 
           if json_mode
-            short_id = db.find_path_info(abs).try(&.short_id) || ""
-            row = {
-              "input"     => JSON::Any.new(path),
-              "path"      => JSON::Any.new(abs),
-              "short_id"  => JSON::Any.new(short_id),
-              "tags"      => JSON::Any.new(applied.map { |t| JSON::Any.new(t) }),
-              "unchanged" => JSON::Any.new(unchanged),
-              "dry_run"   => JSON::Any.new(false),
+            short_id = short_id_after_add(db, abs, prev_info)
+            row = JsonRow{
+              "input"     => path,
+              "path"      => abs,
+              "short_id"  => short_id,
+              "tags"      => applied,
+              "unchanged" => unchanged,
+              "dry_run"   => false,
             }
-            if expires_at
-              row["expires_at"] = JSON::Any.new(expires_at)
-            end
+            expires_at.try { |exp| row["expires_at"] = exp }
             results << row
           else
             if unchanged
               Doma::Logger.info "· no change: #{abs} #{summary}"
             else
-              short_id = db.find_path_info(abs).try(&.short_id) || ""
+              short_id = short_id_after_add(db, abs, prev_info)
               id_suffix = short_id.empty? ? "" : " (id: #{short_id})"
               Doma::Logger.success "added #{abs} #{summary}#{id_suffix}"
             end
@@ -203,19 +203,25 @@ module Doma::CLI
     # recorded as structured rows instead of (or in addition to) human
     # error logging. This enables `add --json` to produce a complete
     # array even on partial failure.
-    private def process_each(paths : Array(String), json_results : Array(Hash(String, JSON::Any))? = nil, &)
+    # An existing row keeps its short_id across a re-add; only a new row
+    # needs the lookup.
+    private def short_id_after_add(db : Doma::Database, abs : String, prev : Doma::Entry?) : String
+      prev.try(&.short_id) || db.find_entry(abs).try(&.short_id) || ""
+    end
+
+    private def process_each(paths : Array(String), json_results : Array(JsonRow)? = nil, &)
       failures = 0
       paths.each do |path|
         yield path
       rescue ex : Doma::ValidationError
         failures += 1
         if json_results
-          row = {
-            "input" => JSON::Any.new(path),
-            "error" => JSON::Any.new(format_failure(path, ex, paths.size)),
+          row = JsonRow{
+            "input" => path,
+            "error" => format_failure(path, ex, paths.size),
           }
           if hint = ex.hint
-            row["hint"] = JSON::Any.new(hint)
+            row["hint"] = hint
           end
           json_results << row
         else

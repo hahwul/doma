@@ -69,8 +69,10 @@ module Doma
     end
   end
 
-  # Persisted user preferences. Values are nil when unset so the loader can
-  # tell "user explicitly chose this" from "fall back to built-in default".
+  # Persisted user preferences. Values are nil when unset so `config list`
+  # can tell "user explicitly chose this" from "fall back to built-in
+  # default", and `config set/unset` can round-trip through `to_yaml`
+  # (which skips nils). The plain getters apply the defaults.
   class Settings
     include YAML::Serializable
     include YAML::Serializable::Strict
@@ -81,30 +83,78 @@ module Doma
       First   # always pick the first match (scriptable)
     end
 
-    @[YAML::Field(key: "db_path")]
+    # Parses through the enum itself so a bad value keeps the
+    # "Unknown enum … value" error `format_parse_error` translates; a
+    # bare `SelectorMode?` union only says "Couldn't parse".
+    module SelectorConverter
+      def self.from_yaml(ctx : YAML::ParseContext, node : YAML::Nodes::Node) : SelectorMode
+        SelectorMode.new(ctx, node)
+      end
+
+      def self.to_yaml(value : SelectorMode, yaml : YAML::Nodes::Builder)
+        value.to_yaml(yaml)
+      end
+    end
+
     property db_path : String? = nil
+    @[YAML::Field(converter: Doma::Settings::SelectorConverter)]
+    setter selector : SelectorMode? = nil
+    setter auto_tag : AutoTag? = nil
 
-    @[YAML::Field(key: "selector")]
-    property selector : SelectorMode = SelectorMode::Auto
+    def selector : SelectorMode
+      @selector || SelectorMode::Auto
+    end
 
-    @[YAML::Field(key: "auto_tag")]
-    property auto_tag : AutoTag = AutoTag.new
+    # Read-only view when unset: write through `self["auto_tag.git"] =`,
+    # not this fresh default object.
+    def auto_tag : AutoTag
+      @auto_tag || AutoTag.new
+    end
 
     class AutoTag
       include YAML::Serializable
       include YAML::Serializable::Strict
 
-      @[YAML::Field(key: "basename")]
-      property basename : Bool = false
+      setter basename : Bool? = nil
+      setter git : Bool? = nil
 
-      @[YAML::Field(key: "git")]
-      property git : Bool = false
+      def basename : Bool
+        !!@basename
+      end
+
+      def git : Bool
+        !!@git
+      end
 
       def initialize
       end
     end
 
     def initialize
+    end
+
+    # Dotted-key access for `doma config`: nil means unset. Keys are
+    # validated by the caller against `ConfigCommand::KEYS`.
+    def [](key : String) : (String | Bool)?
+      case key
+      when "db_path"           then @db_path
+      when "selector"          then @selector.try(&.to_s.downcase)
+      when "auto_tag.basename" then @auto_tag.try { |a| a.@basename }
+      when "auto_tag.git"      then @auto_tag.try { |a| a.@git }
+      end
+    end
+
+    # Pass nil to unset. Values arrive already coerced by `ConfigCommand`.
+    def []=(key : String, value : (String | Bool)?)
+      case key
+      when "db_path"  then @db_path = value.as(String?)
+      when "selector" then @selector = value.as(String?).try { |v| SelectorMode.parse(v) }
+      when "auto_tag.basename", "auto_tag.git"
+        tag = @auto_tag || AutoTag.new
+        key == "auto_tag.git" ? (tag.git = value.as(Bool?)) : (tag.basename = value.as(Bool?))
+        # Drop the parent map once its last child is unset.
+        @auto_tag = tag.@basename.nil? && tag.@git.nil? ? nil : tag
+      end
     end
 
     @@current : Settings? = nil

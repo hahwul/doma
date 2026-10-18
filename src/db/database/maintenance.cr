@@ -70,43 +70,12 @@ class Doma::Database
     removed
   end
 
-  # Removes every directory whose path no longer exists on disk.
-  # Single transaction so a partial failure can't leave half-pruned
-  # state. Returns the number of rows actually deleted.
-  #
-  # Two-step: collect the dead ids first (one stat per row, no DB
-  # writes), then drop them all in one `DELETE … WHERE id IN (…)`.
-  # The previous implementation called `DELETE … WHERE id = ?` row
-  # by row, which on a high-mortality cleanup (user moved their
-  # ~/Projects out from under doma) added up to N round trips inside
-  # one transaction. Batching keeps the same atomicity guarantee
-  # without per-row overhead.
-  def prune_dead! : Int32
-    removed = 0
-    @db.transaction do |tx|
-      cnn = tx.connection
-      rows = cnn.query_all("SELECT id, path FROM directories", as: {Int64, String})
-      dead_ids = rows.compact_map { |row| Dir.exists?(row[1]) ? nil : row[0] }
-
-      unless dead_ids.empty?
-        placeholders = Doma::Sql.placeholders_for(dead_ids.size)
-        args = dead_ids.map { |id| id.as(DB::Any) }
-        result = cnn.exec("DELETE FROM directories WHERE id IN (#{placeholders})", args: args)
-        removed = result.rows_affected.to_i
-      end
-      cleanup_orphans_tx(cnn)
-    end
-    removed
-  end
-
   # Deletes an explicit set of directory rows by id, in one transaction,
-  # and reports how many were actually removed. Unlike `prune_dead!`
-  # (which re-stats the filesystem to decide what is missing), this
-  # trusts the caller's set verbatim. `prune --gone`'s recoverable path
-  # uses it so the rows it deletes are exactly the ones it snapshotted
-  # to the trash: a second independent stat pass could diverge from the
-  # first (e.g. a path reappearing on a remounted disk between the two),
-  # leaving a trash entry for a row that was never removed.
+  # and reports how many were actually removed. Trusts the caller's set
+  # verbatim rather than re-stating the filesystem, so `prune --gone`
+  # deletes exactly the rows it listed (and snapshotted to the trash): a
+  # second independent stat pass could diverge from the first (e.g. a
+  # path reappearing on a remounted disk between the two).
   def remove_ids!(ids : Array(Int64)) : Int32
     return 0 if ids.empty?
     removed = 0

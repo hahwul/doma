@@ -16,21 +16,9 @@ module Doma
                      else           3
                      end
 
-      # Tie-break lexicographically so the same input + candidate set
-      # produces the same hint regardless of iteration order. Previously
-      # ties resolved to "whichever came first" — the DB row order leaked
-      # into user-visible output and made hints feel arbitrary.
-      best : String? = nil
-      best_distance = max_distance + 1
-      candidates.each do |c|
-        d = Levenshtein.distance(input, c)
-        next if d > best_distance
-        if d < best_distance || (b = best).nil? || c < b
-          best_distance = d
-          best = c
-        end
-      end
-      best_distance <= max_distance ? best : nil
+      # Sorted so ties resolve lexicographically (Finder keeps the first
+      # best match) rather than leaking DB row order into the hint.
+      Levenshtein.find(input, candidates.sort, max_distance)
     end
 
     # Convenience wrapper that returns the rendered hint string ready to

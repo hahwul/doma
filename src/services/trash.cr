@@ -66,9 +66,9 @@ module Doma
     # (callers should check this before issuing the actual delete so the
     # trash row mirrors what was removed).
     def snapshot(db : Doma::Database, abs_path : String) : Entry?
-      info = db.find_path_info(abs_path)
+      info = db.find_entry(abs_path)
       return unless info
-      tags = db.tags_for(info.id)
+      tags = info.tags
       expirations = db.tag_expirations(info.id, include_past: true)
       Entry.new(
         deleted_at: Time.utc.to_unix,

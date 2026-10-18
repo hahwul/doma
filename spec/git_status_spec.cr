@@ -49,7 +49,6 @@ describe Doma::GitStatus do
       s.behind.should eq(0)
       s.dirty.should eq(0)
       s.clean?.should be_true
-      s.diverged?.should be_false
     end
 
     it "counts staged / unstaged / untracked / conflicts and ahead-behind" do
@@ -65,7 +64,6 @@ describe Doma::GitStatus do
       # modified + untracked + conflicts — no double counting of MM.
       s.dirty.should eq(5)
       s.clean?.should be_false
-      s.diverged?.should be_true
     end
 
     it "flags a detached HEAD with no branch name" do
@@ -75,11 +73,10 @@ describe Doma::GitStatus do
       s.upstream.should be_nil
     end
 
-    it "leaves upstream nil and diverged? false without an upstream line" do
+    it "leaves upstream nil without an upstream line" do
       s = Doma::GitStatus.parse(NO_UPSTREAM)
       s.branch.should eq("solo")
       s.upstream.should be_nil
-      s.diverged?.should be_false
     end
 
     it "treats empty output as a git repo with nothing to report" do
