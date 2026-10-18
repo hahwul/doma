@@ -135,7 +135,7 @@ module Doma
 
     # Dotted-key access for `doma config`: nil means unset. Keys are
     # validated by the caller against `ConfigCommand::KEYS`.
-    def [](key : String) : String | Bool | Nil
+    def [](key : String) : (String | Bool)?
       case key
       when "db_path"           then @db_path
       when "selector"          then @selector.try(&.to_s.downcase)
@@ -145,7 +145,7 @@ module Doma
     end
 
     # Pass nil to unset. Values arrive already coerced by `ConfigCommand`.
-    def []=(key : String, value : String | Bool | Nil)
+    def []=(key : String, value : (String | Bool)?)
       case key
       when "db_path"  then @db_path = value.as(String?)
       when "selector" then @selector = value.as(String?).try { |v| SelectorMode.parse(v) }
