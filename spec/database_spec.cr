@@ -175,7 +175,7 @@ describe Doma::Database do
           db.transaction do |cnn|
             db.add_tx(cnn, tmp, ["committed"], validate_path: false)
           end
-          db.paths_for_tag("committed").size.should eq(1)
+          db.directories("committed", sort: Doma::Database::SortBy::Recent).map(&.path).size.should eq(1)
         ensure
           FileUtils.rm_rf(tmp)
         end

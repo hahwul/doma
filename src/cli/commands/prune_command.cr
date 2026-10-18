@@ -73,7 +73,7 @@ module Doma::CLI
         dead.each { |e| Doma::Logger.info "  #{e.path}" }
 
         if hard
-          removed = db.prune_dead!
+          removed = db.remove_ids!(dead.map(&.id))
           Doma::Logger.success "pruned #{removed} missing path(s) (permanent)"
           return
         end
@@ -87,11 +87,9 @@ module Doma::CLI
         # for users who actually want it.
         #
         # Snapshot and delete the *same* set: pair each snapshot with the
-        # row id it came from and delete exactly those ids. Calling
-        # `prune_dead!` here instead would re-stat every row, and a path
-        # that reappeared between `dead_paths` above and that second pass
-        # would be snapshotted into the trash yet never deleted — a
-        # phantom, un-restorable trash entry for a row that's still live.
+        # row id it came from and delete exactly those ids, so a path that
+        # reappears mid-sweep can't leave a phantom trash entry for a row
+        # that's still live.
         pending = dead.compact_map do |e|
           snap = Doma::Trash.snapshot(db, e.path)
           snap ? {e.id, snap} : nil

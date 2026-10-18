@@ -32,6 +32,8 @@ module Doma::CLI
     # at module load time and never mutated.
     private EMPTY_TTL = {} of String => Int64
 
+    private alias JsonRow = Hash(String, String | Bool | Int64 | Array(String) | Hash(String, Int64))
+
     def run(args : Array(String))
       tags = [] of String
       json_mode = false
@@ -176,7 +178,7 @@ module Doma::CLI
     private def emit_json(entries : Array(Doma::Entry), ttl_by_id : Hash(Int64, Hash(String, Int64)), group_by_tag : Bool, check_existence : Bool)
       if group_by_tag
         # Object keyed by tag name; untagged entries land under "".
-        grouped = {} of String => Array(Hash(String, JSON::Any))
+        grouped = {} of String => Array(JsonRow)
         group_entries_by_tag(entries).each do |(tag_key, group)|
           grouped[tag_key] = group.map { |e| json_row(e, ttl_by_id, check_existence) }
         end
@@ -513,25 +515,25 @@ module Doma::CLI
 
     # Build one JSON row for an entry, matching the export/import schema.
     # Used by both the flat and grouped JSON render paths.
-    private def json_row(e : Doma::Entry, ttl_by_id : Hash(Int64, Hash(String, Int64)), check_existence : Bool) : Hash(String, JSON::Any)
+    private def json_row(e : Doma::Entry, ttl_by_id : Hash(Int64, Hash(String, Int64)), check_existence : Bool) : JsonRow
       # `created_at` / `last_used_at` are epoch seconds, matching
       # `info --json`. They're here so a consumer can apply its own
       # recency window ("touched in the last 7 days") instead of being
       # limited to the relative ordering `--by recent` provides.
       # `last_used_at == 0` means never used — same sentinel `info`
       # renders as "never".
-      row = {
-        "short_id"     => JSON::Any.new(e.short_id),
-        "path"         => JSON::Any.new(e.path),
-        "basename"     => JSON::Any.new(e.basename),
-        "tags"         => JSON::Any.new(e.tags.map { |t| JSON::Any.new(t) }),
-        "created_at"   => JSON::Any.new(e.created_at),
-        "last_used_at" => JSON::Any.new(e.last_used_at),
+      row = JsonRow{
+        "short_id"     => e.short_id,
+        "path"         => e.path,
+        "basename"     => e.basename,
+        "tags"         => e.tags,
+        "created_at"   => e.created_at,
+        "last_used_at" => e.last_used_at,
       }
       if ttl_map = ttl_by_id[e.id]?
-        row["expirations"] = JSON::Any.new(ttl_map.transform_values { |v| JSON::Any.new(v) })
+        row["expirations"] = ttl_map
       end
-      row["exists"] = JSON::Any.new(Dir.exists?(e.path)) if check_existence
+      row["exists"] = Dir.exists?(e.path) if check_existence
       row
     end
 

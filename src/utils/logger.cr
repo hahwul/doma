@@ -4,34 +4,14 @@ module Doma
   module Logger
     extend self
 
-    @@quiet : Bool = false
-    @@debug : Bool = false
+    class_property? quiet : Bool = false
+    class_property? debug : Bool = false
     # `NO_COLOR` (https://no-color.org/) is honored by default; the runner
     # can flip this on/off via `--no-color` / `--color`. Per the spec, an
     # empty `NO_COLOR=` doesn't count.
-    @@no_color : Bool = !ENV["NO_COLOR"]?.presence.nil?
+    class_setter no_color : Bool = !ENV["NO_COLOR"]?.presence.nil?
     # `--color`: color even when stdout isn't a TTY (e.g. `| less -R`).
     @@force_color : Bool = false
-
-    def quiet=(value : Bool)
-      @@quiet = value
-    end
-
-    def quiet? : Bool
-      @@quiet
-    end
-
-    def debug=(value : Bool)
-      @@debug = value
-    end
-
-    def debug? : Bool
-      @@debug
-    end
-
-    def no_color=(value : Bool)
-      @@no_color = value
-    end
 
     def force_color=(value : Bool)
       @@force_color = value

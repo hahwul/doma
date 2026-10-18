@@ -48,7 +48,6 @@ describe Doma::GitDetector do
     with_fake_repo("https://github.com/hahwul/doma.git") do |dir|
       info = Doma::GitDetector.detect(dir)
       info.host.should eq("github")
-      info.owner.should eq("hahwul")
       info.repo.should eq("doma")
       info.to_tags.should eq(["github", "doma"])
     end

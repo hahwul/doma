@@ -30,7 +30,7 @@ describe "Dead path detection (#2)" do
     end
   end
 
-  it "prune_dead! removes only missing rows and reports the count" do
+  it "remove_ids!(dead_paths) removes only missing rows and reports the count" do
     with_temp_db do |db|
       live = File.tempname("doma-alive2")
       gone = File.tempname("doma-gone2")
@@ -40,7 +40,7 @@ describe "Dead path detection (#2)" do
       db.add(gone, ["b"])
       FileUtils.rm_rf(gone)
       begin
-        db.prune_dead!.should eq(1)
+        db.remove_ids!(db.dead_paths.map(&.id)).should eq(1)
         db.directories.size.should eq(1)
         db.directories.first.path.should eq(Doma::Validator.canonicalize(live))
         # Orphan tag (`b` had only one host) should also be GC'd.
@@ -57,8 +57,8 @@ describe "Dead path detection (#2)" do
       b = File.tempname("doma-rid-b")
       [a, b].each { |d| FileUtils.mkdir_p(d) }
       begin
-        # Both paths still exist on disk: unlike prune_dead!, remove_ids!
-        # trusts the caller's set rather than re-stating the filesystem.
+        # Both paths still exist on disk: remove_ids! trusts the caller's
+        # set rather than re-stating the filesystem.
         # This is what lets `prune --gone` delete exactly what it
         # snapshotted to the trash, with no second stat pass to diverge.
         db.add(a, ["keep"])
@@ -121,7 +121,7 @@ describe "Frecency (#3)" do
 
         # Bump `b` so it should sort first.
         db.bump_used!(b)
-        ordered = db.paths_for_tag("shared")
+        ordered = db.directories("shared", sort: Doma::Database::SortBy::Recent).map(&.path)
         ordered.first.should eq(Doma::Validator.canonicalize(b))
       ensure
         FileUtils.rm_rf(a)
@@ -177,7 +177,7 @@ describe "Tag glob (#4)" do
         db.add(b, ["work-bar"])
         db.add(c, ["home"])
 
-        matched = db.paths_for_tag("work-*").map { |p| File.basename(p) }
+        matched = db.directories("work-*", sort: Doma::Database::SortBy::Recent).map(&.path).map { |p| File.basename(p) }
         matched.size.should eq(2)
         matched.should contain(File.basename(Doma::Validator.canonicalize(a)))
         matched.should contain(File.basename(Doma::Validator.canonicalize(b)))
@@ -193,7 +193,7 @@ describe "Tag glob (#4)" do
       FileUtils.mkdir_p(tmp)
       begin
         db.add(tmp, ["v1"])
-        db.paths_for_tag("v?").size.should eq(1)
+        db.directories("v?", sort: Doma::Database::SortBy::Recent).map(&.path).size.should eq(1)
       ensure
         FileUtils.rm_rf(tmp)
       end
@@ -206,18 +206,17 @@ describe "Tag glob (#4)" do
       FileUtils.mkdir_p(tmp)
       begin
         db.add(tmp, ["work"])
-        db.paths_for_tag("work").size.should eq(1)
+        db.directories("work", sort: Doma::Database::SortBy::Recent).map(&.path).size.should eq(1)
         # 'work' shouldn't match 'workshop' or 'rework' under exact mode.
-        db.paths_for_tag("wor").should be_empty
+        db.directories("wor", sort: Doma::Database::SortBy::Recent).map(&.path).should be_empty
       ensure
         FileUtils.rm_rf(tmp)
       end
     end
   end
 
-  # `paths_for_tag` is the cd-side helper; `directories(tag)` is what
-  # `list -t` calls. Both share `tag_match_clause`, but only the former
-  # had glob coverage — these specs lock the list-side branch in.
+  # `directories(tag)` is what `list -t` calls; these specs lock its
+  # glob branch in.
   it "directories(tag) honors `*` glob and returns hydrated entries" do
     with_temp_db do |db|
       a = File.tempname("doma-dirs-glob-a")

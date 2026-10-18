@@ -42,14 +42,6 @@ module Doma
       def clean? : Bool
         git && dirty == 0
       end
-
-      # True only when there's an upstream to compare against AND the
-      # branch has diverged from it. A no-upstream branch reports false
-      # (nothing to be ahead/behind *of*), matching how the renderer
-      # leaves the ahead/behind column blank in that case.
-      def diverged? : Bool
-        !upstream.nil? && (ahead > 0 || behind > 0)
-      end
     end
 
     NON_GIT = Status.new(false, nil, nil, false, 0, 0, 0, 0, 0, 0, 0)

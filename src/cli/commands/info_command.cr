@@ -115,12 +115,12 @@ module Doma::CLI
     # just because the caller asked for JSON.
     private def emit_error_json(raw : String, ex : Doma::Error)
       payload = {
-        "input" => JSON::Any.new(raw),
-        "found" => JSON::Any.new(false),
-        "error" => JSON::Any.new(ex.message || "not registered"),
-      } of String => JSON::Any
+        "input" => raw,
+        "found" => false,
+        "error" => ex.message || "not registered",
+      } of String => String | Bool
       if hint = ex.hint
-        payload["hint"] = JSON::Any.new(hint)
+        payload["hint"] = hint
       end
       puts payload.to_json
       exit ex.exit_code
@@ -129,8 +129,8 @@ module Doma::CLI
     # Fetch the entry's tags/TTLs/existence and emit it — shared by the
     # direct-lookup path and the bare-name search fallback so the two
     # can't render differently.
-    private def render_entry(db : Doma::Database, info : Doma::Database::PathInfo, json_mode : Bool, raw : String)
-      tags = db.tags_for(info.id)
+    private def render_entry(db : Doma::Database, info : Doma::Entry, json_mode : Bool, raw : String)
+      tags = info.tags
       # Show every TTL — including past ones — so an expired tag
       # doesn't silently disappear from the detail view. The render
       # layer marks "expired" rows distinctly.
@@ -144,18 +144,18 @@ module Doma::CLI
       end
     end
 
-    # Returns {canonical_path, PathInfo?}. PathInfo is nil if not
+    # Returns {canonical_path, Entry?}. Entry is nil if not
     # registered; canonical_path is set in both cases (used by the
     # trash fallback and the not-found message).
-    private def resolve_target(db : Doma::Database, raw : String) : {String, Doma::Database::PathInfo?}
+    private def resolve_target(db : Doma::Database, raw : String) : {String, Doma::Entry?}
       if File.exists?(raw) || Dir.exists?(raw)
         canonical = Doma::Validator.canonicalize(raw)
-        return {canonical, db.find_path_info(canonical)}
+        return {canonical, db.find_entry(canonical)}
       end
 
       if Doma::ShortIdResolver.looks_like?(raw)
         if path = Doma::ShortIdResolver.resolve(db, raw)
-          return {path, db.find_path_info(path)}
+          return {path, db.find_entry(path)}
         end
         # Non-resolving short_id-shaped input falls through with an
         # empty path so the caller can raise a clean "no entry with
@@ -164,7 +164,7 @@ module Doma::CLI
       end
 
       canonical = Doma::Validator.canonicalize(raw)
-      {canonical, db.find_path_info(canonical)}
+      {canonical, db.find_entry(canonical)}
     end
 
     # True for inputs the user clearly didn't mean as a filesystem
@@ -182,12 +182,12 @@ module Doma::CLI
     # list; the user picks one and re-issues with the short_id (which
     # is unambiguous). No matches → return nil so the caller falls
     # through to the existing not-registered + trash hint flow.
-    private def resolve_by_search(db : Doma::Database, query : String) : Doma::Database::PathInfo?
+    private def resolve_by_search(db : Doma::Database, query : String) : Doma::Entry?
       hits = db.search(query)
       return if hits.empty?
 
       if hits.size == 1
-        return db.find_path_info(hits.first.path)
+        return db.find_entry(hits.first.path)
       end
 
       lines = hits.first(8).map do |e|
@@ -201,26 +201,26 @@ module Doma::CLI
       )
     end
 
-    private def render_json(info : Doma::Database::PathInfo, tags : Array(String), ttl_map : Hash(String, Int64), exists : Bool)
+    private def render_json(info : Doma::Entry, tags : Array(String), ttl_map : Hash(String, Int64), exists : Bool)
       payload = {
         # Always present, in both the hit and miss shapes, so a consumer
         # branches on one key instead of probing for `short_id`.
-        "found"        => JSON::Any.new(true),
-        "short_id"     => JSON::Any.new(info.short_id),
-        "path"         => JSON::Any.new(info.path),
-        "basename"     => JSON::Any.new(info.basename),
-        "tags"         => JSON::Any.new(tags.map { |t| JSON::Any.new(t) }),
-        "created_at"   => JSON::Any.new(info.created_at),
-        "last_used_at" => JSON::Any.new(info.last_used_at),
-        "exists"       => JSON::Any.new(exists),
-      } of String => JSON::Any
+        "found"        => true,
+        "short_id"     => info.short_id,
+        "path"         => info.path,
+        "basename"     => info.basename,
+        "tags"         => tags,
+        "created_at"   => info.created_at,
+        "last_used_at" => info.last_used_at,
+        "exists"       => exists,
+      } of String => String | Bool | Int64 | Array(String) | Hash(String, Int64)
       unless ttl_map.empty?
-        payload["expirations"] = JSON::Any.new(ttl_map.transform_values { |v| JSON::Any.new(v) })
+        payload["expirations"] = ttl_map
       end
       puts payload.to_json
     end
 
-    private def render_text(info : Doma::Database::PathInfo, tags : Array(String), ttl_map : Hash(String, Int64), exists : Bool, raw : String)
+    private def render_text(info : Doma::Entry, tags : Array(String), ttl_map : Hash(String, Int64), exists : Bool, raw : String)
       color = Doma::Logger.color_enabled?
 
       # Header: short_id (dim) + canonical path (cyan), so the eye lands

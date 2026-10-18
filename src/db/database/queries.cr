@@ -51,21 +51,12 @@ class Doma::Database
     rows.map { |row| build_entry(row) }
   end
 
-  def tags_for(directory_id : Int64) : Array(String)
-    @db.query_all(
-      "SELECT t.name FROM tags t " \
-      "INNER JOIN directory_tags dt ON dt.tag_id = t.id " \
-      "WHERE dt.directory_id = ? ORDER BY t.name",
-      directory_id, as: String
-    )
-  end
-
   record TagSummary, name : String, count : Int64
 
   def all_tags : Array(TagSummary)
     # Only active (non-expired) associations count toward a tag's total,
     # and a tag whose associations have all expired drops out entirely —
-    # matching what `list`/`paths_for_tag` already do. Putting
+    # matching what `list -t` already does. Putting
     # NOT_EXPIRED_DT on the JOIN (not WHERE) keeps the LEFT JOIN shape so
     # a fully-expired tag yields cnt = 0, which `HAVING` then filters.
     # Without this, `tags`/`tags --json`/`tags --names` listed phantom
@@ -88,31 +79,17 @@ class Doma::Database
     @db.query_all("SELECT name FROM tags ORDER BY name", as: String)
   end
 
-  # Single-row lookup by canonical path. Returns the bookkeeping the
-  # `info` command needs (timestamps + ids) without forcing callers to
-  # scan `directories()` and filter — the caller already has the exact
-  # path, so a direct lookup is both clearer and avoids reading every
-  # row. Tags are not included here; callers compose with `tags_for`
-  # and `tag_expirations` so we don't grow another GROUP_CONCAT join
-  # that's only used in one place.
-  record PathInfo,
-    id : Int64,
-    short_id : String,
-    path : String,
-    basename : String,
-    created_at : Int64,
-    last_used_at : Int64
-
-  def find_path_info(path : String) : PathInfo?
-    row = @db.query_one?(
-      "SELECT id, short_id, path, basename, created_at, last_used_at " \
-      "FROM directories WHERE path = ?",
-      path,
-      as: {Int64, String, String, String, Int64, Int64}
-    )
-    return unless row
-    id, short_id, p, basename, created_at, last_used_at = row
-    PathInfo.new(id, short_id, p, basename, created_at, last_used_at)
+  # Single-row lookup by canonical path. Tags include expired ones so
+  # `info` and the trash snapshot see every association; callers that
+  # need TTLs compose with `tag_expirations`.
+  def find_entry(path : String) : Entry?
+    @db.query_one?(
+      <<-SQL, path, as: ENTRY_ROW
+        SELECT #{ENTRY_COLUMNS}, #{TAGS_GROUP_CONCAT_ALL}
+        FROM directories d
+        WHERE d.path = ?
+        SQL
+    ).try { |row| build_entry(row) }
   end
 
   # Resolves a short_id prefix to matching directories. Backs
@@ -131,28 +108,6 @@ class Doma::Database
         SQL
     )
     rows.map { |row| build_entry(row) }
-  end
-
-  # Paths matching a tag (or tag-glob), sorted by recency. A tag
-  # containing `*` or `?` triggers GLOB matching so `'work*'` resolves to
-  # every directory tagged `work-foo`, `work-bar`, etc. Expired tag rows
-  # are filtered out — a path shouldn't surface via a tag no longer
-  # applied. A convenience read (the CLI goes through `directories()` so
-  # it can post-filter globs with strict shell semantics); handy for
-  # callers — and tests — that want just the recency-ordered paths.
-  def paths_for_tag(tag : String) : Array(String)
-    op = tag_match_clause(tag)
-    @db.query_all(
-      <<-SQL, tag, as: String
-        SELECT DISTINCT d.path
-        FROM directories d
-        INNER JOIN directory_tags dt ON dt.directory_id = d.id
-        INNER JOIN tags t ON t.id = dt.tag_id
-        WHERE t.name #{op} ?
-          AND #{NOT_EXPIRED_DT}
-        ORDER BY d.last_used_at DESC, d.path ASC
-        SQL
-    )
   end
 
   # id-only narrow filter for multi-tag AND. The list command anchors

@@ -113,6 +113,20 @@ describe "doma config" do
     end
   end
 
+  it "[set/unset] can repair the key that makes the config invalid" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      path = File.join(home, "config.yml")
+      File.write(path, "selector: bogus\nauto_tag:\n  git: true\n")
+      run(["config", "set", "selector", "first"], {"DOMA_HOME" => home})[:status].exit_code.should eq(0)
+      run(["config", "get", "auto_tag.git"], {"DOMA_HOME" => home})[:out].strip.should eq("true")
+
+      File.write(path, "selector: bogus\n")
+      run(["config", "unset", "selector"], {"DOMA_HOME" => home})[:status].exit_code.should eq(0)
+      run(["config", "get", "selector"], {"DOMA_HOME" => home})[:out].strip.should eq("auto")
+    end
+  end
+
   it "[unset] cleans up the parent map when no siblings remain" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     with_home do |home|
@@ -143,7 +157,7 @@ describe "doma config" do
       File.write(File.join(home, "config.yml"), "1: foo\n")
       r = run(["config", "list"], {"DOMA_HOME" => home})
       r[:status].exit_code.should eq(5)
-      r[:err].should contain("mapping keys must be strings")
+      r[:err].should contain("unknown key '1'")
       r[:err].should_not contain("internal error")
     end
   end

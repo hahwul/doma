@@ -81,8 +81,7 @@ module Doma::CLI
     private def cmd_get(args : Array(String))
       key = require_arg(args, "key", "doma config get <key>")
       validate_key!(key)
-      effective = effective_value(key)
-      puts effective
+      puts effective_value(load_file, key)
     end
 
     private def cmd_set(args : Array(String))
@@ -91,40 +90,34 @@ module Doma::CLI
       validate_key!(key)
       coerced = coerce(key, raw)
 
-      data = load_yaml
-      set_in(data, key, coerced)
-      write_yaml(data)
-      Doma::Logger.success "set #{key} = #{render(coerced)}"
+      settings, _ = load_for_write(key)
+      settings[key] = coerced
+      write_file(settings)
+      Doma::Logger.success "set #{key} = #{coerced}"
     end
 
     private def cmd_unset(args : Array(String))
       key = require_arg(args, "key", "doma config unset <key>")
       validate_key!(key)
-      data = load_yaml
-      removed = unset_in(data, key)
-      if removed
-        write_yaml(data)
-        Doma::Logger.success "unset #{key}"
-      else
+      settings, repaired = load_for_write(key)
+      if settings[key].nil? && !repaired
         Doma::Logger.info "#{key} was not set (already default)"
+      else
+        settings[key] = nil
+        write_file(settings)
+        Doma::Logger.success "unset #{key}"
       end
     end
 
     private def cmd_list(args : Array(String))
-      OptionParser.parse(args) do |p|
-        p.banner = "Usage: doma config list"
-        p.on("-h", "--help", "Show help") do
-          puts p
-          exit 0
-        end
-      end
+      parse_no_flags(args, "Usage: doma config list")
 
-      data = load_yaml
+      settings = load_file
       width = KEYS.max_of(&.size)
       KEYS.each do |key|
-        source = key_present?(data, key) ? "file" : "default"
+        source = settings[key].nil? ? "default" : "file"
         marker = source == "file" ? "*" : " "
-        value = effective_value(key)
+        value = effective_value(settings, key)
         value = "(empty)" if value.empty?
         puts "#{marker} #{key.ljust(width)}  #{value.ljust(8)}  (#{source})"
       end
@@ -133,13 +126,7 @@ module Doma::CLI
     end
 
     private def cmd_edit(args : Array(String))
-      OptionParser.parse(args) do |p|
-        p.banner = "Usage: doma config edit"
-        p.on("-h", "--help", "Show help") do
-          puts p
-          exit 0
-        end
-      end
+      parse_no_flags(args, "Usage: doma config edit")
 
       Doma::Config.ensure_home!
       path = Doma::Config.config_path
@@ -172,13 +159,7 @@ module Doma::CLI
     end
 
     private def cmd_path(args : Array(String))
-      OptionParser.parse(args) do |p|
-        p.banner = "Usage: doma config path"
-        p.on("-h", "--help", "Show help") do
-          puts p
-          exit 0
-        end
-      end
+      parse_no_flags(args, "Usage: doma config path")
       puts Doma::Config.config_path
     end
 
@@ -197,8 +178,7 @@ module Doma::CLI
     end
 
     # Coerce a raw CLI string into the value type the schema expects.
-    # We return YAML::Any so writing-back produces the right scalar shape.
-    private def coerce(key : String, raw : String) : YAML::Any
+    private def coerce(key : String, raw : String) : String | Bool
       case key
       when "db_path"
         if raw.blank?
@@ -207,7 +187,7 @@ module Doma::CLI
             "use `doma config unset db_path` to revert to the default"
           )
         end
-        YAML::Any.new(raw)
+        raw
       when "selector"
         v = raw.downcase
         unless SELECTOR_VALUES.includes?(v)
@@ -216,9 +196,9 @@ module Doma::CLI
             "allowed: #{SELECTOR_VALUES.join(", ")}"
           )
         end
-        YAML::Any.new(v)
+        v
       when "auto_tag.basename", "auto_tag.git"
-        YAML::Any.new(parse_bool(key, raw))
+        parse_bool(key, raw)
       else
         raise Doma::ValidationError.new("unsupported key '#{key}'")
       end
@@ -236,174 +216,75 @@ module Doma::CLI
       end
     end
 
-    private def render(value : YAML::Any) : String
-      case raw = value.raw
-      when Bool, String, Int, Float
-        raw.to_s
-      when Nil
-        "(unset)"
-      else
-        value.to_yaml.strip
-      end
-    end
-
     # ------------------------------------------------------------------
-    # YAML I/O
+    # File I/O
     # ------------------------------------------------------------------
 
-    # The on-disk shape is a plain map; we work with String-keyed hashes
-    # so the dotted-path code stays readable. YAML::Any is converted at
-    # the boundary.
-    alias YamlMap = Hash(String, YAML::Any)
-
-    private def load_yaml : YamlMap
-      path = Doma::Config.config_path
-      return YamlMap.new unless File.exists?(path)
-      unless File.file?(path)
-        raise Doma::ConfigError.new("config path is not a file: #{path}")
-      end
-      content = File.read(path)
-      return YamlMap.new if content.strip.empty?
-      parsed = YAML.parse(content)
-      to_string_map(parsed)
-    rescue ex : YAML::ParseException
-      raise Doma::ConfigError.new("invalid config (#{Doma::Config.config_path}): #{ex.message}")
-    rescue ex : IO::Error
-      raise Doma::ConfigError.new("cannot read config (#{Doma::Config.config_path}): #{ex.message}")
+    # Read the file fresh — `Settings.current` may be cached from before
+    # the most recent set. `Settings.load` raises the same ConfigError
+    # shapes every other command sees for a malformed file.
+    private def load_file : Doma::Settings
+      Doma::Settings.load(Doma::Config.config_path)
     end
 
-    private def to_string_map(any : YAML::Any) : YamlMap
-      raw = any.raw
-      return YamlMap.new if raw.nil?
-      unless raw.is_a?(Hash)
-        raise Doma::ConfigError.new("config must be a YAML mapping, got #{raw.class}")
+    # `set`/`unset` must be able to fix the very key that breaks the
+    # strict load (`selector: bogus`), so on failure retry with that key
+    # dropped. Returns whether that repair happened; any other breakage
+    # re-raises the original error.
+    private def load_for_write(key : String) : {Doma::Settings, Bool}
+      {load_file, false}
+    rescue ex : Doma::ConfigError
+      begin
+        root = YAML.parse(File.read(Doma::Config.config_path)).as_h
+        head, _, tail = key.partition('.')
+        parent = tail.empty? ? root : root[YAML::Any.new(head)]?.try(&.as_h?)
+        raise ex unless parent && parent.delete(YAML::Any.new(tail.empty? ? head : tail))
+        {Doma::Settings.from_yaml(root.to_yaml), true}
+      rescue
+        raise ex
       end
-      out = YamlMap.new
-      raw.each do |k, v|
-        out[string_key!(k)] = v
-      end
-      out
     end
 
-    # YAML happily parses `1: foo` / `true: bar` — the key comes back as
-    # Int64/Bool and the old `as_s` cast crashed with a TypeCastError
-    # ("internal error"). Recast as the same ConfigError shape every
-    # other malformed-config path uses.
-    private def string_key!(k : YAML::Any) : String
-      k.as_s? || raise Doma::ConfigError.new(
-        "invalid config (#{Doma::Config.config_path}): mapping keys must be strings, got #{k.raw.inspect}"
-      )
-    end
-
-    private def write_yaml(data : YamlMap)
+    private def write_file(settings : Doma::Settings)
       Doma::Config.ensure_home!
       path = Doma::Config.config_path
       # Write through a symlinked config (dotfiles) instead of replacing
       # the link, and make sure a custom DOMA_CONFIG's directory exists.
       path = File.realpath(path) if File.symlink?(path) && File.exists?(path)
       Dir.mkdir_p(File.dirname(path))
-      yaml = wrap_map(data).to_yaml
       # Write atomically so a crash mid-write doesn't truncate the file.
       tmp = "#{path}.tmp"
-      File.write(tmp, yaml)
+      File.write(tmp, settings.to_yaml)
       File.rename(tmp, path)
-      # Invalidate the memoized Settings so subsequent calls see the new
-      # values (relevant for tests and for `set` immediately followed by
-      # `get`).
+      # Invalidate the memoized Settings so later reads see the new values.
       Doma::Settings.current = nil
     end
 
-    # ------------------------------------------------------------------
-    # Dotted-path helpers
-    # ------------------------------------------------------------------
-
-    private def set_in(data : YamlMap, key : String, value : YAML::Any)
-      parts = key.split('.')
-      if parts.size == 1
-        data[parts.first] = value
-        return
-      end
-      head, *rest = parts
-      child = as_yaml_map(data[head]?) || YamlMap.new
-      set_in(child, rest.join('.'), value)
-      data[head] = wrap_map(child)
-    end
-
-    private def unset_in(data : YamlMap, key : String) : Bool
-      parts = key.split('.')
-      if parts.size == 1
-        return data.delete(parts.first) ? true : false
-      end
-      head, *rest = parts
-      child = as_yaml_map(data[head]?)
-      return false if child.nil?
-      removed = unset_in(child, rest.join('.'))
-      if removed
-        if child.empty?
-          data.delete(head)
-        else
-          data[head] = wrap_map(child)
-        end
-      end
-      removed
-    end
-
-    private def wrap_map(map : YamlMap) : YAML::Any
-      hash = Hash(YAML::Any, YAML::Any).new
-      map.each { |k, v| hash[YAML::Any.new(k)] = v }
-      YAML::Any.new(hash)
-    end
-
-    # Coerce a YAML::Any node into a YamlMap copy, or nil if the node
-    # is missing or not a mapping. The copy keeps the dotted-path
-    # helpers working on String-keyed hashes without mutating the
-    # original tree until we re-`wrap_map` it on the way back up.
-    private def as_yaml_map(any : YAML::Any?) : YamlMap?
-      return if any.nil?
-      raw = any.raw
-      return unless raw.is_a?(Hash)
-      m = YamlMap.new
-      raw.each { |k, v| m[string_key!(k)] = v }
-      m
-    end
-
-    private def key_present?(data : YamlMap, key : String) : Bool
-      parts = key.split('.')
-      cur = data
-      parts[0...-1].each do |part|
-        child = as_yaml_map(cur[part]?)
-        return false if child.nil?
-        cur = child
-      end
-      cur.has_key?(parts.last)
-    end
-
-    # ------------------------------------------------------------------
-    # Effective values (after defaults)
-    # ------------------------------------------------------------------
-
-    private def effective_value(key : String) : String
-      # Hit the file fresh — Settings.current may be cached from before
-      # the most recent set.
-      Doma::Settings.current = nil
-      s = Doma::Settings.current
+    private def effective_value(settings : Doma::Settings, key : String) : String
       case key
-      when "db_path"
-        s.db_path || ""
-      when "selector"
-        s.selector.to_s.downcase
-      when "auto_tag.basename"
-        s.auto_tag.basename.to_s
-      when "auto_tag.git"
-        s.auto_tag.git.to_s
-      else
-        ""
+      when "db_path"           then settings.db_path || ""
+      when "selector"          then settings.selector.to_s.downcase
+      when "auto_tag.basename" then settings.auto_tag.basename.to_s
+      when "auto_tag.git"      then settings.auto_tag.git.to_s
+      else                          ""
       end
     end
 
     # ------------------------------------------------------------------
     # Misc
     # ------------------------------------------------------------------
+
+    # The flagless actions still reject unknown options (OptionParser
+    # raises) and answer `-h`.
+    private def parse_no_flags(args : Array(String), banner : String)
+      OptionParser.parse(args) do |p|
+        p.banner = banner
+        p.on("-h", "--help", "Show help") do
+          puts p
+          exit 0
+        end
+      end
+    end
 
     private def require_arg(args : Array(String), name : String, usage : String) : String
       v = args.shift?

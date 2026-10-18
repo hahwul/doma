@@ -62,6 +62,19 @@ module Doma
       Time.utc.to_unix + DEFAULT_TMP_SECONDS
     end
 
+    # Largest whole unit first. Years are display-only (the parser has no
+    # `y`), so only `TimeFormatter.relative_past` opts into them.
+    COMPACT_UNITS = [{31_557_600_i64, "y"}, {604_800_i64, "w"}, {86_400_i64, "d"}, {3600_i64, "h"}, {60_i64, "m"}]
+
+    # `delta` seconds in the compact `Nu` form ("3d", "5m", …).
+    def compact(delta : Int64, *, years : Bool = false) : String
+      COMPACT_UNITS.each do |(secs, unit)|
+        next if unit == "y" && !years
+        return "#{delta // secs}#{unit}" if delta >= secs
+      end
+      "#{delta}s"
+    end
+
     # Render the time between now and `expires_at` in the same compact
     # `Nu` form the parser accepts ("3d", "5m", …) so users can tell at
     # a glance what's about to lapse. Past expirations come back as
@@ -70,18 +83,7 @@ module Doma
       now = Time.utc.to_unix
       # Compare before subtracting: `Int64::MIN - now` would overflow.
       return "expired" if expires_at <= now
-      delta = expires_at - now
-      if delta < 60
-        "#{delta}s"
-      elsif delta < 3600
-        "#{delta // 60}m"
-      elsif delta < 86_400
-        "#{delta // 3600}h"
-      elsif delta < 604_800
-        "#{delta // 86_400}d"
-      else
-        "#{delta // 604_800}w"
-      end
+      compact(expires_at - now)
     end
   end
 end

@@ -8,6 +8,7 @@ require "../../utils/logger"
 require "../../utils/parallel"
 require "../../utils/suggester"
 require "../../utils/tag_glob"
+require "./sweep_args"
 
 module Doma::CLI
   # Git status across a set of tagged directories — the read-only twin of
@@ -38,14 +39,11 @@ module Doma::CLI
       parser = OptionParser.new do |p|
         p.banner = "Usage: doma status [<tag> | -t TAG] [--dirty] [--jobs N] [--json]"
         p.on("-t TAG", "--tag=TAG", "Tag selector (single tag; alias for positional)") do |t|
-          raise Doma::ValidationError.new("tag is empty (-t got an empty value)") if t.strip.empty?
-          flag_tags << t
+          flag_tags << SweepArgs.flag_tag!(t)
         end
         p.on("--dirty", "Only show repos with uncommitted changes") { dirty_only = true }
         p.on("--jobs N", "Max concurrent git probes (default: CPU count)") do |n|
-          parsed = n.to_i?
-          raise Doma::ValidationError.new("--jobs must be a positive integer, got '#{n}'") if parsed.nil? || parsed < 1
-          jobs = parsed
+          jobs = SweepArgs.jobs!(n)
         end
         p.on("--json", "Output as JSON") { json_mode = true }
         p.on("-h", "--help", "Show help") do
@@ -64,16 +62,7 @@ module Doma::CLI
       end
       parser.parse(args)
 
-      if !flag_tags.empty? && !positional.empty?
-        raise Doma::ValidationError.new("tag specified both positionally and via -t; pick one")
-      end
-      if flag_tags.size > 1
-        raise Doma::ValidationError.new("status accepts a single tag; got #{flag_tags.size} via -t")
-      end
-      if positional.size > 1
-        raise Doma::ValidationError.new("status accepts a single tag; got #{positional.size} positional args")
-      end
-      tag = flag_tags.first? || positional.first?
+      tag = SweepArgs.single_tag!("status", flag_tags, positional)
 
       # Fail fast and clearly if git isn't installed — otherwise every
       # directory would probe to "not a git repo" and the user would
