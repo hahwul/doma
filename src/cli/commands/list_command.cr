@@ -146,7 +146,9 @@ module Doma::CLI
       Doma::Database.open do |db|
         # `.as?` narrows the closure-captured var (a plain `||` doesn't).
         by = sort.as?(Doma::Database::SortBy) || (pick_mode ? Doma::Database::SortBy::Recent : Doma::Database::SortBy::Path)
-        entries = collect(db, tags, excludes, query, by, include_expired)
+        tag_in, set_in = SweepArgs.split_sets(tags)
+        tag_ex, set_ex = SweepArgs.split_sets(excludes)
+        entries = SweepArgs.apply_sets(collect(db, tag_in, tag_ex, query, by, include_expired), set_in, set_ex)
 
         if pick_mode
           run_pick(db, entries, pick_query, pick_override, tags, excludes, query)
@@ -202,7 +204,7 @@ module Doma::CLI
       # Only suggest for literal (non-glob) tag names that aren't in
       # the catalog at all. An empty AND intersection between two
       # known tags is a legitimate result, not a typo.
-      if hint = SweepArgs.typo_hint(tags, db.tag_names)
+      if hint = SweepArgs.miss_hint(tags, db.tag_names)
         STDERR.puts "  #{hint}"
       end
       # First-run cue: an unfiltered, empty DB is almost always a
@@ -387,7 +389,7 @@ module Doma::CLI
       if path_like?(candidate)
         return "to register this path, run: doma add #{candidate}"
       end
-      Doma::Suggester.tag_hint_for(candidate, db.tag_names)
+      SweepArgs.miss_hint(tags.empty? ? [candidate] : tags, db.tag_names)
     end
 
     private def path_like?(input : String) : Bool

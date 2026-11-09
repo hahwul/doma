@@ -33,6 +33,19 @@ Output streams interleaved with a per-directory header:
 
 When more than one directory runs, a tally closes the sweep on stderr and re-lists every failure, so a long sweep's ✗ lines don't scroll away. `--no-header` keeps it only when something failed, `-q` drops it; `--json` never prints it (the rows already carry every exit code).
 
+## Retry what failed (`@failed`)
+
+Every real sweep (not `--dry-run`) records the directories that exited non-zero. `@failed` selects them, so the fix-and-retry loop needs no copy-pasting:
+
+```bash
+doma run crystal -- crystal spec      # 2 failed
+# …fix things…
+doma run @failed -- crystal spec      # only those 2; whatever still fails stays in @failed
+doma list -t @failed --paths          # or inspect them
+```
+
+`@dirty` is the other built-in set: git repos with uncommitted changes, probed at selection time (`doma run work -t @dirty -- git stash`). Sets combine with tags in `-t` and `-x` anywhere a tag is accepted (`list`, `run`, `status`). Directories `--fail-fast` never reached count as not-yet-passed and land in `@failed` too. Each sweep replaces the previous list, whatever its tag.
+
 ## Per-directory environment
 
 Each child gets the entry it runs for in its environment, so per-directory commands need no `{}` templating or `xargs` quoting:

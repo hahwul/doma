@@ -66,6 +66,9 @@ module Doma::CLI
       parser.parse(args)
 
       tags = SweepArgs.tags!("status", flag_tags, positional)
+      # `@dirty` here is just `--dirty`, which filters from the probe this
+      # command runs anyway instead of probing every repo twice.
+      dirty_only = true if tags.delete("@dirty")
       filtered = !tags.empty? || !excludes.empty?
 
       # Fail fast and clearly if git isn't installed — otherwise every
@@ -79,14 +82,14 @@ module Doma::CLI
       end
 
       entries, all_tags = Doma::Database.open do |db|
-        {SweepArgs.select(db, tags, excludes, Doma::Database::SortBy::Path), db.tag_names}
+        {SweepArgs.select(db, tags, excludes, Doma::Database::SortBy::Path, jobs), db.tag_names}
       end
 
       if entries.empty?
         if filtered
           raise Doma::NotFoundError.new(
             tags.empty? ? "nothing left after excluding #{SweepArgs.excluded(excludes)}" : "no directories tagged #{SweepArgs.phrase(tags, excludes)}",
-            hint: SweepArgs.typo_hint(tags, all_tags)
+            hint: SweepArgs.miss_hint(tags, all_tags)
           )
         else
           # Keep `--json` parseable, like `list --json` on an empty db.

@@ -1,4 +1,7 @@
 require "../../db/database"
+require "../../services/git_status"
+require "../../services/last_run"
+require "../../utils/parallel"
 require "../../utils/errors"
 require "../../utils/suggester"
 require "../../utils/tag_glob"
@@ -28,13 +31,61 @@ module Doma::CLI
       (positional + flag_tags).uniq
     end
 
+    # Dynamic sets: computed per call rather than stored as tags. Real tags
+    # must start alphanumeric, so the `@` namespace can't collide.
+    SETS = {
+      "@failed" => "directories that failed the last `doma run`",
+      "@dirty"  => "git repos with uncommitted changes",
+    }
+
     # Entries carrying a match for every include and none for any exclude.
-    # The first include (if any) narrows the SQL read; TagGlob then
-    # applies the strict shell-glob rules to every pattern.
+    # The first tag include (if any) narrows the SQL read; TagGlob then
+    # applies the strict shell-glob rules to every pattern, and `@sets`
+    # narrow what's left.
     def self.select(db : Doma::Database, includes : Array(String), excludes : Array(String),
-                    sort : Doma::Database::SortBy) : Array(Doma::Entry)
-      db.directories(includes.first?, sort: sort)
+                    sort : Doma::Database::SortBy, jobs : Int32? = nil) : Array(Doma::Entry)
+      includes, set_in = split_sets(includes)
+      excludes, set_ex = split_sets(excludes)
+      entries = db.directories(includes.first?, sort: sort)
         .select { |e| Doma::TagGlob.satisfy?(e.tags, includes, excludes) }
+      apply_sets(entries, set_in, set_ex, jobs)
+    end
+
+    # Splits `@set` names out of a selector list → {tags, sets}. Unknown
+    # sets are an error, not a silent empty match.
+    def self.split_sets(names : Array(String)) : {Array(String), Array(String)}
+      sets, tags = names.partition(&.starts_with?('@'))
+      sets.each do |s|
+        next if SETS.has_key?(s)
+        raise Doma::ValidationError.new("unknown set '#{s}'",
+          hint: "known sets: #{SETS.map { |k, v| "#{k} (#{v})" }.join(", ")}")
+      end
+      {tags, sets}
+    end
+
+    # Applied after tag filtering, and with the cheap `@failed` file read
+    # before `@dirty`, so git only probes what's left.
+    def self.apply_sets(entries : Array(Doma::Entry), includes : Array(String), excludes : Array(String),
+                        jobs : Int32? = nil) : Array(Doma::Entry)
+      includes.sort_by { |s| s == "@dirty" ? 1 : 0 }.each do |s|
+        members = members(s, entries, jobs)
+        entries = entries.select { |e| members.includes?(e.path) }
+      end
+      excludes.sort_by { |s| s == "@dirty" ? 1 : 0 }.each do |s|
+        members = members(s, entries, jobs)
+        entries = entries.reject { |e| members.includes?(e.path) }
+      end
+      entries
+    end
+
+    private def self.members(set : String, entries : Array(Doma::Entry), jobs : Int32?) : Set(String)
+      return Doma::LastRun.failed.to_set if set == "@failed"
+      # @dirty: one `git status` per candidate, overlapped like `status`.
+      # `probe` never raises; a missing dir or non-repo reads as clean.
+      dirty = Doma::Parallel.map(entries, jobs || Doma::Parallel.default_jobs) do |e|
+        e.path if Doma::GitStatus.probe(e.path).dirty > 0
+      end
+      dirty.compact.to_set
     end
 
     # "'a' AND 'b', excluding 'c'" — for not-found and dry-run messages.
@@ -48,17 +99,20 @@ module Doma::CLI
       excludes.map { |t| "'#{t}'" }.join(", ")
     end
 
-    # A did-you-mean for the first include that isn't a known tag. A
+    # Why an include came back empty: a did-you-mean for the first tag
+    # that doesn't exist, or a note that `@failed` has nothing in it. A
     # known tag in an empty AND is a legitimate result, not a typo.
-    def self.typo_hint(includes : Array(String), catalog : Array(String)) : String?
+    def self.miss_hint(includes : Array(String), catalog : Array(String)) : String?
       known = catalog.to_set
       includes.each do |t|
-        next if known.includes?(t)
+        next if known.includes?(t) || t.starts_with?('@')
         if hint = Doma::Suggester.tag_hint_for(t, catalog)
           return hint
         end
       end
-      nil
+      if includes.includes?("@failed") && Doma::LastRun.failed.empty?
+        "@failed is empty: the last `doma run` had no failures"
+      end
     end
   end
 end

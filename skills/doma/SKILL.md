@@ -121,6 +121,8 @@ doma run crystal --parallel --jobs 4 -- ...   # cap concurrency (default: CPU co
 doma run crystal --fail-fast -- ...           # halt on first non-zero exit (sequential only)
 doma run crystal --dry-run -- rm -rf build    # print the target set without running anything
 doma run crystal -t work -x archived -- ...   # AND with -t, subtract with -x (also on list/status)
+doma run @failed -- ...                       # retry only what the last run failed on
+doma run crystal -t @dirty -- git stash       # @dirty = repos with uncommitted changes
 doma run crystal --no-header -- pwd           # suppress ▶/✓ chrome (failures still surface)
 doma run crystal -- sh -c 'echo "$DOMA_NAME"' # child env: DOMA_PATH, DOMA_NAME, DOMA_ID, DOMA_TAGS (comma-joined)
 ```

@@ -40,6 +40,7 @@ It is not a frecency jumper: doma never adds a directory on its own, and a direc
 ### Tagging
 - Multiple tags per directory; tags are reusable across paths
 - Auto-tag from basename and Git remote (`--auto-tag`, `--git-tag`)
+- Dynamic sets next to tags: `@failed` (what the last `run` failed on) and `@dirty` (repos with uncommitted changes) — `doma run @failed -- make test` retries only the failures
 - One selector for every set command: repeat `-t` to AND, `-x` to exclude (`run crystal -x archived -- …`, `status -t work -t api`, `list -x 'tmp*'`)
 - Glob filter on tags (`list -t 'work/*'`, `run 'work/*' -- cmd`) — shell-style: `*` matches within one segment, `**` crosses `/`, `?` is a single non-`/` character
 - Hierarchical tag display (`tags --tree`)
