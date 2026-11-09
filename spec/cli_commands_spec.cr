@@ -541,6 +541,62 @@ describe "doma run" do
     end
   end
 
+  it "exposes the entry to the child as DOMA_PATH / DOMA_NAME / DOMA_ID / DOMA_TAGS" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      r = run(["run", "fs", "--json", "--", "sh", "-c", "echo \"$DOMA_PATH|$DOMA_NAME|$DOMA_ID|$DOMA_TAGS\""],
+        {"DOMA_HOME" => home})
+      row = JSON.parse(r[:out]).as_a.first
+      path, name, id, tags = row["stdout"].as_s.strip.split("|")
+      path.should eq(row["path"].as_s)
+      name.should eq(File.basename(path))
+      id.size.should eq(7)
+      tags.split(",").sort!.should eq(%w[fs shared])
+    end
+  end
+
+  it "ends a multi-directory sweep with a tally that re-lists failures" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      r = run(["run", "shared", "--", "sh", "-c", "[ \"$DOMA_PATH\" != \"#{SEED_HOME_PATH}\" ]"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(1)
+      r[:err].should contain("1 ok · 1 failed")
+      tally = r[:err].split("1 ok · 1 failed").last
+      tally.should contain("✗ #{SEED_HOME_PATH} (exit 1)")
+      tally.lines.count(&.includes?("✗")).should eq(1)
+    end
+  end
+
+  it "[--fail-fast] counts the directories it never reached as skipped" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      r = run(["run", "shared", "--fail-fast", "--", "false"], {"DOMA_HOME" => home})
+      r[:err].should contain("0 ok · 1 failed · 1 skipped")
+    end
+  end
+
+  it "[--no-header] drops the tally when everything passed" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      r = run(["run", "shared", "--no-header", "--", "true"], {"DOMA_HOME" => home})
+      r[:err].should_not contain(" ok")
+    end
+  end
+
+  it "[-q] drops the tally even when something failed" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      r = run(["-q", "run", "shared", "--", "false"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(1)
+      r[:err].should_not contain("failed")
+    end
+  end
+
   it "[gone dir] blames the missing directory, not the command" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     with_home do |home|

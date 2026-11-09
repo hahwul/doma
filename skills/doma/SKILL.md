@@ -120,7 +120,11 @@ doma run crystal --parallel --jobs 4 -- ...   # cap concurrency (default: CPU co
 doma run crystal --fail-fast -- ...           # halt on first non-zero exit (sequential only)
 doma run crystal --dry-run -- rm -rf build    # print the target set without running anything
 doma run crystal --no-header -- pwd           # suppress ▶/✓ chrome (failures still surface)
+doma run crystal -- sh -c 'echo "$DOMA_NAME"' # child env: DOMA_PATH, DOMA_NAME, DOMA_ID, DOMA_TAGS (comma-joined)
 ```
+
+Without `--json`, a sweep over more than one directory ends with a
+`N ok · N failed · N skipped` tally on stderr that re-lists each failure.
 
 **Prefer `--json` in an agent.** Without it, every directory's output
 lands on one shared stream, and under `--parallel` there is no way left

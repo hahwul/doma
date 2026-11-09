@@ -25,7 +25,28 @@ Output streams interleaved with a per-directory header:
 
 ▶ /Users/me/Projects/sandbox
 …
-✓ /Users/me/Projects/sandbox (exit 0)
+✗ /Users/me/Projects/sandbox (exit 1)
+
+1 ok · 1 failed
+  ✗ /Users/me/Projects/sandbox (exit 1)
+```
+
+When more than one directory runs, a tally closes the sweep on stderr and re-lists every failure, so a long sweep's ✗ lines don't scroll away. `--no-header` keeps it only when something failed, `-q` drops it; `--json` never prints it (the rows already carry every exit code).
+
+## Per-directory environment
+
+Each child gets the entry it runs for in its environment, so per-directory commands need no `{}` templating or `xargs` quoting:
+
+| Variable | Value |
+|---|---|
+| `DOMA_PATH` | the directory (also the child's cwd) |
+| `DOMA_NAME` | its basename |
+| `DOMA_ID` | its 7-char `short_id` |
+| `DOMA_TAGS` | its active tags, comma-separated |
+
+```bash
+doma run crystal -- sh -c 'tar czf "/tmp/backup/$DOMA_NAME.tgz" .'
+doma run 'work/*' -- sh -c 'echo "$DOMA_ID $DOMA_TAGS"'
 ```
 
 ## Parallel
@@ -79,7 +100,7 @@ Prints the directories that *would* be swept — paths on stdout, the summary on
 doma run crystal --fail-fast -- crystal spec
 ```
 
-`--fail-fast` halts the loop on the first non-zero exit (sequential only — parallel always runs every directory to completion). doma's exit code reflects the failure.
+`--fail-fast` halts the loop on the first non-zero exit (sequential only — parallel always runs every directory to completion). doma's exit code reflects the failure, and the tally counts the directories it never reached as `skipped`.
 
 ## When to reach for `run` vs a manual loop
 
