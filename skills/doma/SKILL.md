@@ -37,7 +37,7 @@ tag, and silent emptiness is worse than asking.
 | Substring across path/basename/tag | `doma list <query>` | Single substring match. Combines with `-t` for intersection. Multiple positional args are joined by a space — they are *not* AND-ed |
 | Sorted by recency | `doma list --by recent` | Most-recently-used first; aliases: `used`, `recency`. Useful when "the project I was just working on" is in scope |
 | Mark missing paths inline | `doma list --check` | Tags entries whose path is gone with `[gone]`. Without it, the footer just counts them |
-| Just the tag names | `doma tags --names` | Cheap probe before committing to a tag. `doma tags --tree` shows the `work/proj/...` hierarchy; `doma tags -0` is NUL-separated for `xargs -0` |
+| Just the tag names | `doma tags --names` | Cheap probe before committing to a tag. `doma tags --tree` shows the `work/proj/...` hierarchy; `doma tags -0` is NUL-separated for `xargs -0`. Plain `doma tags` hides single-directory basename tags (`--all` shows them); `--names` / `--json` never hide anything |
 | Narrow a set | `doma list -t A -t B --paths` / `-x TAG` | Repeated `-t` ANDs, `-x TAG` (repeatable, glob ok) drops directories carrying it. Same flags on `run` and `status` |
 | Git state across a tagged set | `doma status -t TAG --json` | Per-repo `branch`, `ahead`/`behind`, `dirty`, `clean`, `untracked`, etc. Use for "which of my X repos have uncommitted changes?" — filter `.[] \| select(.dirty > 0)`. Add `--dirty` to pre-filter. Shells out to `git` |
 

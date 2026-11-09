@@ -11,10 +11,12 @@ module Doma::CLI
       names_only = false
       null_sep = false
       tree_mode = false
+      show_all = false
 
       parser = OptionParser.new do |p|
-        p.banner = "Usage: doma tags [--tree] [--json] [--names] [-0]"
+        p.banner = "Usage: doma tags [--tree] [--all] [--json] [--names] [-0]"
         p.on("--tree", "Group tags hierarchically by '/' segments") { tree_mode = true }
+        p.on("--all", "Include name tags (a tag on one directory that equals its basename)") { show_all = true }
         p.on("--json", "Output as JSON") { json_mode = true }
         p.on("--names", "Print tag names only") { names_only = true }
         # Same pattern as `doma list -0`: `-0` implies `--names` for
@@ -61,10 +63,24 @@ module Doma::CLI
           return
         end
 
+        # The machine forms above keep every tag (completion reads
+        # --names); the human views drop name tags, which alias a single
+        # path and crowd out the tags that actually group directories.
+        hidden = 0
+        unless show_all
+          names = db.name_tags
+          shown = tags.reject { |t| names.includes?(t.name) }
+          hidden = tags.size - shown.size
+          tags = shown
+        end
+
         if tree_mode
           render_tree(tags)
         else
           tags.each { |t| puts "#{t.name}\t#{t.count}" }
+        end
+        if hidden > 0 && !Doma::Logger.quiet?
+          STDERR.puts "(#{hidden} name #{hidden == 1 ? "tag" : "tags"} hidden: one directory each, same as its basename; --all shows them)"
         end
       end
     end

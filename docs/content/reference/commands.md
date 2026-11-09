@@ -11,7 +11,7 @@ weight = 1
 | `rm <path>` | Remove tag(s) from a path, or drop the path entirely. |
 | `prune --gone\|--expired` | Bulk-delete entries whose path is missing, or tag rows past their TTL. |
 | `move <old> <new>` | Move a registered path; tags carry over. |
-| `tags` | List all tags with usage counts. |
+| `tags` | List tags with usage counts (`--all` adds single-directory basename tags). |
 | `rename <old> <new>` | Rename a tag, or merge into an existing one. |
 | `list [<query>]` | List or search directories (`--pick` to resolve to one path). |
 | `info [<path>]` | Show one entry's details (tags, TTLs, last-used). Defaults to cwd. |

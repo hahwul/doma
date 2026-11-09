@@ -779,6 +779,29 @@ end
 # ---------- tags ----------
 
 describe "doma tags" do
+  it "hides name tags from tags / tags --tree, keeps them in --names / --json / --all" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      # `tmp` is /tmp's own basename on one directory → a name tag.
+      # `scratch` (also on /tmp) and `shared` (two dirs) are real groupings.
+      run(["add", "/tmp", "-t", File.basename(Doma::Validator.canonicalize("/tmp"))], {"DOMA_HOME" => home})
+      name = File.basename(Doma::Validator.canonicalize("/tmp"))
+
+      r = run(["tags"], {"DOMA_HOME" => home})
+      r[:out].lines.map(&.split('\t').first).should_not contain(name)
+      r[:out].should contain("scratch")
+      r[:err].should contain("1 name tag hidden")
+
+      tree = run(["tags", "--tree"], {"DOMA_HOME" => home})
+      tree[:out].lines.map(&.split('\t').first).should_not contain(name)
+
+      run(["tags", "--all"], {"DOMA_HOME" => home})[:out].should contain("#{name}\t1")
+      run(["tags", "--names"], {"DOMA_HOME" => home})[:out].lines.should contain(name)
+      JSON.parse(run(["tags", "--json"], {"DOMA_HOME" => home})[:out]).as_a.map(&.["name"].as_s).should contain(name)
+    end
+  end
+
   it "[default] lists tags with usage counts" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     with_home do |home|
