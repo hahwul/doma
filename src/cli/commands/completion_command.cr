@@ -3,6 +3,7 @@ require "../../utils/errors"
 require "./config_command"
 require "./list_command"
 require "./shell_arg"
+require "./sweep_args"
 
 module Doma::CLI
   # Emits shell completion scripts for bash, zsh, and fish. Mirrors the
@@ -123,6 +124,11 @@ module Doma::CLI
     # commands where the first positional is *unambiguously* a tag.
     private TAG_FIRST_ARG = %w[cd run rename status]
 
+    # Subcommands whose selector accepts `@sets` next to tags (and the
+    # space-joined names to offer there).
+    private SET_CMDS  = %w[list ls run status]
+    private SET_NAMES = SweepArgs::SETS.keys.join(' ')
+
     # Subcommands whose first positional is a known directory path.
     private PATH_FIRST_ARG = %w[add move rm info]
 
@@ -161,16 +167,51 @@ module Doma::CLI
         # doma completion (bash)
         # Install: doma setup completion bash > /etc/bash_completion.d/doma
         #     or:  source <(doma setup completion bash)
+
+        # Tag names, plus the `@sets` for commands whose selector takes them.
+        __doma_tag_words() {
+          command doma tags --names 2>/dev/null
+          case "$1" in
+            #{SET_CMDS.join('|')}) printf '%s\\n' #{SET_NAMES} ;;
+          esac
+        }
+
+        # Readline replaces only the text after the last COMP_WORDBREAKS
+        # char (`:` in `lang:crystal`, `@` in `@failed`, `user@host` paths)
+        # while doma completes the whole word, so strip that prefix from
+        # each candidate. Reads `cur` from the calling `_doma`.
+        __doma_ltrim() {
+          local breaks=""
+          [[ "$COMP_WORDBREAKS" == *:* ]] && breaks+=":"
+          [[ "$COMP_WORDBREAKS" == *@* ]] && breaks+="@"
+          [[ -n "$breaks" && "$cur" == *[$breaks]* ]] || return 0
+          local prefix="${cur%"${cur##*[$breaks]}"}" i
+          for i in "${!COMPREPLY[@]}"; do
+            COMPREPLY[$i]="${COMPREPLY[$i]#"$prefix"}"
+          done
+        }
+
+        # COMPREPLY from a word list, trimmed for readline.
+        __doma_reply() {
+          COMPREPLY=( $(compgen -W "$1" -- "$cur") )
+          __doma_ltrim
+        }
+
         _doma() {
           local cur prev words cword
           if declare -F _init_completion >/dev/null 2>&1; then
-            # `-n :` keeps `lang:crystal` one word (`:` is in COMP_WORDBREAKS).
-            _init_completion -n : || return
+            # `-n :@` keeps `lang:crystal` and `@failed` one word (both are
+            # in COMP_WORDBREAKS).
+            _init_completion -n :@ || return
           else
-            cur="${COMP_WORDS[COMP_CWORD]}"
-            prev="${COMP_WORDS[COMP_CWORD-1]}"
-            words=("${COMP_WORDS[@]}")
-            cword=$COMP_CWORD
+            # Rebuild words from the raw line: COMP_WORDS is split at every
+            # COMP_WORDBREAKS char, which would cut `@failed` in two.
+            local line="${COMP_LINE:0:COMP_POINT}"
+            read -ra words <<< "$line"
+            [[ ${#words[@]} -eq 0 || "$line" == *[[:space:]] ]] && words+=("")
+            cword=$(( ${#words[@]} - 1 ))
+            cur="${words[cword]}"
+            prev="${words[cword-1]}"
           fi
 
           local cmds="#{COMMAND_SPEC.map(&.name).join(' ')}"
@@ -186,18 +227,15 @@ module Doma::CLI
           # Flags that take a tag argument across multiple commands.
           case "$prev" in
             -t|--tag|-x|--exclude)
-              local tags
-              tags=$(command doma tags --names 2>/dev/null)
-              COMPREPLY=( $(compgen -W "$tags" -- "$cur") )
-              declare -F __ltrim_colon_completions >/dev/null 2>&1 && __ltrim_colon_completions "$cur"
+              __doma_reply "$(__doma_tag_words "$cmd")"
               return
               ;;
             --by)
-              COMPREPLY=( $(compgen -W "#{BY_VALUES.join(' ')}" -- "$cur") )
+              __doma_reply "#{BY_VALUES.join(' ')}"
               return
               ;;
             --ttl)
-              COMPREPLY=( $(compgen -W "#{TTL_VALUES.join(' ')}" -- "$cur") )
+              __doma_reply "#{TTL_VALUES.join(' ')}"
               return
               ;;
           esac
@@ -209,18 +247,17 @@ module Doma::CLI
           if [ "$cword" -eq 2 ] && [[ "$cur" != -* ]]; then
             case "$cmd" in
               #{TAG_FIRST_ARG.join('|')})
-                local tags
-                tags=$(command doma tags --names 2>/dev/null)
-                COMPREPLY=( $(compgen -W "$tags" -- "$cur") )
-                declare -F __ltrim_colon_completions >/dev/null 2>&1 && __ltrim_colon_completions "$cur"
+                __doma_reply "$(__doma_tag_words "$cmd")"
                 return
                 ;;
               #{PATH_FIRST_ARG.join('|')})
                 COMPREPLY=( $(compgen -d -- "$cur") )
+                __doma_ltrim
                 return
                 ;;
               #{FILE_FIRST_ARG.join('|')})
                 COMPREPLY=( $(compgen -f -- "$cur") )
+                __doma_ltrim
                 return
                 ;;
         #{bash_first_arg_action_cases.chomp}
@@ -300,6 +337,9 @@ module Doma::CLI
           local -a tags
           _doma_tags() {
             tags=("${(@f)$(command doma tags --names 2>/dev/null)}")
+            case $cmd in
+              #{SET_CMDS.join('|')}) tags+=(#{SET_NAMES}) ;;
+            esac
             _wanted tags expl 'doma tag' compadd -a tags
           }
 
@@ -403,6 +443,14 @@ module Doma::CLI
       end
     end
 
+    # Fish condition for "the tag positional of `sub`": only while no
+    # positional has been typed yet (`rename` takes two), so tags aren't
+    # offered after `--` or as a second, rejected positional.
+    private def fish_positional(sub : String) : String
+      max = sub == "rename" ? 3 : 2
+      "__fish_seen_subcommand_from #{sub}; and test (count (commandline -opc)) -le #{max}"
+    end
+
     private def fish_script : String
       lines = [] of String
       lines << "# doma completion (fish)"
@@ -422,14 +470,21 @@ module Doma::CLI
 
       # Tag-as-first-arg subcommands.
       TAG_FIRST_ARG.each do |sub|
-        lines << "complete -c doma -n '__fish_seen_subcommand_from #{sub}' " \
+        lines << "complete -c doma -n '#{fish_positional(sub)}' " \
                  "-a '(command doma tags --names 2>/dev/null)' -d 'tag'"
       end
       lines << ""
 
       # -t/--tag value completion across the suite.
       lines << "complete -c doma -s t -l tag -x -a '(command doma tags --names 2>/dev/null)' -d 'tag'"
-      lines << "complete -c doma -n '__fish_seen_subcommand_from list ls run status' -s x -l exclude -x -a '(command doma tags --names 2>/dev/null)' -d 'exclude tag'"
+      lines << "complete -c doma -n '__fish_seen_subcommand_from #{SET_CMDS.join(' ')}' -s x -l exclude -x -a '(command doma tags --names 2>/dev/null)' -d 'exclude tag'"
+      # `@sets` next to tags wherever the selector takes them.
+      sets = "-a '#{SET_NAMES}' -d 'set'"
+      lines << "complete -c doma -n '__fish_seen_subcommand_from #{SET_CMDS.join(' ')}' -s t -l tag -x #{sets}"
+      lines << "complete -c doma -n '__fish_seen_subcommand_from #{SET_CMDS.join(' ')}' -s x -l exclude -x #{sets}"
+      (TAG_FIRST_ARG & SET_CMDS).each do |sub|
+        lines << "complete -c doma -n '#{fish_positional(sub)}' #{sets}"
+      end
       lines << "complete -c doma -l by -x -a '#{BY_VALUES.join(' ')}' -d 'sort key'"
       lines << "complete -c doma -l ttl -x -a '#{TTL_VALUES.join(' ')}' -d 'duration'"
       lines << ""
