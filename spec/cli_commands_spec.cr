@@ -1710,6 +1710,38 @@ describe "doma setup completion" do
     r[:out].should contain("doma tags --names")
   end
 
+  it "[bash] offers @sets only where the selector takes them, trimmed past COMP_WORDBREAKS" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    script = run(["setup", "completion", "bash"])[:out]
+    # No bash-completion: `_doma` rebuilds words from COMP_LINE, so `@f`
+    # and `lang:c` stay whole, and each candidate is trimmed back to the
+    # text readline will actually replace.
+    driver = <<-SH
+      #{script}
+      COMP_WORDBREAKS="@: "
+      t() { COMP_LINE="$1"; COMP_POINT=${#1}; COMPREPLY=(); _doma; echo "${COMPREPLY[*]}"; }
+      t "doma run @f"
+      t "doma status -t lang:c"
+      t "doma run "
+      t "doma add -t @"
+      SH
+    with_home do |home|
+      run(["add", "/tmp", "-t", "lang:crystal"], {"DOMA_HOME" => home})
+      buf = IO::Memory.new
+      Process.run("bash", ["-c", driver], output: buf, error: Process::Redirect::Close,
+        env: {"DOMA_HOME" => home, "PATH" => "#{File.dirname(File.expand_path(DOMA_BIN))}:#{ENV["PATH"]}"})
+      buf.to_s.lines.should eq(["failed", "crystal", "lang:crystal @failed @dirty", ""])
+    end
+  end
+
+  it "[zsh/fish] add @sets for list/run/status" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    run(["setup", "completion", "zsh"])[:out].should contain("tags+=(@failed @dirty)")
+    fish = run(["setup", "completion", "fish"])[:out]
+    fish.should contain("__fish_seen_subcommand_from list ls run status' -s t -l tag -x -a '@failed @dirty'")
+    fish.should contain("__fish_seen_subcommand_from run; and test (count (commandline -opc)) -le 2' -a '@failed @dirty'")
+  end
+
   it "[zsh] emits a #compdef header and a tag-completion helper" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     r = run(["setup", "completion", "zsh"])

@@ -130,7 +130,7 @@ doma run (<tag> | -t TAG)... [-x TAG]... [--fail-fast] [--parallel [--jobs N]] [
 
 `--` is required. `--fail-fast` is sequential-only. One tag goes positionally; AND more with repeatable `-t/--tag`, and drop directories with repeatable `-x/--exclude` (`run crystal -x archived -- …`). Both flags also split on commas (`-x archived,tmp`), as in `list`; glob patterns (`*`, `?`) work in every position. An include tag is required — `-x` alone would sweep everything else.
 
-Dynamic sets work wherever a tag does, in `list`, `run`, and `status`: `@failed` (directories that failed the last `doma run`) and `@dirty` (git repos with uncommitted changes). An unknown `@name` exits 2.
+Dynamic sets work wherever a tag does, in `list`, `run`, and `status`: `@failed` (directories that failed the last `doma run`) and `@dirty` (git repos with uncommitted changes). An unknown `@name` exits 2. Shell completion offers the sets after `-t`, `-x`, and the positional tag of `run` / `status`.
 
 - `--jobs N`: cap concurrency under `--parallel` (default: CPU count).
 - `--no-header`: drop the `▶`/`✓` chrome; failures still surface.
