@@ -117,6 +117,7 @@ module Doma
 
       setter basename : Bool? = nil
       setter git : Bool? = nil
+      setter project : Bool? = nil
 
       def basename : Bool
         !!@basename
@@ -124,6 +125,10 @@ module Doma
 
       def git : Bool
         !!@git
+      end
+
+      def project : Bool
+        !!@project
       end
 
       def initialize
@@ -141,6 +146,7 @@ module Doma
       when "selector"          then @selector.try(&.to_s.downcase)
       when "auto_tag.basename" then @auto_tag.try { |a| a.@basename }
       when "auto_tag.git"      then @auto_tag.try { |a| a.@git }
+      when "auto_tag.project"  then @auto_tag.try { |a| a.@project }
       end
     end
 
@@ -149,11 +155,15 @@ module Doma
       case key
       when "db_path"  then @db_path = value.as(String?)
       when "selector" then @selector = value.as(String?).try { |v| SelectorMode.parse(v) }
-      when "auto_tag.basename", "auto_tag.git"
+      when "auto_tag.basename", "auto_tag.git", "auto_tag.project"
         tag = @auto_tag || AutoTag.new
-        key == "auto_tag.git" ? (tag.git = value.as(Bool?)) : (tag.basename = value.as(Bool?))
+        case key
+        when "auto_tag.git"     then tag.git = value.as(Bool?)
+        when "auto_tag.project" then tag.project = value.as(Bool?)
+        else                         tag.basename = value.as(Bool?)
+        end
         # Drop the parent map once its last child is unset.
-        @auto_tag = tag.@basename.nil? && tag.@git.nil? ? nil : tag
+        @auto_tag = tag.@basename.nil? && tag.@git.nil? && tag.@project.nil? ? nil : tag
       end
     end
 

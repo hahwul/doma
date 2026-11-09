@@ -19,6 +19,7 @@ module Doma::CLI
       "selector",
       "auto_tag.basename",
       "auto_tag.git",
+      "auto_tag.project",
     ]
 
     # Also referenced by `setup completion`, so the action list in the
@@ -197,7 +198,7 @@ module Doma::CLI
           )
         end
         v
-      when "auto_tag.basename", "auto_tag.git"
+      when "auto_tag.basename", "auto_tag.git", "auto_tag.project"
         parse_bool(key, raw)
       else
         raise Doma::ValidationError.new("unsupported key '#{key}'")
@@ -266,6 +267,7 @@ module Doma::CLI
       when "selector"          then settings.selector.to_s.downcase
       when "auto_tag.basename" then settings.auto_tag.basename.to_s
       when "auto_tag.git"      then settings.auto_tag.git.to_s
+      when "auto_tag.project"  then settings.auto_tag.project.to_s
       else                          ""
       end
     end

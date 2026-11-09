@@ -62,6 +62,7 @@ module Doma::CLI
         kv "selector", s.selector.to_s.downcase
         kv "auto_tag.basename", s.auto_tag.basename.to_s
         kv "auto_tag.git", s.auto_tag.git.to_s
+        kv "auto_tag.project", s.auto_tag.project.to_s
       rescue ex : Doma::ConfigError
         kv "status", "INVALID — #{ex.message}"
       end

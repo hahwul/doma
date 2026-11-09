@@ -37,6 +37,7 @@ A valid tag is `[A-Za-z0-9][A-Za-z0-9_.\-+:/]{0,63}` — starts with a letter or
 doma add . --auto-tag       # tag with the directory's basename
 doma add . --git-tag        # tag with the git remote host + repo (if any)
 doma add . --auto-tag --git-tag
+doma add . --project-tag    # tag by project type: shard.yml → crystal, Cargo.toml → rust, …
 ```
 
 `--git-tag` reads `.git/config`'s `[remote "origin"]` and derives a host tag (`github`, `gitlab`, `bitbucket`, `codeberg`, or the raw hostname for self-hosted) and the repo name.
@@ -44,6 +45,16 @@ doma add . --auto-tag --git-tag
 Auto-derived tags are sanitized — `.dotfiles` becomes `dotfiles`. If sanitization can't produce a valid tag, the auto-tag is silently skipped.
 
 Defaults are configurable in [config](../../reference/config/).
+
+## Registering a whole tree
+
+```bash
+doma add -r ~/Projects --project-tag -n    # preview
+doma add -r ~/Projects --project-tag       # every git repo under ~/Projects, tagged by type
+doma add -r ~/work -t work --git-tag       # flags apply to each repo found
+```
+
+`-r` replaces each path with the git repos at or under it. A repo is a leaf: submodules and checkouts nested inside it aren't listed. Hidden directories, `node_modules` / `vendor` / `target` / `dist` / `build`, and symlinks are skipped; the walk stops 4 levels down.
 
 ## Re-tagging
 

@@ -43,8 +43,8 @@ weight = 1
 ## `add`
 
 ```
-doma add [<path> ...] [-t TAG ...] [--ttl DUR | --tmp]
-                                   [--auto-tag] [--git-tag] [--dry-run] [--json]
+doma add [<path> ...] [-r] [-t TAG ...] [--ttl DUR | --tmp]
+                     [--auto-tag] [--git-tag] [--project-tag] [--dry-run] [--json]
 ```
 
 - `-t TAG`: add a tag. Repeatable; comma-separated also works (`-t a,b`).
@@ -52,6 +52,8 @@ doma add [<path> ...] [-t TAG ...] [--ttl DUR | --tmp]
 - `--tmp`: alias for `--ttl 7d`.
 - `--auto-tag` / `--no-auto-tag`: include the basename as a tag.
 - `--git-tag` / `--no-git-tag`: derive host and repo tags from `.git/config`.
+- `--project-tag` / `--no-project-tag`: tag by project type from marker files (`shard.yml`→`crystal`, `Cargo.toml`→`rust`, `go.mod`→`go`, `package.json`→`node`, `pyproject.toml`/`setup.py`/`requirements.txt`→`python`, `Gemfile`→`ruby`, `mix.exs`→`elixir`, `pom.xml`/`build.gradle`→`java`, `build.gradle.kts`→`kotlin`, `Package.swift`→`swift`, `composer.json`→`php`, `CMakeLists.txt`→`cpp`). Config: `auto_tag.project`.
+- `-r`, `--recursive`: register every git repo at or under each `<path>` instead of `<path>` itself. A repo is a leaf (nothing inside it is listed); hidden dirs, `node_modules`/`vendor`/`target`/`dist`/`build`, and symlinks aren't descended; at most 4 levels deep. A root with no repos exits 3.
 - `-n`, `--dry-run`: resolve and print without writing.
 - `--json`: structured output (array of results including `short_id` per path). `mark` forwards this flag. Useful for agents that want the stable ID immediately.
 
