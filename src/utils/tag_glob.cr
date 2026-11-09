@@ -52,6 +52,14 @@ module Doma
       to_regex(pattern).matches?(name)
     end
 
+    # True when `tags` has a match for every include pattern and none for
+    # any exclude pattern — the gate behind `-t`/`-x` and the TUI's
+    # `tag:` / `-tag:` tokens.
+    def satisfy?(tags : Array(String), includes : Array(String), excludes : Array(String)) : Bool
+      includes.all? { |p| tags.any? { |t| match?(p, t) } } &&
+        excludes.none? { |p| tags.any? { |t| match?(p, t) } }
+    end
+
     # Narrow `entries` to those carrying a tag that matches `pattern` under
     # the strict semantics. A no-op for a plain (non-glob) pattern — the SQL
     # layer already returned the exact-match set, so there's nothing to

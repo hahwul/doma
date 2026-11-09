@@ -1,36 +1,64 @@
+require "../../db/database"
 require "../../utils/errors"
+require "../../utils/suggester"
+require "../../utils/tag_glob"
+require "../../utils/validator"
 
 module Doma::CLI
-  # Argument checks shared by the tag sweeps (`run`, `status`), which
-  # take a single tag either positionally or via `-t`, plus `--jobs`.
+  # Argument checks and target selection shared by the tag sweeps
+  # (`run`, `status`): tags positionally or via repeatable `-t` (AND),
+  # `-x` exclusions, plus `--jobs`.
   module SweepArgs
-    def self.flag_tag!(raw : String) : String
-      raise Doma::ValidationError.new("tag is empty (-t got an empty value)") if raw.strip.empty?
-      raw
-    end
-
     def self.jobs!(raw : String) : Int32
       n = raw.to_i?
       raise Doma::ValidationError.new("--jobs must be a positive integer, got '#{raw}'") if n.nil? || n < 1
       n
     end
 
-    # A glob (`*`, `?`) still matches across several tags, so one tag
-    # argument is enough.
-    def self.single_tag!(command : String, flag_tags : Array(String), positional : Array(String)) : String?
-      if !flag_tags.empty? && !positional.empty?
-        raise Doma::ValidationError.new("tag specified both positionally and via -t; pick one")
-      end
-      if flag_tags.size > 1
-        raise Doma::ValidationError.new("#{command} accepts a single tag; got #{flag_tags.size} via -t")
-      end
+    # At most one positional tag — a second bare word is far more often a
+    # command missing its `--` than a second filter. More tags go via
+    # repeatable `-t`; all of them AND together.
+    def self.tags!(command : String, flag_tags : Array(String), positional : Array(String)) : Array(String)
       if positional.size > 1
         raise Doma::ValidationError.new(
-          "#{command} accepts a single tag; got #{positional.size} positional args",
-          hint: "use a glob like 'work*' to sweep several tags at once"
+          "#{command} accepts one positional tag; got #{positional.size} positional args",
+          hint: "AND more tags with -t (`#{command} #{positional.first} -t #{positional[1]}`), or use a glob like 'work*'"
         )
       end
-      flag_tags.first? || positional.first?
+      (positional + flag_tags).uniq
+    end
+
+    # Entries carrying a match for every include and none for any exclude.
+    # The first include (if any) narrows the SQL read; TagGlob then
+    # applies the strict shell-glob rules to every pattern.
+    def self.select(db : Doma::Database, includes : Array(String), excludes : Array(String),
+                    sort : Doma::Database::SortBy) : Array(Doma::Entry)
+      db.directories(includes.first?, sort: sort)
+        .select { |e| Doma::TagGlob.satisfy?(e.tags, includes, excludes) }
+    end
+
+    # "'a' AND 'b', excluding 'c'" — for not-found and dry-run messages.
+    def self.phrase(includes : Array(String), excludes : Array(String)) : String
+      s = includes.map { |t| "'#{t}'" }.join(" AND ")
+      s += ", excluding #{excluded(excludes)}" unless excludes.empty?
+      s
+    end
+
+    def self.excluded(excludes : Array(String)) : String
+      excludes.map { |t| "'#{t}'" }.join(", ")
+    end
+
+    # A did-you-mean for the first include that isn't a known tag. A
+    # known tag in an empty AND is a legitimate result, not a typo.
+    def self.typo_hint(includes : Array(String), catalog : Array(String)) : String?
+      known = catalog.to_set
+      includes.each do |t|
+        next if known.includes?(t)
+        if hint = Doma::Suggester.tag_hint_for(t, catalog)
+          return hint
+        end
+      end
+      nil
     end
   end
 end

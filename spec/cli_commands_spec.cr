@@ -634,13 +634,74 @@ describe "doma run" do
     end
   end
 
-  it "[positional + -t] errors instead of silently picking one" do
+  it "[positional + -t] ANDs the tags" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     with_home do |home|
       seed_home(home)
-      r = run(["run", "shared", "-t", "shared", "--", "echo"], {"DOMA_HOME" => home})
+      r = run(["run", "shared", "-t", "fs", "--json", "--", "pwd"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(0)
+      rows = JSON.parse(r[:out]).as_a
+      rows.size.should eq(1)
+      rows[0]["path"].as_s.should_not eq(SEED_HOME_PATH)
+    end
+  end
+
+  it "[-x TAG] skips directories carrying the excluded tag" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      r = run(["run", "shared", "-x", "fs", "--json", "--", "pwd"], {"DOMA_HOME" => home})
+      rows = JSON.parse(r[:out]).as_a
+      rows.map(&.["path"].as_s).should eq([SEED_HOME_PATH])
+    end
+  end
+
+  it "[-x glob] excludes by pattern and names the exclusion when nothing is left" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      r = run(["run", "shared", "-x", "*", "--", "pwd"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(3)
+      r[:err].should contain("no directories tagged 'shared', excluding '*'")
+    end
+  end
+
+  it "[-x a,b] splits commas like list, so nothing excluded slips through" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      r = run(["run", "shared", "-x", "fs,home", "--", "pwd"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(3)
+      r[:err].should contain("excluding 'fs', 'home'")
+    end
+  end
+
+  it "[empty AND of known tags] gives no did-you-mean" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      r = run(["run", "fs", "-t", "home", "--", "pwd"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(3)
+      r[:err].should_not contain("did you mean")
+    end
+  end
+
+  it "[-x ''] names the flag that got the empty value" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      r = run(["status", "-x", ""], {"DOMA_HOME" => home})
       r[:status].exit_code.should eq(2)
-      r[:err].should contain("both positionally and via -t")
+      r[:err].should contain("-x got an empty value")
+    end
+  end
+
+  it "[-x only] still requires an include tag" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      r = run(["run", "-x", "fs", "--", "pwd"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(2)
+      r[:err].should contain("tag is required")
     end
   end
 
@@ -652,7 +713,7 @@ describe "doma run" do
       # dropping the rest — mirror `status`, which already rejects this.
       r = run(["run", "shared", "extra", "--", "echo"], {"DOMA_HOME" => home})
       r[:status].exit_code.should eq(2)
-      r[:err].should contain("run accepts a single tag")
+      r[:err].should contain("run accepts one positional tag")
       r[:err].should contain("got 2 positional args")
     end
   end
@@ -1135,6 +1196,19 @@ end
 # ---------- list flag combinations ----------
 
 describe "doma list flags" do
+  it "[-x TAG] drops directories carrying the tag and says so when nothing is left" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      r = run(["list", "-t", "shared", "-x", "fs", "--paths"], {"DOMA_HOME" => home})
+      r[:out].lines.should eq([SEED_HOME_PATH])
+      none = run(["list", "-x", "*"], {"DOMA_HOME" => home})
+      none[:err].should contain("nothing left after excluding '*'")
+      pick = run(["list", "-x", "*", "--pick", "--first"], {"DOMA_HOME" => home})
+      pick[:err].should contain("nothing left after excluding '*'")
+    end
+  end
+
   it "[--by recent] orders by frecency" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     with_home do |home|
@@ -2398,12 +2472,25 @@ describe "doma status" do
     end
   end
 
-  it "[positional + -t] is rejected before any git work (exit 2)" do
+  it "[positional + -t] ANDs the tags" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     with_home do |home|
-      r = run(["status", "a", "-t", "b"], {"DOMA_HOME" => home})
-      r[:status].exit_code.should eq(2)
-      r[:err].should contain("both positionally and via -t")
+      seed_home(home)
+      r = run(["status", "shared", "-t", "home", "--json"], {"DOMA_HOME" => home})
+      JSON.parse(r[:out]).as_a.map(&.["path"].as_s).should eq([SEED_HOME_PATH])
+    end
+  end
+
+  it "[-x TAG] drops excluded directories, with or without an include tag" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      r = run(["status", "shared", "-x", "fs", "--json"], {"DOMA_HOME" => home})
+      JSON.parse(r[:out]).as_a.map(&.["path"].as_s).should eq([SEED_HOME_PATH])
+      all = run(["status", "-x", "shared", "--json"], {"DOMA_HOME" => home})
+      all_paths = JSON.parse(all[:out]).as_a.map(&.["path"].as_s)
+      all_paths.size.should eq(1)
+      all_paths.should_not contain(SEED_HOME_PATH)
     end
   end
 

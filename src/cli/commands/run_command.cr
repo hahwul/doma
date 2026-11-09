@@ -31,13 +31,17 @@ module Doma::CLI
       json_mode = false
       jobs : Int32? = nil
       flag_tags = [] of String
+      excludes = [] of String
       positional_tags = [] of String
       cmd_args = [] of String
 
       parser = OptionParser.new do |p|
-        p.banner = "Usage: doma run (<tag> | -t TAG) [--fail-fast] [--parallel [--jobs N]] [--no-header] [--dry-run] [--json] -- <cmd> [args...]"
-        p.on("-t TAG", "--tag=TAG", "Tag selector — single tag, no comma split (alias for positional)") do |t|
-          flag_tags << SweepArgs.flag_tag!(t)
+        p.banner = "Usage: doma run (<tag> | -t TAG)... [-x TAG]... [--fail-fast] [--parallel [--jobs N]] [--no-header] [--dry-run] [--json] -- <cmd> [args...]"
+        p.on("-t TAG", "--tag=TAG", "Tag selector (repeatable or comma-separated; AND with the positional tag)") do |t|
+          flag_tags.concat(Doma::Validator.split_tag_flag!(t))
+        end
+        p.on("-x TAG", "--exclude=TAG", "Skip directories carrying TAG (repeatable or comma-separated, glob ok)") do |t|
+          excludes.concat(Doma::Validator.split_tag_flag!(t, "-x"))
         end
         p.on("--fail-fast", "Stop on first failure") { stop_on_fail = true }
         p.on("--parallel", "Run commands in parallel (best-effort, output interleaves)") { parallel = true }
@@ -50,11 +54,11 @@ module Doma::CLI
         p.on("-h", "--help", "Show help") do
           puts p
           STDOUT.puts ""
-          STDOUT.puts "Runs <cmd> in every directory tagged with <tag>. The tag"
-          STDOUT.puts "can be passed positionally (`run work -- cmd`) or via"
-          STDOUT.puts "`-t TAG` (`run -t work -- cmd`), but not both. Only a"
-          STDOUT.puts "single tag is accepted; glob patterns (`*`, `?`) still"
-          STDOUT.puts "match across multiple tags."
+          STDOUT.puts "Runs <cmd> in every directory tagged with <tag>. Pass one"
+          STDOUT.puts "tag positionally (`run work -- cmd`) and AND more with -t"
+          STDOUT.puts "(`run work -t api -- cmd`); -x drops directories carrying"
+          STDOUT.puts "a tag (`run work -x archived -- cmd`). Globs (`*`, `?`)"
+          STDOUT.puts "work everywhere."
           STDOUT.puts ""
           STDOUT.puts "--json captures each child's stdout/stderr instead of"
           STDOUT.puts "streaming them, and emits one row per directory:"
@@ -98,23 +102,19 @@ module Doma::CLI
         )
       end
 
-      tag = SweepArgs.single_tag!("run", flag_tags, positional_tags)
-      raise Doma::ValidationError.new("tag is required") unless tag
+      tags = SweepArgs.tags!("run", flag_tags, positional_tags)
+      # Exclusions alone would sweep everything else — too broad to fire
+      # by accident, so an include tag stays mandatory.
+      raise Doma::ValidationError.new("tag is required") if tags.empty?
 
       targets, all_tags = Doma::Database.open do |db|
-        # `directories(tag)` returns Entry rows with their tag list so we
-        # can post-filter against the strict glob rules. SQL GLOB treats
-        # `*` as crossing `/`; we reimpose shell-glob semantics in Crystal so `run 'a/*' -- ...`
-        # doesn't end up running in `a/b/c/d`.
-        entries = db.directories(tag, sort: Doma::Database::SortBy::Recent)
-        entries = Doma::TagGlob.filter(entries, tag, &.tags)
-        {entries.uniq!(&.path), db.tag_names}
+        {SweepArgs.select(db, tags, excludes, Doma::Database::SortBy::Recent).uniq!(&.path), db.tag_names}
       end
 
       if targets.empty?
         raise Doma::NotFoundError.new(
-          "no directories tagged '#{tag}'",
-          hint: Doma::Suggester.tag_hint_for(tag, all_tags)
+          "no directories tagged #{SweepArgs.phrase(tags, excludes)}",
+          hint: SweepArgs.typo_hint(tags, all_tags)
         )
       end
 
@@ -139,7 +139,7 @@ module Doma::CLI
         # Suppressed under -q, which asks for just the machine-readable set.
         unless Doma::Logger.quiet?
           noun = targets.size == 1 ? "directory" : "directories"
-          STDERR.puts "[dry-run] would run `#{cmd_args.join(" ")}` in #{targets.size} #{noun} tagged '#{tag}'"
+          STDERR.puts "[dry-run] would run `#{cmd_args.join(" ")}` in #{targets.size} #{noun} tagged #{SweepArgs.phrase(tags, excludes)}"
         end
         targets.each { |entry| puts entry.path }
         return

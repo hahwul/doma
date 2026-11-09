@@ -65,7 +65,7 @@ module Doma
         scored = [] of Scored
 
         entries.each do |entry|
-          next unless tags_satisfy?(entry, parsed)
+          next unless TagGlob.satisfy?(entry.tags, parsed.tag_includes, parsed.tag_excludes)
           next unless id_satisfy?(entry, parsed)
 
           total = 0
@@ -98,16 +98,6 @@ module Doma
 
       private def strip_prefix(token : String, prefix : String) : String?
         token.starts_with?(prefix) ? token[prefix.size..] : nil
-      end
-
-      private def tags_satisfy?(entry : Entry, parsed : Parsed) : Bool
-        parsed.tag_includes.each do |pattern|
-          return false unless entry.tags.any? { |tag| TagGlob.match?(pattern, tag) }
-        end
-        parsed.tag_excludes.each do |pattern|
-          return false if entry.tags.any? { |tag| TagGlob.match?(pattern, tag) }
-        end
-        true
       end
 
       private def id_satisfy?(entry : Entry, parsed : Parsed) : Bool

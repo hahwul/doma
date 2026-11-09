@@ -7,7 +7,6 @@ require "../../utils/errors"
 require "../../utils/logger"
 require "../../utils/parallel"
 require "../../utils/suggester"
-require "../../utils/tag_glob"
 require "./sweep_args"
 
 module Doma::CLI
@@ -34,12 +33,16 @@ module Doma::CLI
       dirty_only = false
       jobs : Int32? = nil
       flag_tags = [] of String
+      excludes = [] of String
       positional = [] of String
 
       parser = OptionParser.new do |p|
-        p.banner = "Usage: doma status [<tag> | -t TAG] [--dirty] [--jobs N] [--json]"
-        p.on("-t TAG", "--tag=TAG", "Tag selector (single tag; alias for positional)") do |t|
-          flag_tags << SweepArgs.flag_tag!(t)
+        p.banner = "Usage: doma status [<tag> | -t TAG]... [-x TAG]... [--dirty] [--jobs N] [--json]"
+        p.on("-t TAG", "--tag=TAG", "Tag selector (repeatable or comma-separated; AND with the positional tag)") do |t|
+          flag_tags.concat(Doma::Validator.split_tag_flag!(t))
+        end
+        p.on("-x TAG", "--exclude=TAG", "Skip directories carrying TAG (repeatable or comma-separated, glob ok)") do |t|
+          excludes.concat(Doma::Validator.split_tag_flag!(t, "-x"))
         end
         p.on("--dirty", "Only show repos with uncommitted changes") { dirty_only = true }
         p.on("--jobs N", "Max concurrent git probes (default: CPU count)") do |n|
@@ -62,7 +65,8 @@ module Doma::CLI
       end
       parser.parse(args)
 
-      tag = SweepArgs.single_tag!("status", flag_tags, positional)
+      tags = SweepArgs.tags!("status", flag_tags, positional)
+      filtered = !tags.empty? || !excludes.empty?
 
       # Fail fast and clearly if git isn't installed — otherwise every
       # directory would probe to "not a git repo" and the user would
@@ -75,14 +79,14 @@ module Doma::CLI
       end
 
       entries, all_tags = Doma::Database.open do |db|
-        {resolve_entries(db, tag), db.tag_names}
+        {SweepArgs.select(db, tags, excludes, Doma::Database::SortBy::Path), db.tag_names}
       end
 
       if entries.empty?
-        if tag
+        if filtered
           raise Doma::NotFoundError.new(
-            "no directories tagged '#{tag}'",
-            hint: Doma::Suggester.tag_hint_for(tag, all_tags)
+            tags.empty? ? "nothing left after excluding #{SweepArgs.excluded(excludes)}" : "no directories tagged #{SweepArgs.phrase(tags, excludes)}",
+            hint: SweepArgs.typo_hint(tags, all_tags)
           )
         else
           # Keep `--json` parseable, like `list --json` on an empty db.
@@ -101,21 +105,11 @@ module Doma::CLI
 
       if states.empty?
         # Only reachable under --dirty: everything matched was clean.
-        Doma::Logger.info tag ? "all '#{tag}' repos are clean" : "all repos are clean"
+        Doma::Logger.info tags.empty? ? "all repos are clean" : "all repos tagged #{SweepArgs.phrase(tags, excludes)} are clean"
         return
       end
 
       render_text(states)
-    end
-
-    # Mirrors `run`/`list`: a tag containing glob metacharacters is
-    # post-filtered with shell-glob semantics (SQLite GLOB lets `*`
-    # cross `/`; TagGlob doesn't), and no tag means the whole board.
-    private def resolve_entries(db : Doma::Database, tag : String?) : Array(Doma::Entry)
-      return db.directories(nil, sort: Doma::Database::SortBy::Path) unless tag
-
-      entries = db.directories(tag, sort: Doma::Database::SortBy::Path)
-      Doma::TagGlob.filter(entries, tag, &.tags)
     end
 
     # Bounded fan-out over the directory set (see Doma::Parallel). Each

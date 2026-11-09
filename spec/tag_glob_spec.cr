@@ -5,6 +5,17 @@ require "./spec_helper"
 # pin the pure Crystal semantics — especially the `*` vs `**` distinction and
 # the regex-special-character escaping that the SQL layer can't express.
 describe Doma::TagGlob do
+  describe ".satisfy?" do
+    it "needs a match for every include and none for any exclude" do
+      tags = %w[work/api crystal]
+      Doma::TagGlob.satisfy?(tags, %w[work/* crystal], [] of String).should be_true
+      Doma::TagGlob.satisfy?(tags, %w[work/* rust], [] of String).should be_false
+      Doma::TagGlob.satisfy?(tags, [] of String, %w[archived]).should be_true
+      Doma::TagGlob.satisfy?(tags, %w[crystal], %w[work/*]).should be_false
+      Doma::TagGlob.satisfy?(tags, [] of String, [] of String).should be_true
+    end
+  end
+
   describe ".match?" do
     it "treats a glob-free pattern as plain equality" do
       Doma::TagGlob.match?("work", "work").should be_true

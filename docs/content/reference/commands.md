@@ -88,14 +88,15 @@ The two flags are mutually exclusive.
 ## `list`
 
 ```
-doma list [<query>] [-t TAG] [--by path|recent|tag]
+doma list [<query>] [-t TAG]... [-x TAG]... [--by path|recent|tag]
                     [--check] [--include-expired]
                     [--json] [--paths] [-0]
                     [--pick [--first | --builtin] [--query Q]]
 ```
 
 - `<query>`: substring match across path/basename/tag.
-- `-t TAG`: exact tag (or glob if `*` / `?` is present).
+- `-t TAG`: exact tag (or glob if `*` / `?` is present). Repeat to AND.
+- `-x TAG`, `--exclude TAG`: drop directories carrying TAG (glob ok). Repeatable.
 - `--by`: sort/group key.
   - `path` (default): alphabetical by path.
   - `recent` (aliases: `used`, `recency`): most-recently-used first.
@@ -123,11 +124,11 @@ With `--json`, *every* outcome is a JSON object on stdout — a hit is `{"found"
 ## `run`
 
 ```
-doma run (<tag> | -t TAG) [--fail-fast] [--parallel [--jobs N]] [--no-header]
+doma run (<tag> | -t TAG)... [-x TAG]... [--fail-fast] [--parallel [--jobs N]] [--no-header]
                           [-n | --dry-run] [--json] -- <cmd> [args...]
 ```
 
-`--` is required. `--fail-fast` is sequential-only. The tag can be passed positionally or via `-t/--tag` (alias) — pick one. A single tag is accepted; commas are not split, but glob patterns (`*`, `?`) match across multiple tags.
+`--` is required. `--fail-fast` is sequential-only. One tag goes positionally; AND more with repeatable `-t/--tag`, and drop directories with repeatable `-x/--exclude` (`run crystal -x archived -- …`). Both flags also split on commas (`-x archived,tmp`), as in `list`; glob patterns (`*`, `?`) work in every position. An include tag is required — `-x` alone would sweep everything else.
 
 - `--jobs N`: cap concurrency under `--parallel` (default: CPU count).
 - `--no-header`: drop the `▶`/`✓` chrome; failures still surface.
@@ -137,10 +138,10 @@ doma run (<tag> | -t TAG) [--fail-fast] [--parallel [--jobs N]] [--no-header]
 ## `status`
 
 ```
-doma status [<tag> | -t TAG] [--dirty] [--jobs N] [--json]
+doma status [<tag> | -t TAG]... [-x TAG]... [--dirty] [--jobs N] [--json]
 ```
 
-Reports each tagged directory's git working-tree state — branch, ahead/behind vs upstream, dirty-file count. No tag scans every tracked directory. `--dirty` shows only repos with uncommitted changes. Probes run in parallel (`--jobs` to tune; default CPU count) by shelling out to `git`; non-git and missing paths are surfaced too. See [Git status](../../usage/status/).
+Reports each tagged directory's git working-tree state — branch, ahead/behind vs upstream, dirty-file count. No tag scans every tracked directory; `-t` ANDs more tags and `-x` drops directories carrying a tag, as in `run`. `--dirty` shows only repos with uncommitted changes. Probes run in parallel (`--jobs` to tune; default CPU count) by shelling out to `git`; non-git and missing paths are surfaced too. See [Git status](../../usage/status/).
 
 ## `export` / `import`
 

@@ -87,7 +87,7 @@ module Doma::CLI
       CmdSpec.new("rename", "Rename or merge a tag",
         [] of String, [] of String),
       CmdSpec.new("list", "List/search directories",
-        %w[-t --tag --by --check --include-expired --json --paths -0 --print0 --pick --query --first --builtin -h --help], [] of String),
+        %w[-t --tag -x --exclude --by --check --include-expired --json --paths -0 --print0 --pick --query --first --builtin -h --help], [] of String),
       CmdSpec.new("tui", "Fuzzy-find directories interactively",
         %w[-t --tag --query -h --help], [] of String),
       CmdSpec.new("info", "Show one entry's details (default: cwd)",
@@ -97,9 +97,9 @@ module Doma::CLI
       CmdSpec.new("stats", "Top tags and recent paths",
         %w[--top --recent --used --group-by-prefix --json -h --help], [] of String),
       CmdSpec.new("status", "Git status across tagged repos",
-        %w[-t --tag --dirty --jobs --json -h --help], [] of String),
+        %w[-t --tag -x --exclude --dirty --jobs --json -h --help], [] of String),
       CmdSpec.new("run", "Run a command in every tagged directory",
-        %w[-t --tag --fail-fast --parallel --jobs --no-header -n --dry-run --json -h --help], [] of String),
+        %w[-t --tag -x --exclude --fail-fast --parallel --jobs --no-header -n --dry-run --json -h --help], [] of String),
       CmdSpec.new("export", "Dump the database",
         %w[--json --yaml -o --output -h --help], [] of String),
       CmdSpec.new("import", "Load a snapshot",
@@ -185,7 +185,7 @@ module Doma::CLI
 
           # Flags that take a tag argument across multiple commands.
           case "$prev" in
-            -t|--tag)
+            -t|--tag|-x|--exclude)
               local tags
               tags=$(command doma tags --names 2>/dev/null)
               COMPREPLY=( $(compgen -W "$tags" -- "$cur") )
@@ -327,7 +327,7 @@ module Doma::CLI
 
           # Flag-value completion across commands.
           case $words[CURRENT-1] in
-            -t|--tag) _doma_tags; return ;;
+            -t|--tag|-x|--exclude) _doma_tags; return ;;
             --by)     _values 'sort key' #{BY_VALUES.join(' ')}; return ;;
             --ttl)    _values 'duration' #{TTL_VALUES.join(' ')}; return ;;
           esac
@@ -429,6 +429,7 @@ module Doma::CLI
 
       # -t/--tag value completion across the suite.
       lines << "complete -c doma -s t -l tag -x -a '(command doma tags --names 2>/dev/null)' -d 'tag'"
+      lines << "complete -c doma -n '__fish_seen_subcommand_from list ls run status' -s x -l exclude -x -a '(command doma tags --names 2>/dev/null)' -d 'exclude tag'"
       lines << "complete -c doma -l by -x -a '#{BY_VALUES.join(' ')}' -d 'sort key'"
       lines << "complete -c doma -l ttl -x -a '#{TTL_VALUES.join(' ')}' -d 'duration'"
       lines << ""
