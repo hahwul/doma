@@ -79,16 +79,21 @@ module Doma::CLI
       use_project : Bool = auto_project.nil? ? cfg.auto_tag.project : !!auto_project
 
       # `-r` swaps each root for the repos under it, then the batch runs as
-      # if those paths had been typed. A root with no repos is a mistake
-      # worth stopping on (wrong directory), not a silent no-op.
+      # if those paths had been typed. Every root is scanned before
+      # anything is written, so a bad or repo-less root (likely a typo)
+      # stops the whole bulk add instead of half-applying it.
       if recursive
         positional = positional.flat_map do |root|
           abs = Doma::Validator.path!(root)
-          found = Doma::Project.repos(abs)
+          found = begin
+            Doma::Project.repos(abs)
+          rescue ex : File::Error
+            raise Doma::ValidationError.new("cannot scan #{abs}: #{ex.message}")
+          end
           raise Doma::NotFoundError.new("no git repos under #{abs}") if found.empty?
           Doma::Logger.info "found #{found.size} git #{found.size == 1 ? "repo" : "repos"} under #{abs}" unless json_mode
           found
-        end
+        end.uniq!
       end
 
       ttl_label = expires_at.try { |e| "expires #{Doma::TimeFormatter.absolute(e)}" }

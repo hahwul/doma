@@ -37,28 +37,34 @@ module Doma
     SKIP = %w[node_modules vendor target dist build]
 
     # Git repos at or under `root`, sorted. A repo is a leaf — submodules
-    # and nested checkouts inside it aren't listed. Hidden directories,
-    # SKIP names, and symlinks (loops, duplicates) aren't descended.
+    # and nested checkouts inside it aren't listed. Any child that is a
+    # repo counts (hidden or not); only non-repo hidden dirs, SKIP names,
+    # and symlinks (loops, duplicates) aren't descended. An unreadable
+    # `root` raises; an unreadable directory below it is skipped.
     def repos(root : String) : Array(String)
+      return [root] if repo?(root)
       found = [] of String
-      walk(root, 0, found)
+      walk(root, 1, found)
       found.sort!
     end
 
+    private def repo?(dir : String) : Bool
+      File.exists?(File.join(dir, ".git"))
+    end
+
     private def walk(dir : String, depth : Int32, found : Array(String)) : Nil
-      if File.exists?(File.join(dir, ".git"))
-        found << dir
-        return
-      end
-      return if depth >= MAX_DEPTH
       Dir.each_child(dir) do |name|
-        next if name.starts_with?('.') || SKIP.includes?(name)
         child = File.join(dir, name)
-        next if File.symlink?(child) || !Dir.exists?(child)
-        walk(child, depth + 1, found)
+        # lstat: a symlink reports as a symlink, not as its target.
+        next unless File.info?(child, follow_symlinks: false).try(&.directory?)
+        if repo?(child)
+          found << child
+        elsif depth < MAX_DEPTH && !name.starts_with?('.') && !SKIP.includes?(name)
+          walk(child, depth + 1, found)
+        end
       end
-    rescue File::Error
-      # Unreadable directory: skip it, keep scanning its siblings.
+    rescue ex : File::Error
+      raise ex if depth == 1
     end
   end
 end

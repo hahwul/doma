@@ -1413,7 +1413,8 @@ describe "doma add flags" do
         FileUtils.mkdir_p(File.join(root, "app", ".git"))
         File.write(File.join(root, "app", "shard.yml"), "")
         FileUtils.mkdir_p(File.join(root, "plain"))
-        r = run(["add", "-r", root, "--project-tag", "-t", "work", "--json"], {"DOMA_HOME" => home})
+        # Overlapping roots: each repo is still added once.
+        r = run(["add", "-r", root, root, "--project-tag", "-t", "work", "--json"], {"DOMA_HOME" => home})
         r[:status].exit_code.should eq(0)
         rows = JSON.parse(r[:out]).as_a
         rows.map(&.["path"].as_s).should eq([Doma::Validator.canonicalize(File.join(root, "app"))])

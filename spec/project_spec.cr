@@ -20,7 +20,7 @@ describe Doma::Project do
     end
   end
 
-  it ".repos finds git repos as leaves, skipping hidden, vendor, symlinked, and too-deep dirs" do
+  it ".repos finds git repos as leaves, skipping hidden, vendor, symlinked, and too-deep non-repo dirs" do
     root = File.tempname("doma-scan")
     begin
       FileUtils.mkdir_p(File.join(root, "a", ".git"))
@@ -29,11 +29,24 @@ describe Doma::Project do
       FileUtils.mkdir_p(File.join(root, "node_modules", "x", ".git"))
       FileUtils.mkdir_p(File.join(root, ".hidden", "y", ".git"))
       FileUtils.mkdir_p(File.join(root, "d1", "d2", "d3", "d4", "d5", ".git")) # depth 5
+      FileUtils.mkdir_p(File.join(root, "d1", "d2", "d3", "ok", ".git"))       # depth 4
+      FileUtils.mkdir_p(File.join(root, ".dotfiles", ".git"))                  # hidden, but a repo
+      FileUtils.mkdir_p(File.join(root, "vendor", ".git"))                     # SKIP name, but a repo
       File.symlink(File.join(root, "a"), File.join(root, "link"))
-      Doma::Project.repos(root).should eq([File.join(root, "a"), File.join(root, "b", "c")])
+      Doma::Project.repos(root).should eq([
+        File.join(root, ".dotfiles"),
+        File.join(root, "a"),
+        File.join(root, "b", "c"),
+        File.join(root, "d1", "d2", "d3", "ok"),
+        File.join(root, "vendor"),
+      ])
     ensure
       FileUtils.rm_rf(root)
     end
+  end
+
+  it ".repos raises for an unreadable root instead of reporting no repos" do
+    expect_raises(File::Error) { Doma::Project.repos(File.tempname("doma-scan-missing")) }
   end
 
   it ".repos returns the root itself when it is a repo" do
