@@ -247,3 +247,24 @@ describe Doma::Database do
     end
   end
 end
+
+describe "Doma::Database#name_tags" do
+  it "is a tag on exactly one directory that equals its sanitized basename" do
+    with_temp_db do |db|
+      a = File.tempname("doma-nt")
+      b = File.tempname(".dotrepo")
+      FileUtils.mkdir_p(a)
+      FileUtils.mkdir_p(b)
+      begin
+        a_name = File.basename(Doma::Validator.canonicalize(a))
+        b_name = Doma::Validator.sanitize_tag(File.basename(Doma::Validator.canonicalize(b))) || raise "unsanitizable"
+        db.add(a, [a_name, "solo"])
+        db.add(b, [b_name, "solo"]) # `solo` is on two dirs; b's name tag is the sanitized `.dotrepo…`
+        db.name_tags.should eq(Set{a_name, b_name})
+      ensure
+        FileUtils.rm_rf(a)
+        FileUtils.rm_rf(b)
+      end
+    end
+  end
+end

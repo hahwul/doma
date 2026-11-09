@@ -41,14 +41,15 @@ module Doma::CLI
       parser.parse(args)
 
       Doma::Database.open do |db|
-        # When rolling up by prefix, ask the database for *all* tags
-        # before we collapse — otherwise a `top_n` truncation could
-        # silently drop a leaf that would have changed a parent's total.
+        # Fetch *all* tags and cut to `top_n` here: name tags (see
+        # `Database#name_tags`) must be dropped before the cut, and a
+        # prefix roll-up needs every leaf for correct parent totals.
         # Cheap enough; tag tables stay tiny in real use.
-        effective_top_n = group_prefix ? Int32::MAX : top_n
-        stats = db.stats(top_n: effective_top_n, recent_n: recent_n, used_n: used_n)
+        stats = db.stats(top_n: Int32::MAX, recent_n: recent_n, used_n: used_n)
+        names = db.name_tags
+        top = stats.top_tags.reject { |t| names.includes?(t.name) }
 
-        rendered_top = group_prefix ? roll_up_by_prefix(stats.top_tags, top_n) : stats.top_tags
+        rendered_top = group_prefix ? roll_up_by_prefix(top, top_n) : top.first(top_n)
 
         if json_mode
           payload = {

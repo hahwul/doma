@@ -53,6 +53,22 @@ class Doma::Database
 
   record TagSummary, name : String, count : Int64
 
+  # "Name tags": a tag on exactly one directory that is just that
+  # directory's (sanitized) basename — what `--auto-tag` produces. They
+  # alias one path rather than group a set, so overview listings hide them.
+  def name_tags : Set(String)
+    @db.query_all(
+      <<-SQL, as: {String, String}
+        SELECT t.name, MIN(d.basename)
+        FROM tags t
+        INNER JOIN directory_tags dt ON dt.tag_id = t.id AND #{NOT_EXPIRED_DT}
+        INNER JOIN directories d ON d.id = dt.directory_id
+        GROUP BY t.id
+        HAVING COUNT(*) = 1
+        SQL
+    ).select { |name, base| Validator.sanitize_tag(base) == name }.map(&.[0]).to_set
+  end
+
   def all_tags : Array(TagSummary)
     # Only active (non-expired) associations count toward a tag's total,
     # and a tag whose associations have all expired drops out entirely —
