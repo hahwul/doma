@@ -1,4 +1,4 @@
 +++
 title = "doma"
-description = "Directory tag manager — put your directories on the cutting board"
+description = "A workbench for sets of project directories — put them on the cutting board"
 +++

@@ -23,14 +23,16 @@
 
 ---
 
-doma is a Crystal CLI for tagging directories so you can recall, browse, or batch-execute across them. Tag your projects once (`crystal`, `work/proj-a`, `bookmark`), then jump to them, list them, or run a command across the whole set without re-typing paths.
+doma is a workbench for sets of project directories. Label your projects once (`crystal`, `work/proj-a`, `bookmark`), then operate on a whole label at a time: see which repos have uncommitted work, run a command in every one of them, and get per-directory results back.
 
 ```bash
 doma add ~/Projects/my-app -t crystal -t web
-doma list -t crystal --paths | xargs -I{} sh -c 'cd {} && shards build'
-doma cd crystal                # interactive picker, then cd  (needs `doma setup install`)
-doma mark spike                # bookmark cwd for 7 days
+doma status crystal            # branch, ahead/behind, dirty count for every crystal repo
+doma run crystal -- shards build   # build them all; failures re-listed at the end
+doma run crystal --parallel --json -- crystal spec | jq '.[] | select(.exit_code != 0)'
 ```
+
+It is not a frecency jumper: doma never adds a directory on its own, and a directory only joins a set when you label it. Jumping is still there (`doma cd crystal`, or bare `doma` for the fuzzy finder), and so is `doma mark` for short-lived bookmarks.
 
 <details>
 <summary><strong>Features</strong></summary>
@@ -146,8 +148,11 @@ doma list -t crystal --paths | while read -r d; do
   (cd "$d" && sed -i 's/crystal: 1.20/crystal: 1.21/' .github/workflows/*.yml)
 done
 
-# Status across work repos (paths-with-spaces safe)
-doma list -t 'work/*' -0 | xargs -0 -I{} sh -c 'cd "{}" && git status -s | head'
+# Repos under work/ with uncommitted changes
+doma status 'work/*' --dirty
+
+# Feed paths to tools that want them as arguments (paths-with-spaces safe)
+doma list -t 'work/*' -0 | xargs -0 rg -l TODO
 
 # Structured access via jq
 doma list --json | jq -r '.[] | "\(.short_id)\t\(.path)\t\(.tags|join(","))"'
