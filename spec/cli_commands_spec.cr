@@ -779,7 +779,7 @@ end
 # ---------- tags ----------
 
 describe "doma tags" do
-  it "hides name tags from the human views, keeps them in --names / --json / --all" do
+  it "hides name tags from tags / tags --tree, keeps them in --names / --json / --all" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     with_home do |home|
       seed_home(home)
@@ -799,9 +799,6 @@ describe "doma tags" do
       run(["tags", "--all"], {"DOMA_HOME" => home})[:out].should contain("#{name}\t1")
       run(["tags", "--names"], {"DOMA_HOME" => home})[:out].lines.should contain(name)
       JSON.parse(run(["tags", "--json"], {"DOMA_HOME" => home})[:out]).as_a.map(&.["name"].as_s).should contain(name)
-
-      stats = run(["stats", "--json"], {"DOMA_HOME" => home})
-      JSON.parse(stats[:out])["top_tags"].as_a.map(&.["name"].as_s).should_not contain(name)
     end
   end
 

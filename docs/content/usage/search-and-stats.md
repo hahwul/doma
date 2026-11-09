@@ -44,7 +44,7 @@ doma tags --names             # just the names (one per line, scriptable)
 doma tags --tree              # group by `/` prefix
 ```
 
-`tags`, `tags --tree`, and the **Top tags** chart in `stats` leave out *name tags*: a tag on exactly one directory that equals that directory's basename, which is what `--auto-tag` produces. They alias one path rather than group a set, so they'd otherwise bury the tags that do. A footer counts what was hidden; `--all` shows them. `--names`, `-0`, and `--json` always list every tag, so completion and scripts are unaffected.
+`tags` and `tags --tree` leave out *name tags*: a tag on exactly one directory that equals that directory's basename, which is what `--auto-tag` produces. They alias one path rather than group a set, so they'd otherwise bury the tags that do. A footer counts what was hidden; `--all` shows them. The heuristic can't tell a hand-typed `-t api` on `~/work/api` from an auto-tag, so that one is hidden too. `--names`, `-0`, `--json`, and `stats` always count every tag, so completion and scripts are unaffected.
 
 `--tree` groups hierarchically:
 

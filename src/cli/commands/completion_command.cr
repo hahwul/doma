@@ -84,7 +84,7 @@ module Doma::CLI
       CmdSpec.new("move", "Move a registered path (tags carry over)",
         %w[--allow-missing -h --help], [] of String),
       CmdSpec.new("tags", "List all tags with counts",
-        %w[--names --tree --json -0 --print0 -h --help], [] of String),
+        %w[--names --tree --all --json -0 --print0 -h --help], [] of String),
       CmdSpec.new("rename", "Rename or merge a tag",
         [] of String, [] of String),
       CmdSpec.new("list", "List/search directories",
