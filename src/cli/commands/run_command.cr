@@ -108,13 +108,13 @@ module Doma::CLI
       raise Doma::ValidationError.new("tag is required") if tags.empty?
 
       targets, all_tags = Doma::Database.open do |db|
-        {SweepArgs.select(db, tags, excludes, Doma::Database::SortBy::Recent).uniq!(&.path), db.tag_names}
+        {SweepArgs.select(db, tags, excludes, Doma::Database::SortBy::Recent, jobs).uniq!(&.path), db.tag_names}
       end
 
       if targets.empty?
         raise Doma::NotFoundError.new(
           "no directories tagged #{SweepArgs.phrase(tags, excludes)}",
-          hint: SweepArgs.typo_hint(tags, all_tags)
+          hint: SweepArgs.miss_hint(tags, all_tags)
         )
       end
 
@@ -197,6 +197,9 @@ module Doma::CLI
         end
       end
 
+      # What `--fail-fast` never reached hasn't passed either, so a retry
+      # of @failed covers it too. (Sequential runs a prefix of `targets`.)
+      Doma::LastRun.save(failed.map(&.[0]) + targets[ran..].map(&.path))
       # --no-header keeps it only when something failed; -q drops it.
       if targets.size > 1 && !Doma::Logger.quiet? && (!no_header || !failed.empty?)
         summarize(targets.size, ran, failed, color)
@@ -271,6 +274,8 @@ module Doma::CLI
         {path: targets[i].path, exit_code: result.exit_code, stdout: result.stdout, stderr: result.stderr, dry_run: false}
       end
       puts rows.to_json
+      Doma::LastRun.save(rows.reject { |row| row[:exit_code] == 0 }.map { |row| row[:path] } +
+                         targets[results.size..].map(&.path))
       results.count { |r| r.exit_code != 0 }
     end
 

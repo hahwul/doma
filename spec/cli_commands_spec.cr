@@ -2503,3 +2503,96 @@ describe "doma status" do
     end
   end
 end
+
+# ---------- dynamic sets ----------
+
+describe "doma @sets" do
+  it "[@failed] remembers the last run's failures, and a clean rerun empties it" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      run(["run", "shared", "--", "sh", "-c", "[ \"$DOMA_PATH\" != \"#{SEED_HOME_PATH}\" ]"], {"DOMA_HOME" => home})
+
+      r = run(["list", "-t", "@failed", "--paths"], {"DOMA_HOME" => home})
+      r[:out].lines.should eq([SEED_HOME_PATH])
+      ex = run(["list", "-t", "shared", "-x", "@failed", "--paths"], {"DOMA_HOME" => home})
+      ex[:out].lines.should_not contain(SEED_HOME_PATH)
+      ex[:out].lines.size.should eq(1)
+
+      retry = run(["run", "@failed", "--json", "--", "true"], {"DOMA_HOME" => home})
+      JSON.parse(retry[:out]).as_a.map(&.["path"].as_s).should eq([SEED_HOME_PATH])
+
+      empty = run(["run", "@failed", "--", "true"], {"DOMA_HOME" => home})
+      empty[:status].exit_code.should eq(3)
+      empty[:err].should contain("@failed is empty")
+    end
+  end
+
+  it "[--fail-fast] keeps the never-reached directories in @failed" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      run(["run", "shared", "--fail-fast", "--", "false"], {"DOMA_HOME" => home})
+      r = run(["list", "-t", "@failed", "--paths"], {"DOMA_HOME" => home})
+      r[:out].lines.size.should eq(2)
+    end
+  end
+
+  it "[status @dirty] behaves like --dirty" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    pending! "git not on PATH" unless STATUS_GIT_OK
+    with_home do |home|
+      clean = make_git_repo("doma-sdirty-clean")
+      dirty = make_git_repo("doma-sdirty-dirty", dirty: true)
+      begin
+        run(["add", clean, "-t", "proj"], {"DOMA_HOME" => home})
+        run(["add", dirty, "-t", "proj"], {"DOMA_HOME" => home})
+        r = run(["status", "proj", "-t", "@dirty", "--json"], {"DOMA_HOME" => home})
+        JSON.parse(r[:out]).as_a.map(&.["path"].as_s).should eq([Doma::Validator.canonicalize(dirty)])
+      ensure
+        FileUtils.rm_rf(clean)
+        FileUtils.rm_rf(dirty)
+      end
+    end
+  end
+
+  it "[--dry-run] leaves @failed alone" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      run(["run", "fs", "--", "false"], {"DOMA_HOME" => home})
+      run(["run", "shared", "--dry-run", "--", "true"], {"DOMA_HOME" => home})
+      r = run(["list", "-t", "@failed", "--paths"], {"DOMA_HOME" => home})
+      r[:out].lines.size.should eq(1)
+    end
+  end
+
+  it "[@dirty] keeps only git repos with uncommitted changes" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    pending! "git not on PATH" unless STATUS_GIT_OK
+    with_home do |home|
+      clean = make_git_repo("doma-set-clean")
+      dirty = make_git_repo("doma-set-dirty", dirty: true)
+      begin
+        run(["add", clean, "-t", "proj"], {"DOMA_HOME" => home})
+        run(["add", dirty, "-t", "proj"], {"DOMA_HOME" => home})
+        r = run(["run", "proj", "-t", "@dirty", "--json", "--", "true"], {"DOMA_HOME" => home})
+        JSON.parse(r[:out]).as_a.map(&.["path"].as_s).should eq([Doma::Validator.canonicalize(dirty)])
+      ensure
+        FileUtils.rm_rf(clean)
+        FileUtils.rm_rf(dirty)
+      end
+    end
+  end
+
+  it "[unknown set] fails with the known sets as a hint (exit 2)" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      r = run(["status", "@nope"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(2)
+      r[:err].should contain("unknown set '@nope'")
+      r[:err].should contain("@failed")
+    end
+  end
+end

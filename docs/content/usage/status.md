@@ -41,6 +41,13 @@ doma status work --dirty
 
 `--dirty` hides everything clean, leaving only repos with uncommitted work — the fast answer to "what did I leave unfinished across all my work repos?"
 
+To act on that set rather than just look at it, select it with `@dirty`:
+
+```bash
+doma run work -t @dirty -- git stash
+doma list -t @dirty --paths
+```
+
 ## Speed
 
 Each directory is probed with one `git status` call, run in parallel (CPU-count workers by default). Tune with `--jobs N` on slow disks or very large sets:
