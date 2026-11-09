@@ -1,5 +1,26 @@
 # Changelog
 
+## v0.5.0
+
+doma leans into being a workbench for *sets* of directories: one selector across `list` / `run` / `status`, dynamic sets for the fix-and-retry loop, and a faster way onto the board.
+
+### Added
+- `run` exports `DOMA_PATH` / `DOMA_NAME` / `DOMA_ID` / `DOMA_TAGS` to every child, so per-directory commands need no `{}` templating or `sh -c` quoting (#53)
+- `run` ends a multi-directory sweep with an `N ok · N failed · N skipped` tally on stderr that re-lists each failure; `--no-header` keeps it only when something failed, `-q` and `--json` drop it (#53)
+- One tag selector for `list`, `run`, and `status`: repeat `-t` to AND, `-x/--exclude TAG` (repeatable, comma-split, glob ok) to subtract — `doma run crystal -x archived -- shards update` (#55)
+- Dynamic sets usable anywhere a tag is (positional, `-t`, `-x`): `@failed` — the directories the last `doma run` didn't pass, including any `--fail-fast` never reached, so `doma run @failed -- make test` retries just those — and `@dirty` — git repos with uncommitted changes (#56)
+- Shell completion for `@failed` / `@dirty` and `-x/--exclude` in bash, zsh, and fish (#57)
+- `add --project-tag` / `--no-project-tag` (config `auto_tag.project`) tags by project type from marker files: `shard.yml` → `crystal`, `Cargo.toml` → `rust`, `go.mod` → `go`, `package.json` → `node`, `pyproject.toml` → `python`, and more (#58)
+- `add -r PATH` registers every git repo at or under PATH — `doma add -r ~/Projects --project-tag` onboards a whole tree. Repos are leaves; non-repo hidden and dependency dirs are skipped; 4 levels deep; every root is scanned before anything is written (#58)
+- `tags --all`. Plain `tags` / `tags --tree` now hide *name tags* — a tag on exactly one directory that equals its basename, what `--auto-tag` produces — and footer how many were hidden. `--names`, `-0`, `--json`, and `stats` still list every tag (#59)
+
+### Changed
+- `run a -t b` / `status a -t b` AND the two tags instead of erroring, and `-t a,b` on `run` / `status` splits on commas like `list -t` (#55)
+- README and docs lead with `status` / `run` (#54)
+
+### Fixed
+- bash completion without bash-completion installed (stock macOS bash) rebuilds words from the command line, so `@failed` and `lang:crystal` aren't split at `@` / `:` and complete correctly; fish no longer offers tags after `--` or as a second positional (#57)
+
 ## v0.4.1
 
 ### Fixed
