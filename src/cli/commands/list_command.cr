@@ -10,6 +10,7 @@ require "../../utils/logger"
 require "../../utils/suggester"
 require "../../utils/tag_glob"
 require "../../utils/tag_renderer"
+require "./sweep_args"
 
 module Doma::CLI
   # Lists registered directories. Three filter dimensions, all optional
@@ -48,10 +49,11 @@ module Doma::CLI
       # (what its non-TTY / `--first` fallback promises).
       sort : Doma::Database::SortBy? = nil
       group_by_tag = false
+      excludes = [] of String
       positional = [] of String
 
       parser = OptionParser.new do |p|
-        p.banner = "Usage: doma list [<query>] [-t TAG ...] [--by path|recent|tag] [--check] [--include-expired] [--json] [--paths] [-0] [--pick]\n" \
+        p.banner = "Usage: doma list [<query>] [-t TAG ...] [-x TAG ...] [--by path|recent|tag] [--check] [--include-expired] [--json] [--paths] [-0] [--pick]\n" \
                    "  (aliases for 'recent': 'used', 'recency')"
         # Repeatable / comma-separated, mirroring `add` and `rm`. Multiple
         # tags AND together — i.e. only directories carrying every listed
@@ -60,6 +62,9 @@ module Doma::CLI
           # Reject `-t ''`, `-t '   '`, `-t ',,'` — anything that would
           # collapse to an empty filter and silently match every path.
           Doma::Validator.split_tag_flag!(t).each { |x| tags << x }
+        end
+        p.on("-x TAG", "--exclude=TAG", "Drop directories carrying TAG (repeatable, glob ok)") do |t|
+          Doma::Validator.split_tag_flag!(t).each { |x| excludes << x }
         end
         p.on("--by SORT", "Sort by 'path' (default), 'recent' ('used'/'recency'), or 'tag' (group)") do |val|
           case val
@@ -141,10 +146,10 @@ module Doma::CLI
       Doma::Database.open do |db|
         # `.as?` narrows the closure-captured var (a plain `||` doesn't).
         by = sort.as?(Doma::Database::SortBy) || (pick_mode ? Doma::Database::SortBy::Recent : Doma::Database::SortBy::Path)
-        entries = collect(db, tags, query, by, include_expired)
+        entries = collect(db, tags, excludes, query, by, include_expired)
 
         if pick_mode
-          run_pick(db, entries, pick_query, pick_override, tags, query)
+          run_pick(db, entries, pick_query, pick_override, tags, excludes, query)
           return
         end
 
@@ -160,7 +165,7 @@ module Doma::CLI
         end
 
         if entries.empty?
-          report_empty(db, tags, query)
+          report_empty(db, tags, excludes, query)
           return
         end
 
@@ -192,12 +197,12 @@ module Doma::CLI
     # Nothing matched: explain why (the empty_message), then layer on the
     # most useful next step — a typo/parent hint for a bogus tag, or the
     # first-run "add ." cue when the database is simply empty.
-    private def report_empty(db : Doma::Database, tags : Array(String), query : String?)
-      STDERR.puts(empty_message(tags, query))
+    private def report_empty(db : Doma::Database, tags : Array(String), excludes : Array(String), query : String?)
+      STDERR.puts(empty_message(tags, query, excludes))
       # Only suggest for literal (non-glob) tag names that aren't in
       # the catalog at all. An empty AND intersection between two
       # known tags is a legitimate result, not a typo.
-      if hint = typo_hint(db, tags)
+      if hint = SweepArgs.typo_hint(tags, db.tag_names)
         STDERR.puts "  #{hint}"
       end
       # First-run cue: an unfiltered, empty DB is almost always a
@@ -289,10 +294,10 @@ module Doma::CLI
     #   - N entries + no TTY → most-recent wins, with a stderr warning so
     #                          callers piping `--pick` don't silently get
     #                          a heuristic pick they didn't expect
-    private def run_pick(db : Doma::Database, entries : Array(Doma::Entry), pick_query : String?, pick_override : Doma::Settings::SelectorMode?, tags : Array(String), query : String?)
+    private def run_pick(db : Doma::Database, entries : Array(Doma::Entry), pick_query : String?, pick_override : Doma::Settings::SelectorMode?, tags : Array(String), excludes : Array(String), query : String?)
       if entries.empty?
         raise Doma::NotFoundError.new(
-          empty_message(tags, query),
+          empty_message(tags, query, excludes),
           hint: pick_miss_hint(db, tags, query)
         )
       end
@@ -305,7 +310,7 @@ module Doma::CLI
 
       if items.empty?
         raise Doma::NotFoundError.new("no directories match '#{pick_query}'") if pick_query
-        raise Doma::NotFoundError.new(empty_message(tags, query))
+        raise Doma::NotFoundError.new(empty_message(tags, query, excludes))
       end
 
       if items.size == 1
@@ -402,8 +407,9 @@ module Doma::CLI
 
     # Compose the two filters. Doing the intersection client-side keeps
     # the SQL straightforward — both `directories(tag)` and `search(query)`
-    # already exist and are tested in isolation. Multi-tag AND is layered
-    # on top by intersecting per-tag id sets.
+    # already exist and are tested in isolation. Multi-tag AND and `-x`
+    # are checked against each row's tag list (`TagGlob.satisfy?`), the
+    # same gate `run`, `status`, and the TUI use.
     #
     # SQLite's GLOB is a permissive `*`-anywhere matcher, including across
     # `/`. We re-tighten that to shell-glob semantics in Crystal — `*`
@@ -411,23 +417,15 @@ module Doma::CLI
     # The SQL still does the heavy lifting (tag join, sort, expiry
     # filter); the post-filter just trims false positives the strict
     # rules wouldn't accept.
-    private def collect(db : Doma::Database, tags : Array(String), query : String?, sort : Doma::Database::SortBy, include_expired : Bool) : Array(Doma::Entry)
-      base = if tags.empty?
-               query ? db.search(query, sort: sort, include_expired: include_expired) : db.directories(sort: sort, include_expired: include_expired)
+    private def collect(db : Doma::Database, tags : Array(String), excludes : Array(String), query : String?, sort : Doma::Database::SortBy, include_expired : Bool) : Array(Doma::Entry)
+      # The first tag narrows the SQL read; `satisfy?` applies the strict
+      # glob rules to every include and exclude against each row's tags.
+      base = if tags.empty? && query
+               db.search(query, sort: sort, include_expired: include_expired)
              else
-               # Anchor on the first tag (gets the right `sort`/`include_expired`
-               # treatment), then narrow by intersecting against each
-               # additional tag's id set. Empty additional set short-circuits
-               # to no matches without further DB work.
-               first, *rest = tags
-               anchor = strict_filter(db.directories(first, sort: sort, include_expired: include_expired), first)
-               rest.each do |t|
-                 break if anchor.empty?
-                 ids = rest_tag_ids(db, t, include_expired)
-                 anchor = anchor.select { |e| ids.includes?(e.id) }
-               end
-               anchor
+               db.directories(tags.first?, sort: sort, include_expired: include_expired)
              end
+      base = base.select { |e| Doma::TagGlob.satisfy?(e.tags, tags, excludes) } unless tags.empty? && excludes.empty?
 
       return base if query.nil? || tags.empty?
 
@@ -435,46 +433,14 @@ module Doma::CLI
       db.search(query, sort: sort, include_expired: include_expired).select { |e| tagged_ids.includes?(e.id) }
     end
 
-    # Trim entries the SQL GLOB matched but our stricter rules would
-    # reject (single `*` shouldn't cross `/`, etc.). No-op for plain tag
-    # names, where `TagGlob.filter` skips the per-entry loop entirely.
-    private def strict_filter(entries : Array(Doma::Entry), pattern : String) : Array(Doma::Entry)
-      Doma::TagGlob.filter(entries, pattern, &.tags)
-    end
-
-    # Id set for a tag used purely as an intersection filter (the second,
-    # third, … `-t` in a multi-tag AND). For plain tag names we can ask
-    # the database to hand us just the ids — no tag GROUP_CONCAT, no
-    # entry hydration. For glob patterns the SQL GLOB is permissive
-    # (crosses `/`), so we still pay the price of a full `directories()`
-    # call to get each row's tag list back, then apply our stricter
-    # match in Crystal. Worth re-investigating only if globbing in rest
-    # position becomes a hot path.
-    private def rest_tag_ids(db : Doma::Database, pattern : String, include_expired : Bool) : Set(Int64)
-      if Doma::TagGlob.pattern?(pattern)
-        strict_filter(db.directories(pattern, include_expired: include_expired), pattern).map(&.id).to_set
+    private def empty_message(tags : Array(String), query : String?, excludes : Array(String)) : String
+      if !tags.empty?
+        query ? "no matches for '#{query}' tagged #{SweepArgs.phrase(tags, excludes)}" : "no directories tagged #{SweepArgs.phrase(tags, excludes)}"
+      elsif !excludes.empty?
+        query ? "no matches for '#{query}', excluding #{SweepArgs.excluded(excludes)}" : "nothing left after excluding #{SweepArgs.excluded(excludes)}"
       else
-        db.directory_ids_for_tag(pattern, include_expired: include_expired).to_set
+        query ? "no matches for '#{query}'" : "no directories registered"
       end
-    end
-
-    private def empty_message(tags : Array(String), query : String?) : String
-      tag_phrase = tag_phrase(tags)
-      if tag_phrase && query
-        "no matches for '#{query}' tagged #{tag_phrase}"
-      elsif tag_phrase
-        "no directories tagged #{tag_phrase}"
-      elsif query
-        "no matches for '#{query}'"
-      else
-        "no directories registered"
-      end
-    end
-
-    private def tag_phrase(tags : Array(String)) : String?
-      return if tags.empty?
-      return "'#{tags.first}'" if tags.size == 1
-      tags.map { |t| "'#{t}'" }.join(" AND ")
     end
 
     # Bucket entries by tag name. An entry with N tags lands in N
@@ -535,25 +501,6 @@ module Doma::CLI
       end
       row["exists"] = Dir.exists?(e.path) if check_existence
       row
-    end
-
-    # Pick the first tag the user typed that doesn't actually exist (and
-    # isn't a glob) and propose the closest catalog name. Stops at one
-    # hint to keep the noise floor low when several tags are bogus.
-    # `tag_hint_for` covers two miss shapes: typo (Levenshtein) and
-    # hierarchical parent (`-t work` when only `work/...` tags exist).
-    private def typo_hint(db : Doma::Database, tags : Array(String)) : String?
-      return if tags.empty?
-      catalog = db.tag_names
-      known = catalog.to_set
-      tags.each do |t|
-        next if Doma::TagGlob.pattern?(t)
-        next if known.includes?(t)
-        if hint = Doma::Suggester.tag_hint_for(t, catalog)
-          return hint
-        end
-      end
-      nil
     end
   end
 end

@@ -117,11 +117,15 @@ dcode crystal
 "Every Crystal repo that I also marked as work":
 
 ```bash
-doma list -t crystal --json \
-  | jq -r '.[] | select(.tags | index("work")) | .path'
+doma list -t crystal -t work --paths
 ```
 
-`-t TAG` is exact-match against one tag; for set intersection, fall back to `--json | jq`.
+Repeated `-t` ANDs; `-x` subtracts. The same selector works on `run` and `status`:
+
+```bash
+doma run crystal -x archived -- shards update
+doma status 'work/*' -x 'work/legacy*' --dirty
+```
 
 ## Run only on dirs that still build
 

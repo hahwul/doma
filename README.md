@@ -40,6 +40,7 @@ It is not a frecency jumper: doma never adds a directory on its own, and a direc
 ### Tagging
 - Multiple tags per directory; tags are reusable across paths
 - Auto-tag from basename and Git remote (`--auto-tag`, `--git-tag`)
+- One selector for every set command: repeat `-t` to AND, `-x` to exclude (`run crystal -x archived -- …`, `status -t work -t api`, `list -x 'tmp*'`)
 - Glob filter on tags (`list -t 'work/*'`, `run 'work/*' -- cmd`) — shell-style: `*` matches within one segment, `**` crosses `/`, `?` is a single non-`/` character
 - Hierarchical tag display (`tags --tree`)
 - TTL on tags: `--ttl 30m | 1h | 7d | 2w`, `--tmp` for the 7-day default, `mark` for the cwd + 7-day shortcut

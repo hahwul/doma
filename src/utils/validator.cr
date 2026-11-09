@@ -42,10 +42,10 @@ module Doma
     # no-op tag write that prints a misleading "added (no tags)". Shared by
     # the option blocks of `add`/`rm`/`mark`/`list`; `run`/`status`
     # deliberately take a single, non-split tag and don't use it.
-    def split_tag_flag!(raw : String) : Array(String)
+    def split_tag_flag!(raw : String, flag : String = "-t") : Array(String)
       parts = raw.split(',').map(&.strip).reject(&.empty?)
       if parts.empty?
-        raise ValidationError.new("tag is empty (-t got an empty value)")
+        raise ValidationError.new("tag is empty (#{flag} got an empty value)")
       end
       parts
     end

@@ -38,6 +38,7 @@ tag, and silent emptiness is worse than asking.
 | Sorted by recency | `doma list --by recent` | Most-recently-used first; aliases: `used`, `recency`. Useful when "the project I was just working on" is in scope |
 | Mark missing paths inline | `doma list --check` | Tags entries whose path is gone with `[gone]`. Without it, the footer just counts them |
 | Just the tag names | `doma tags --names` | Cheap probe before committing to a tag. `doma tags --tree` shows the `work/proj/...` hierarchy; `doma tags -0` is NUL-separated for `xargs -0` |
+| Narrow a set | `doma list -t A -t B --paths` / `-x TAG` | Repeated `-t` ANDs, `-x TAG` (repeatable, glob ok) drops directories carrying it. Same flags on `run` and `status` |
 | Git state across a tagged set | `doma status -t TAG --json` | Per-repo `branch`, `ahead`/`behind`, `dirty`, `clean`, `untracked`, etc. Use for "which of my X repos have uncommitted changes?" — filter `.[] \| select(.dirty > 0)`. Add `--dirty` to pre-filter. Shells out to `git` |
 
 ## When the user wants to register or bookmark paths
@@ -119,6 +120,7 @@ doma run crystal --parallel -- ...            # concurrent; without --json the o
 doma run crystal --parallel --jobs 4 -- ...   # cap concurrency (default: CPU count)
 doma run crystal --fail-fast -- ...           # halt on first non-zero exit (sequential only)
 doma run crystal --dry-run -- rm -rf build    # print the target set without running anything
+doma run crystal -t work -x archived -- ...   # AND with -t, subtract with -x (also on list/status)
 doma run crystal --no-header -- pwd           # suppress ▶/✓ chrome (failures still surface)
 doma run crystal -- sh -c 'echo "$DOMA_NAME"' # child env: DOMA_PATH, DOMA_NAME, DOMA_ID, DOMA_TAGS (comma-joined)
 ```

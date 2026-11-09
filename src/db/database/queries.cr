@@ -110,27 +110,6 @@ class Doma::Database
     rows.map { |row| build_entry(row) }
   end
 
-  # id-only narrow filter for multi-tag AND. The list command anchors
-  # on the first tag (which needs full Entry hydration to render)
-  # and then intersects with the id sets of each remaining tag — and
-  # only the ids matter for an intersection. Skipping the GROUP_CONCAT
-  # tag subquery + Entry materialization here is cheap relative to the
-  # work `directories()` would otherwise do for each rest tag.
-  def directory_ids_for_tag(tag : String, *, include_expired : Bool = false) : Array(Int64)
-    op = tag_match_clause(tag)
-    expired_pred = include_expired ? "1=1" : NOT_EXPIRED_DT
-    @db.query_all(
-      <<-SQL, tag, as: Int64
-        SELECT DISTINCT d.id
-        FROM directories d
-        INNER JOIN directory_tags dt ON dt.directory_id = d.id
-        INNER JOIN tags t ON t.id = dt.tag_id
-        WHERE t.name #{op} ?
-          AND #{expired_pred}
-        SQL
-    )
-  end
-
   # Number of `directory_tags` rows whose TTL has lapsed. The list
   # command uses this to surface a "N tag(s) hidden by TTL" banner so
   # users notice when --include-expired would change the picture.
