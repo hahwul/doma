@@ -1,6 +1,7 @@
 require "option_parser"
 require "../../db/database"
 require "../../services/git_detector"
+require "../../services/project"
 require "../../services/trash"
 require "../../utils/config"
 require "../../utils/duration"
@@ -18,13 +19,15 @@ module Doma::CLI
       raw_tags = [] of String
       auto_basename : Bool? = nil
       auto_git : Bool? = nil
+      auto_project : Bool? = nil
+      recursive = false
       dry_run = false
       json_mode = false
       expires_at : Int64? = nil
       positional = [] of String
 
       parser = OptionParser.new do |p|
-        p.banner = "Usage: doma add [<path> ...] [-t TAG ...] [--ttl DUR | --tmp] [--auto-tag] [--git-tag] [--dry-run] [--json]"
+        p.banner = "Usage: doma add [<path> ...] [-r] [-t TAG ...] [--ttl DUR | --tmp] [--auto-tag] [--git-tag] [--project-tag] [--dry-run] [--json]"
         p.on("-t TAG", "--tag=TAG", "Add a tag (repeatable, comma-separated allowed)") do |t|
           # Reject `-t ''`/`-t ','` up front rather than letting the empty
           # string slide through `Validator.tags!` and print a misleading
@@ -45,6 +48,9 @@ module Doma::CLI
         p.on("--no-auto-tag", "Disable basename auto-tag (override config)") { auto_basename = false }
         p.on("--git-tag", "Detect a git remote and add host/repo tags") { auto_git = true }
         p.on("--no-git-tag", "Disable git auto-tag (override config)") { auto_git = false }
+        p.on("--project-tag", "Tag by project type from marker files (shard.yml → crystal, ...)") { auto_project = true }
+        p.on("--no-project-tag", "Disable project-type auto-tag (override config)") { auto_project = false }
+        p.on("-r", "--recursive", "Register every git repo under each <path> instead of <path> itself") { recursive = true }
         p.on("-n", "--dry-run", "Show what would happen without writing") { dry_run = true }
         p.on("--json", "Output as JSON (one object per path)") { json_mode = true }
         p.on("-h", "--help", "Show help") do
@@ -70,6 +76,20 @@ module Doma::CLI
       # otherwise.
       use_basename : Bool = auto_basename.nil? ? cfg.auto_tag.basename : !!auto_basename
       use_git : Bool = auto_git.nil? ? cfg.auto_tag.git : !!auto_git
+      use_project : Bool = auto_project.nil? ? cfg.auto_tag.project : !!auto_project
+
+      # `-r` swaps each root for the repos under it, then the batch runs as
+      # if those paths had been typed. A root with no repos is a mistake
+      # worth stopping on (wrong directory), not a silent no-op.
+      if recursive
+        positional = positional.flat_map do |root|
+          abs = Doma::Validator.path!(root)
+          found = Doma::Project.repos(abs)
+          raise Doma::NotFoundError.new("no git repos under #{abs}") if found.empty?
+          Doma::Logger.info "found #{found.size} git #{found.size == 1 ? "repo" : "repos"} under #{abs}" unless json_mode
+          found
+        end
+      end
 
       ttl_label = expires_at.try { |e| "expires #{Doma::TimeFormatter.absolute(e)}" }
 
@@ -93,7 +113,7 @@ module Doma::CLI
             short_id_redirect_hint(preview_db, path)
             abs = Doma::Validator.path!(path)
             applied = Doma::Validator.tags!(raw_tags).dup
-            applied.concat(derive_tags(abs, use_basename, use_git, git_explicit))
+            applied.concat(derive_tags(abs, use_basename, use_git, git_explicit, use_project))
             applied.uniq!
             summary = applied.empty? ? "(no tags)" : "tags: #{applied.join(", ")}"
             summary += " (#{ttl_label})" if ttl_label
@@ -132,7 +152,7 @@ module Doma::CLI
           # (basename, git remote) flow through `sanitize_tag` so a repo
           # named `.dotfiles` doesn't blow up the whole `add`.
           applied = Doma::Validator.tags!(raw_tags).dup
-          applied.concat(derive_tags(abs, use_basename, use_git, git_explicit))
+          applied.concat(derive_tags(abs, use_basename, use_git, git_explicit, use_project))
           applied.uniq!
 
           # Snapshot the pre-state so we can tell apart a real write from
@@ -273,9 +293,10 @@ module Doma::CLI
       "#{path}: #{message}"
     end
 
-    private def derive_tags(abs : String, use_basename : Bool, use_git : Bool, git_explicit : Bool) : Array(String)
+    private def derive_tags(abs : String, use_basename : Bool, use_git : Bool, git_explicit : Bool, use_project : Bool) : Array(String)
       sources = [] of String
       sources << File.basename(abs) if use_basename
+      sources.concat(Doma::Project.types(abs)) if use_project
       if use_git
         info = Doma::GitDetector.detect(abs)
         if info.git

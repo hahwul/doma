@@ -1405,6 +1405,58 @@ end
 # ---------- add flag matrix ----------
 
 describe "doma add flags" do
+  it "[-r --project-tag] registers every repo under a root, tagged by type" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      root = File.tempname("doma-add-r")
+      begin
+        FileUtils.mkdir_p(File.join(root, "app", ".git"))
+        File.write(File.join(root, "app", "shard.yml"), "")
+        FileUtils.mkdir_p(File.join(root, "plain"))
+        r = run(["add", "-r", root, "--project-tag", "-t", "work", "--json"], {"DOMA_HOME" => home})
+        r[:status].exit_code.should eq(0)
+        rows = JSON.parse(r[:out]).as_a
+        rows.map(&.["path"].as_s).should eq([Doma::Validator.canonicalize(File.join(root, "app"))])
+        rows[0]["tags"].as_a.map(&.as_s).sort!.should eq(%w[crystal work])
+      ensure
+        FileUtils.rm_rf(root)
+      end
+    end
+  end
+
+  it "[-r] on a tree with no repos is not-found (exit 3)" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      root = File.tempname("doma-add-r-empty")
+      FileUtils.mkdir_p(root)
+      begin
+        r = run(["add", "-r", root], {"DOMA_HOME" => home})
+        r[:status].exit_code.should eq(3)
+        r[:err].should contain("no git repos under")
+      ensure
+        FileUtils.rm_rf(root)
+      end
+    end
+  end
+
+  it "[auto_tag.project] config turns project tags on; --no-project-tag overrides" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      dir = File.tempname("doma-add-proj")
+      FileUtils.mkdir_p(dir)
+      File.write(File.join(dir, "Cargo.toml"), "")
+      begin
+        run(["config", "set", "auto_tag.project", "true"], {"DOMA_HOME" => home})
+        on = run(["add", dir, "-n", "--json"], {"DOMA_HOME" => home})
+        JSON.parse(on[:out]).as_a[0]["tags"].as_a.map(&.as_s).should eq(["rust"])
+        off = run(["add", dir, "-n", "--json", "--no-project-tag"], {"DOMA_HOME" => home})
+        JSON.parse(off[:out]).as_a[0]["tags"].as_a.should be_empty
+      ensure
+        FileUtils.rm_rf(dir)
+      end
+    end
+  end
+
   it "[--dry-run] resolves tags but writes nothing" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     with_home do |home|

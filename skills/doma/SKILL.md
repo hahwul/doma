@@ -69,6 +69,8 @@ durable categorization that survives multiple sessions.
 doma add /path        -t crystal -t cli           # multiple tags, one path
 doma add /a /b /c     -t shared                   # one tag, many paths
 doma add . -t crystal --auto-tag --git-tag        # +basename, +github/repo derived
+doma add . --project-tag                          # +crystal/rust/go/node/... from marker files
+doma add -r ~/Projects --project-tag -n           # preview: every git repo under the tree
 doma mark -p /elsewhere spike                     # mark a path other than cwd
 doma mark spike skim review                       # multiple temp tags on cwd at once
 ```

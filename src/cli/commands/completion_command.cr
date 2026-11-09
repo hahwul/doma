@@ -74,7 +74,7 @@ module Doma::CLI
 
     private COMMAND_SPEC = [
       CmdSpec.new("add", "Register a path with tags",
-        %w[-t --tag --ttl --tmp --auto-tag --no-auto-tag --git-tag --no-git-tag -n --dry-run --json -h --help], [] of String),
+        %w[-t --tag --ttl --tmp --auto-tag --no-auto-tag --git-tag --no-git-tag --project-tag --no-project-tag -r --recursive -n --dry-run --json -h --help], [] of String),
       CmdSpec.new("mark", "Tag cwd with temporary (7d) tags",
         %w[-t --tag -p --path --ttl -h --help], [] of String),
       CmdSpec.new("rm", "Remove tag(s) or the path itself",

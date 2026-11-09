@@ -21,10 +21,12 @@ db_path: ~/.config/doma/doma.db
 selector: auto
 
 # Default behavior for tag derivation flags. CLI flags
-# (--auto-tag / --no-auto-tag, --git-tag / --no-git-tag) override.
+# (--auto-tag / --no-auto-tag, --git-tag / --no-git-tag,
+#  --project-tag / --no-project-tag) override.
 auto_tag:
   basename: false
   git: false
+  project: false   # shard.yml → crystal, Cargo.toml → rust, ...
 ```
 
 ## Where doma writes
