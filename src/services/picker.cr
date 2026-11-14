@@ -61,7 +61,11 @@ module Doma
     # Terminal columns `text` occupies (CJK/Hangul take two, combining
     # marks none) — `String#size` counts codepoints, which wraps rows.
     def display_width(text : String) : Int32
-      text.each_char.sum { |c| Termisu::UnicodeWidth.codepoint_width(c.ord).to_i }
+      text.each_char.sum { |c| char_width(c) }
+    end
+
+    def char_width(c : Char) : Int32
+      Termisu::UnicodeWidth.codepoint_width(c.ord).to_i
     end
 
     # The longest suffix of `text` that fits in `room` columns, so the end
@@ -71,7 +75,7 @@ module Doma
       col = 0
       i = chars.size
       while i > 0
-        w = Termisu::UnicodeWidth.codepoint_width(chars[i - 1].ord).to_i
+        w = char_width(chars[i - 1])
         break if col + w > room
         col += w
         i -= 1
@@ -87,7 +91,7 @@ module Doma
       String.build do |io|
         col = 0
         text.each_char do |c|
-          w = Termisu::UnicodeWidth.codepoint_width(c.ord).to_i
+          w = char_width(c)
           break if col + w > room
           io << c
           col += w
@@ -105,11 +109,7 @@ module Doma
     # terminals render it as a column-aligned gap, not an injection.
     def sanitize(text : String) : String
       return text unless text.each_char.any? { |c| control_byte?(c) }
-      String.build(text.size) do |io|
-        text.each_char do |c|
-          io << (control_byte?(c) ? '?' : c)
-        end
-      end
+      text.gsub { |c| control_byte?(c) ? '?' : c }
     end
 
     private def control_byte?(c : Char) : Bool

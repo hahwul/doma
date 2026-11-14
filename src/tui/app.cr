@@ -328,7 +328,7 @@ module Doma
         col = x
         index = 0
         path.each_char do |ch|
-          w = char_width(ch)
+          w = Picker.char_width(ch)
           if col + w > limit
             @termisu.set_cell(col, y, '…', fg: Termisu::Color.bright_black, attr: base) if col < limit
             break
@@ -416,16 +416,12 @@ module Doma
         limit = max_x || @width
         col = x
         text.each_char do |ch|
-          w = char_width(ch)
+          w = Picker.char_width(ch)
           break if col + w > limit
           @termisu.set_cell(col, y, ch, fg: fg, attr: attr)
           col += w
         end
         col
-      end
-
-      private def char_width(ch : Char) : Int32
-        Termisu::UnicodeWidth.codepoint_width(ch.ord).to_i
       end
     end
   end

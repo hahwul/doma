@@ -60,17 +60,6 @@ module Doma
         excludes.none? { |p| tags.any? { |t| match?(p, t) } }
     end
 
-    # Narrow `entries` to those carrying a tag that matches `pattern` under
-    # the strict semantics. A no-op for a plain (non-glob) pattern — the SQL
-    # layer already returned the exact-match set, so there's nothing to
-    # re-filter. The block yields each entry's tag list, keeping this
-    # decoupled from any particular row type (list/run/status all pass
-    # `&.tags`).
-    def filter(entries : Array(T), pattern : String, & : T -> Array(String)) : Array(T) forall T
-      return entries unless pattern?(pattern)
-      entries.select { |e| (yield e).any? { |t| match?(pattern, t) } }
-    end
-
     # Memoized compile — see `compile_regex` for the translation. The
     # glob → regex mapping is pure, so caching by pattern string is safe.
     private def to_regex(pattern : String) : Regex

@@ -113,7 +113,7 @@ module Doma
     # `~/…`). `~user` is deliberately excluded — Crystal does not do
     # per-user home lookup, so it stays a *relative* segment that must
     # resolve against the cwd, exactly as before this helper existed.
-    private def cwd_independent?(raw : String) : Bool
+    def cwd_independent?(raw : String) : Bool
       raw.starts_with?('/') || raw == "~" || raw.starts_with?("~/")
     end
 

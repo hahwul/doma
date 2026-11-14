@@ -42,7 +42,11 @@ describe Doma::TUI::Query do
     end
 
     it "reports an all-empty parse as empty" do
-      Doma::TUI::Query.parse("   ").empty?.should be_true
+      parsed = Doma::TUI::Query.parse("   ")
+      parsed.tag_includes.should be_empty
+      parsed.tag_excludes.should be_empty
+      parsed.id_prefixes.should be_empty
+      parsed.terms.should be_empty
     end
   end
 
