@@ -50,12 +50,12 @@ It is not a frecency jumper: doma never adds a directory on its own, and a direc
 
 ### Navigation & operations
 - `tui` — full-screen fuzzy finder over your registered directories, and the default when you run `doma` with no subcommand. Fuzzy match on paths with match highlighting, narrow with a small query syntax (`tag:crystal`, `-tag:archived`, `id:0d`, `path:src`), register a directory with `Ctrl-A` or copy a path with `Ctrl-Y` without leaving it. Enter prints the path so the shell wrapper `cd`s into it
-- `list --pick` resolves to a single path (Crystal-native picker, no fzf dependency); the `doma cd <tag>` shell wrapper from `doma setup install` builds on it
-- `run <tag> -- <cmd>` to execute a command in every tagged directory; `--parallel` (with `--jobs N`, default CPU count), `--fail-fast`, and `--dry-run` available. Each child sees `DOMA_PATH` / `DOMA_NAME` / `DOMA_ID` / `DOMA_TAGS`, and the sweep ends with an `ok · failed · skipped` tally that re-lists failures. `--json` captures each directory's stdout/stderr/exit code into its own row — in stable input order even under `--parallel`
+- `list --pick` resolves to a single path — with several matches it opens the same finder, scoped to them (no fzf dependency); the `doma cd <tag>` shell wrapper from `doma setup install` builds on it
+- `run <tag> -- <cmd>` to execute a command in every tagged directory; `--parallel` (with `--jobs N`, default CPU count), `--fail-fast`, and `--dry-run` available. Each child sees `DOMA_PATH` / `DOMA_NAME` / `DOMA_ID` / `DOMA_TAGS`, and the sweep ends with an `ok · failed · skipped` tally that re-lists failures. Ctrl-C stops the sweep cleanly and leaves what didn't pass in `@failed`, so `doma run @failed -- …` resumes. `--json` captures each directory's stdout/stderr/exit code into its own row — in stable input order even under `--parallel`
 - `status <tag>` for a one-glance git dashboard across a tagged set — branch, ahead/behind, dirty count, stashes, last-commit age; `--dirty` to show only repos with uncommitted work, `--json` for scripting
 - `move` to follow a path that moved on disk; tags carry over
 - `rename` to merge or relabel tags
-- Recency tracking — most-used directories surface first in pickers and `list --by recent`
+- Recency tracking — most-used directories surface first in the finder and `list --by recent`
 - Substring search across path / basename / tag (`doma list <query>`)
 - Single-entry detail view (`doma info` defaults to cwd) — tags, TTLs, last-used, exists check
 - Dead-path detection: `list --check`, `prune --gone`; expiry purge: `prune --expired`
@@ -123,7 +123,7 @@ docker run --rm -it -v "$HOME/.config/doma:/root/.config/doma" \
 ```bash
 doma setup install                    # auto-detects $SHELL, appends to your rc
 exec $SHELL                           # or `source ~/.zshrc`
-doma cd crystal                       # interactive picker, then cd
+doma cd crystal                       # one match: cd; several: pick in the finder, then cd
 doma                                  # bare doma opens the fuzzy finder, then cd
 ```
 

@@ -36,5 +36,5 @@ require "./tui/app"
 require "./cli/runner"
 
 module Doma
-  VERSION = "0.5.0"
+  VERSION = "0.6.0"
 end

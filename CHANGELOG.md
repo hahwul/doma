@@ -1,16 +1,19 @@
 # Changelog
 
-## Unreleased
+## v0.6.0
+
+The workbench gets a bigger vocabulary and a way to travel: more sets computed from git state, a snapshot that can rebuild a workspace on another machine, and one finder instead of two.
 
 ### Added
-- `export --portable` writes a snapshot meant for another machine: paths under the home directory become `~/…`, and each primary git checkout carries its `origin` URL as `remote` (embedded credentials stripped; worktrees and submodules get none). `import --clone` then registers the entries and `git clone`s the ones that aren't on disk — `--dry-run` previews, re-running skips what exists, a failed clone exits 1 but keeps the entry. No schema bump: older versions import portable snapshots and ignore `remote`
-- Three more dynamic sets, usable anywhere a tag is (`list`, `run`, `status`, `-t` / `-x`, completion): `@ahead` (ahead of the upstream), `@behind` (behind the upstream as of the last fetch), and `@unreleased` (commits since the nearest tag; never-tagged repos are not members) — `doma run @ahead -- git push`, `doma status @unreleased`. `status` answers `@dirty` / `@ahead` / `@behind` from its own probe, and a git set now errors when `git` is missing instead of reading as empty
-- `status` shows stash count (`≡N stashed`, git 2.35+) and how long ago the last commit was; `--json` gains `stash` and `last_commit_at`
-- Ctrl-C during `run` stops the sweep cleanly: no new directories start, the tally still prints, doma ends with SIGINT (status 130), and everything that didn't pass (interrupted or never started) lands in `@failed` so `doma run @failed -- …` resumes. A second Ctrl-C quits immediately, still recording `@failed`
+- `export --portable` writes a snapshot meant for another machine: paths under the home directory become `~/…`, and each primary git checkout carries its `origin` URL as `remote` (embedded credentials stripped; worktrees and submodules get none). `import --clone` then registers the entries and `git clone`s the ones that aren't on disk — `--dry-run` previews, re-running skips what exists, a failed clone exits 1 but keeps the entry. No schema bump: older versions import portable snapshots and ignore `remote` (#65)
+- Three more dynamic sets, usable anywhere a tag is (`list`, `run`, `status`, `-t` / `-x`, completion): `@ahead` (ahead of the upstream), `@behind` (behind the upstream as of the last fetch), and `@unreleased` (commits since the nearest tag; never-tagged repos are not members) — `doma run @ahead -- git push`, `doma status @unreleased`. `status` answers `@dirty` / `@ahead` / `@behind` from its own probe, and a git set now errors when `git` is missing instead of reading as empty (#63)
+- `status` shows stash count (`≡N stashed`, git 2.35+) and how long ago the last commit was; `--json` gains `stash` and `last_commit_at` (#66)
+- Ctrl-C during `run` stops the sweep cleanly: no new directories start, the tally still prints, doma ends with SIGINT (status 130), and everything that didn't pass (interrupted or never started) lands in `@failed` so `doma run @failed -- …` resumes. A second Ctrl-C quits immediately, still recording `@failed` (#66)
 
 ### Changed
-- `list --pick` (and so `doma cd <tag>`) opens the same full-screen finder as `doma tui`, scoped to the matching directories, replacing the separate inline picker. Typing fuzzy-filters with highlights and the `tag:` / `-tag:` / `id:` / `path:` operators; `--query` stays a plain substring prefilter. `--builtin` now draws on `/dev/tty` even when stdin isn't a TTY, as documented
-- `setup init` wrappers run `doma cd` through the same `DOMA_CD_FILE` hand-off as `tui`; `list --pick` writes its pick there when `DOMA_CD_FILE` is set. Re-run `doma setup install` or open a new shell to pick up the updated wrapper
+- `list --pick` (and so `doma cd <tag>`) opens the same full-screen finder as `doma tui`, scoped to the matching directories, replacing the separate inline picker. Typing fuzzy-filters with highlights and the `tag:` / `-tag:` / `id:` / `path:` operators; `--query` stays a plain substring prefilter. `--builtin` now draws on `/dev/tty` even when stdin isn't a TTY, as documented (#62)
+- `setup init` wrappers run `doma cd` through the same `DOMA_CD_FILE` hand-off as `tui`; `list --pick` writes its pick there when `DOMA_CD_FILE` is set. Re-run `doma setup install` or open a new shell to pick up the updated wrapper (#62)
+- Comparison page measures doma against mani / gita / myrepos rather than directory jumpers (#64)
 
 ## v0.5.0
 
