@@ -1,5 +1,5 @@
 /* =============================================================================
-   Search — a slip of brighter paper
+   Search — sits on the dark header
    ============================================================================= */
 
 .docs-search {
@@ -10,46 +10,40 @@
 .docs-search-input {
     appearance: none;
     -webkit-appearance: none;
-    width: 190px;
+    width: 200px;
     max-width: 32vw;
-    padding: 0.42rem 0.75rem;
-    border: 1px solid var(--score-strong);
-    border-radius: var(--radius-md);
-    background: var(--board-bright);
-    color: var(--ink);
+    padding: 0.4rem 0.7rem;
+    border: var(--px) solid var(--husk);
+    border-radius: 0;
+    background: var(--bark);
+    color: var(--sap);
     font-family: var(--font-sans);
-    font-size: 0.85rem;
-    transition:
-        border-color var(--transition-fast),
-        box-shadow var(--transition-fast),
-        width 0.25s var(--ease-out);
+    font-size: 0.9rem;
 }
 
 .docs-search-input::placeholder {
-    color: var(--ink-faint);
+    color: var(--husk);
+    opacity: 1;
 }
 
 .docs-search-input:focus {
     outline: none;
-    width: 240px;
-    border-color: var(--lacquer);
-    box-shadow: 0 0 0 3px var(--lacquer-tint);
+    border-color: var(--oak);
 }
 
 .docs-search-results {
+    --slab: var(--page);
     position: absolute;
-    top: calc(100% + 0.5rem);
+    /* Clear of the header's dithered lower edge. */
+    top: calc(100% + 1.9rem);
     right: 0;
     width: 380px;
     max-width: min(380px, 90vw);
     max-height: 60vh;
     overflow-y: auto;
-    background: var(--board-bright);
-    border: 1px solid var(--score-strong);
-    border-radius: var(--radius-lg);
-    box-shadow:
-        0 1px 2px rgba(36, 30, 21, 0.08),
-        0 16px 40px -16px rgba(36, 30, 21, 0.35);
+    /* The frame, inside the slab so the shadow strip stays clear. */
+    box-shadow: inset 0 0 0 var(--px) var(--bark);
+    padding: var(--px);
     z-index: 150;
 }
 
@@ -59,10 +53,9 @@
 
 .docs-search-result {
     display: block;
-    padding: 0.65rem 0.9rem;
-    border-bottom: 1px solid var(--score);
+    padding: 0.6rem 0.85rem;
+    border-bottom: 1px solid var(--rule);
     color: var(--ink);
-    transition: background-color var(--transition-fast);
 }
 
 .docs-search-result:last-child {
@@ -71,81 +64,109 @@
 
 .docs-search-result:hover,
 .docs-search-result.is-active {
-    background: var(--lacquer-tint);
+    background: var(--bark);
+    color: var(--sap);
 }
 
 .docs-search-result-title {
     display: block;
-    font-weight: 600;
-    font-size: 0.9rem;
-    color: var(--ink);
+    font-weight: 700;
+    font-size: 0.94rem;
     margin-bottom: 0.15rem;
 }
 
 .docs-search-result-snippet {
     display: block;
-    font-size: 0.8rem;
-    color: var(--ink-mute);
-    line-height: 1.5;
+    font-size: 0.84rem;
+    color: var(--walnut);
+    line-height: 1.45;
+}
+
+.docs-search-result:hover .docs-search-result-snippet,
+.docs-search-result.is-active .docs-search-result-snippet {
+    color: var(--oak);
 }
 
 .docs-search-result-snippet mark {
-    background: var(--lacquer-glow);
-    color: var(--ink);
+    background: var(--oak);
+    color: var(--bark);
     padding: 0 0.1em;
-    border-radius: 2px;
 }
 
 .docs-search-empty {
-    padding: 0.8rem 0.9rem;
-    color: var(--ink-mute);
-    font-size: 0.85rem;
+    padding: 0.8rem 0.85rem;
+    color: var(--walnut);
+    font-size: 0.9rem;
 }
 
 /* =============================================================================
-   Info boxes — tinted paper, no shouting
+   Buttons — a slab you can press
+   ============================================================================= */
+
+.btn {
+    --slab: var(--oak);
+    display: inline-flex;
+    align-items: center;
+    padding: 0.7rem 1.2rem;
+    color: var(--bark);
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1.2;
+    cursor: pointer;
+}
+
+/* A tone darker — it has to read on the dark hero and the light 404 alike. */
+.btn:hover {
+    --slab: var(--husk);
+    color: var(--bark);
+}
+
+.btn:active {
+    transform: translate(var(--px), var(--px));
+}
+
+/* =============================================================================
+   Info boxes — the heavier the dither bar, the louder the note
    ============================================================================= */
 
 .info-box {
-    padding: 0.9rem 1.15rem;
+    --slab: var(--shade);
+    position: relative;
+    padding: 0.9rem 1.15rem 0.9rem 1.9rem;
     margin: 1.5rem 0;
-    border: 1px solid;
-    border-radius: var(--radius-md);
-    font-size: 0.88rem;
-    line-height: 1.7;
+    font-size: 0.94rem;
+    line-height: 1.6;
+}
+
+.info-box::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: calc(var(--px) * 4);
+    background: var(--dither-25);
+}
+
+.info-box.tip::before {
+    background: var(--dither-50);
+}
+
+.info-box.warning::before {
+    background: var(--dither-75);
+}
+
+.info-box.danger::before {
+    background: var(--bark);
 }
 
 .info-box p {
     margin: 0;
-    color: inherit;
-}
-
-.info-box.note {
-    background: rgba(56, 97, 140, 0.07);
-    border-color: rgba(56, 97, 140, 0.25);
-    color: #33587c;
-}
-
-.info-box.warning {
-    background: rgba(158, 116, 22, 0.09);
-    border-color: rgba(158, 116, 22, 0.3);
-    color: #7c5c12;
-}
-
-.info-box.tip {
-    background: rgba(62, 125, 79, 0.08);
-    border-color: rgba(62, 125, 79, 0.28);
-    color: #35673f;
-}
-
-.info-box.danger {
-    background: var(--lacquer-tint);
-    border-color: rgba(178, 58, 28, 0.3);
-    color: var(--lacquer-deep);
 }
 
 /* =============================================================================
-   Page index — a numbered prep list, not a card grid
+   Page index — the pages of a section, one per ruled row
    ============================================================================= */
 
 ul.page-list,
@@ -153,45 +174,27 @@ ul.section-list {
     list-style: none;
     padding: 0;
     margin: 1.5rem 0 2rem;
-    counter-reset: prep;
 }
 
 ul.page-list li,
 ul.section-list li {
-    counter-increment: prep;
-    display: flex;
-    align-items: baseline;
-    gap: 1rem;
-    padding: 0.75rem 0.4rem;
-    border-bottom: 1px solid var(--score);
-    transition: background-color var(--transition-fast);
+    margin: 0;
+    border-bottom: 1px solid var(--rule);
 }
 
-ul.page-list li::before,
-ul.section-list li::before {
-    content: counter(prep, decimal-leading-zero);
-    font-family: var(--font-mono);
-    font-size: 0.72rem;
-    color: var(--lacquer);
-    min-width: 2ch;
-}
-
-ul.page-list li:hover,
-ul.section-list li:hover {
-    background: var(--board-raised);
-}
-
-ul.page-list li a,
-ul.section-list li a {
-    flex: 1;
-    font-weight: 550;
-    font-size: 0.92rem;
+.docs-main ul.page-list li a,
+.docs-main ul.section-list li a {
+    display: block;
+    padding: 0.7rem 0.6rem;
+    font-weight: 700;
     color: var(--ink);
+    text-decoration: none;
 }
 
-ul.page-list li a:hover,
-ul.section-list li a:hover {
-    color: var(--lacquer-deep);
+.docs-main ul.page-list li a:hover,
+.docs-main ul.section-list li a:hover {
+    background: var(--bark);
+    color: var(--sap);
 }
 
 /* =============================================================================
@@ -200,26 +203,21 @@ ul.section-list li a:hover {
 
 .docs-footer {
     margin-top: 4.5rem;
-    padding-top: 1.4rem;
-    border-top: 1px solid var(--score-strong);
-    font-family: var(--font-mono);
-    font-size: 0.72rem;
-    letter-spacing: 0.02em;
-    color: var(--ink-mute);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 0.75rem;
+    font-size: 0.84rem;
+    color: var(--walnut);
+}
+
+.docs-footer::before {
+    --dither-ink: var(--husk);
+    content: "";
+    display: block;
+    height: calc(var(--px) * 2);
+    margin-bottom: 1.4rem;
+    background: var(--dither-50);
 }
 
 .docs-footer a {
-    color: var(--ink-soft);
-    transition: color var(--transition-fast);
-}
-
-.docs-footer a:hover {
-    color: var(--lacquer);
+    color: var(--walnut);
 }
 
 /* hahwul mark — Built with Love (matches dalfox docs footer) */
@@ -239,20 +237,53 @@ ul.section-list li a:hover {
     width: 80px;
     height: 80px;
     /* Recolor the logo to the footer text tone by masking with its alpha. */
-    background-color: var(--ink-mute);
+    background-color: var(--walnut);
     -webkit-mask: url("../../images/hahwul.webp") center / contain no-repeat;
     mask: url("../../images/hahwul.webp") center / contain no-repeat;
-    transition: background-color 0.3s ease;
 }
 
 .footer-mark .hahwul-img:hover {
-    background-color: var(--ink);
+    background-color: var(--bark);
 }
 
 .footer-love {
     margin-top: 0.85rem;
-    color: var(--ink-mute);
+    color: var(--walnut);
     font-family: "Bradley Hand", "Snell Roundhand", "Apple Chancery", cursive;
     font-size: 0.95rem;
     letter-spacing: 0.02em;
+}
+
+/* =============================================================================
+   Not found
+   ============================================================================= */
+
+.lost {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    /* Clear of the fixed header and its dithered edge. */
+    padding: calc(var(--header-h) + 3rem) 1.25rem 3rem;
+    text-align: center;
+}
+
+/* The canvas sizes itself to its parent: cap it at the 2x drawing. */
+.lost-board {
+    display: flex;
+    justify-content: center;
+    width: min(100%, 400px);
+}
+
+.lost h1 {
+    font-size: 60px;
+    line-height: 1;
+    margin: 1rem 0 0.75rem;
+}
+
+.lost p {
+    margin: 0 0 1.75rem;
+    font-size: 1.1rem;
+    color: var(--walnut);
 }

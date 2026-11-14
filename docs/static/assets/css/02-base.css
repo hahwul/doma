@@ -1,5 +1,5 @@
 /* =============================================================================
-   Base — the board surface
+   Base
    ============================================================================= */
 
 *,
@@ -14,51 +14,86 @@ html {
 
 body {
     font-family: var(--font-sans);
-    line-height: 1.7;
+    font-size: 16px;
+    line-height: 1.6;
     margin: 0;
     color: var(--ink);
-    background: var(--board);
-    font-size: 15.5px;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
+    background: var(--page);
     text-rendering: optimizeLegibility;
 }
 
-/* End-grain brand strip — the board's edge, on every page */
-body::before {
-    content: "";
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: var(--strip-h);
-    background: var(--grain);
-    z-index: 500;
-    pointer-events: none;
-}
-
-/* Selection — the seal's ink */
 ::selection {
-    background: var(--lacquer);
-    color: var(--board);
+    background: var(--bark);
+    color: var(--sap);
 }
 
-/* Links */
 a {
-    color: var(--lacquer);
+    color: var(--walnut);
     text-decoration: none;
-    transition: color var(--transition-fast);
 }
 
 a:hover {
-    color: var(--lacquer-deep);
+    color: var(--bark);
 }
 
-/* Focus */
 :focus-visible {
-    outline: 2px solid var(--lacquer);
-    outline-offset: 2px;
-    border-radius: var(--radius-sm);
+    outline: var(--px) solid var(--bark);
+    outline-offset: var(--px);
+}
+
+img {
+    max-width: 100%;
+    height: auto;
+}
+
+/* Pixel type: bitmap glyphs, so no smoothing and no synthesized weights. */
+.pixel,
+.docs-main h1,
+.docs-main h2,
+.sidebar-title,
+.toc-title,
+.docs-main th,
+.wordmark {
+    font-family: var(--font-pixel);
+    font-weight: 700;
+    font-synthesis: none;
+    -webkit-font-smoothing: none;
+    font-smooth: never;
+    letter-spacing: 0;
+}
+
+/* Bitmap images scale by whole pixels only. */
+.board-canvas,
+.logo img {
+    image-rendering: pixelated;
+}
+
+/* ---------------------------------------------------------------------------
+   The slab: a flat block with a checkerboard drop shadow.
+
+   The shadow lives in a transparent right/bottom border, so it survives
+   `overflow: auto` (a pseudo-element would be clipped) and scrolling
+   content never runs over it. Layers, top to bottom: two page-coloured
+   corner patches (a drop shadow leaves those two corners empty), the
+   slab itself, the checker. Set --slab for the fill.
+   --------------------------------------------------------------------------- */
+
+.docs-main pre,
+.docs-main table,
+.docs-search-results,
+.btn,
+.term,
+.info-box {
+    --slab: var(--bark);
+    border: solid transparent;
+    border-width: 0 var(--shadow) var(--shadow) 0;
+    background:
+        linear-gradient(var(--page), var(--page)) 100% 0 / var(--shadow) var(--shadow) no-repeat,
+        linear-gradient(var(--page), var(--page)) 0 100% / var(--shadow) var(--shadow) no-repeat,
+        linear-gradient(var(--slab), var(--slab)) 0 0 / calc(100% - var(--shadow))
+            calc(100% - var(--shadow)) no-repeat,
+        var(--dither-50);
+    background-origin: border-box;
 }
 
 /* Scrollbar */
@@ -72,21 +107,13 @@ a:hover {
 }
 
 ::-webkit-scrollbar-thumb {
-    background: var(--score-strong);
-    border-radius: 4px;
+    background: var(--husk);
 }
 
 ::-webkit-scrollbar-thumb:hover {
-    background: var(--ink-faint);
+    background: var(--walnut);
 }
 
-/* Images */
-img {
-    max-width: 100%;
-    height: auto;
-}
-
-/* Reduced motion — cut the theatrics, keep the content */
 @media (prefers-reduced-motion: reduce) {
     *,
     *::before,

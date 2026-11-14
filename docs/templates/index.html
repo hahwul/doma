@@ -24,7 +24,7 @@
         <meta name="apple-mobile-web-app-title" content="Doma" />
         <link rel="manifest" href="/icons/site.webmanifest" />
         <link
-            href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,200..800&family=Gowun+Batang:wght@400;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap"
+            href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,400..700;1,400..700&family=Atkinson+Hyperlegible+Mono:wght@400..700&display=swap"
             rel="stylesheet"
         />
         {{ auto_includes_css }}
@@ -32,15 +32,11 @@
     <body class="landing-body">
         <header class="landing-header">
             <a href="{{ base_url }}/" class="logo" aria-label="doma home">
-                <img
-                    src="/images/doma-wide.webp"
-                    alt="doma"
-                    width="121"
-                    height="41"
-                />
+                <img src="/images/board-mark.png" alt="" width="44" height="44" />
+                <span class="wordmark">doma</span>
             </a>
             <nav>
-                <a href="{{ base_url }}/start/" class="nav-link">Docs</a>
+                <a href="{{ base_url }}/start/">Docs</a>
                 <a
                     href="https://github.com/hahwul/doma"
                     class="github-link"
@@ -48,79 +44,118 @@
                     rel="noopener"
                     aria-label="GitHub"
                 >
-                    <svg
-                        viewBox="0 0 24 24"
-                        fill="currentColor"
-                        width="20"
-                        height="20"
-                    >
-                        <path
-                            d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"
-                        />
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
                     </svg>
                 </a>
             </nav>
         </header>
 
-        <main class="landing-main">
-            <!-- Hero — type on the board, blade on the right -->
-            <section class="hero">
-                <div class="hero-copy">
-                    <p class="hero-eyebrow">
-                        directory tag manager · written in crystal
-                    </p>
-                    <h1 class="hero-title">
-                        Put your directories on the
-                        <span class="hl-cut">cutting&nbsp;board</span>.
-                    </h1>
-                    <p class="hero-tagline">
-                        Tag the folders you actually live in — then
-                        <em>jump</em>, <em>list</em>, and <em>run</em> across
-                        the whole pile at once.
-                    </p>
-                    <div class="hero-actions">
-                        <a href="{{ base_url }}/start/" class="btn-lacquer">
-                            Read the docs
-                            <svg viewBox="0 0 24 24" aria-hidden="true">
-                                <path d="M5 12h14M13 6l6 6-6 6" />
-                            </svg>
-                        </a>
-                        <code class="install-chip" title="Select to copy"
-                            >brew install hahwul/doma/doma</code
-                        >
+        <main>
+            <!-- Hero: the board itself, dithered live. The pointer is the lamp. -->
+            <section class="hero" data-board-stage>
+                <div class="hero-inner">
+                    <div class="hero-copy">
+                        <h1 class="hero-title pixel">
+                            Put your directories on the cutting board.
+                        </h1>
+                        <p class="hero-sub">
+                            doma is a workbench for sets of project
+                            directories. Label them once, then check or run a
+                            whole label at a time.
+                        </p>
+                        <div class="hero-actions">
+                            <a href="{{ base_url }}/start/" class="btn">Read the docs</a>
+                            <code class="install" title="Select to copy"
+                                ><span aria-hidden="true">$ </span>brew install hahwul/doma/doma</code
+                            >
+                        </div>
+                        <p class="hero-meta">
+                            One static binary. No runtime dependencies. MIT
+                            licensed.
+                        </p>
                     </div>
-                    <p class="hero-meta">
-                        one static binary · zero runtime deps · MIT
-                    </p>
+                    <div class="hero-board">
+                        <canvas
+                            class="board-canvas"
+                            data-board="pool"
+                            role="img"
+                            aria-label="A wooden cutting board with a handle, drawn in dithered pixels"
+                        ></canvas>
+                    </div>
                 </div>
+            </section>
+            <div class="ramp" aria-hidden="true"></div>
 
-                <figure class="term" role="img" aria-label="doma in a terminal">
-                    <div class="term-bar">
-                        <span class="term-dot"></span>
-                        <span class="term-dot"></span>
-                        <span class="term-dot"></span>
-                        <span class="term-title">~ · zsh</span>
-                    </div>
-                    <div class="term-body">
-<pre><span class="c"># pin a directory, tag it</span>
-<span class="p">$</span> doma add ~/labs/noir -t crystal -t security
-<span class="ok">✓</span> tagged <span class="hi">~/labs/noir</span>  <span class="tag">crystal</span> <span class="tag">security</span>
+            <!-- The loop: label, look, run, retry -->
+            <section class="loop">
+                <h2 class="pixel">Label once. Then work on the whole set.</h2>
+                <div class="loop-grid">
+                    <ol class="steps">
+                        <li>
+                            <h3>Label</h3>
+                            <p>
+                                Tag a directory with whatever makes sense: a
+                                language, a client, this week's spike. Tags
+                                can expire on their own.
+                            </p>
+                            <code>doma add . -t crystal -t work</code>
+                        </li>
+                        <li>
+                            <h3>Look</h3>
+                            <p>
+                                See every repo under a label at once: branch,
+                                ahead and behind, uncommitted files, stashes,
+                                last commit.
+                            </p>
+                            <code>doma status work</code>
+                        </li>
+                        <li>
+                            <h3>Run</h3>
+                            <p>
+                                Run a command in each one. Whatever fails is
+                                listed again at the end.
+                            </p>
+                            <code>doma run work --parallel -- git fetch</code>
+                        </li>
+                        <li>
+                            <h3>Retry</h3>
+                            <p>
+                                Sets like <code>@failed</code> and
+                                <code>@dirty</code> are worked out when you
+                                ask, so you only redo what needs it.
+                            </p>
+                            <code>doma run @failed -- make test</code>
+                        </li>
+                    </ol>
 
-<span class="c"># jump back by tag — picker opens on multiple matches</span>
-<span class="p">$</span> doma cd crystal
-<span class="ok">▸</span> <span class="hi">~/labs/noir</span>
-<span class="dim">  ~/Projects/doma</span>
-<span class="dim">  ~/Projects/hwaro</span>
+                    <figure class="term" role="img" aria-label="A terminal session: doma status, doma run, then a retry of what failed">
+<pre><span class="p">$</span> <span class="cmd">doma status crystal</span>
+/Users/me/Projects/doma   <span class="hi">● 2 dirty</span>  main  ↑1  8m ago
+/Users/me/Projects/hwaro  ✔ clean  main  3d ago
+/Users/me/Projects/noir   ✔ clean  main  ≡1 stashed  1w ago
 
-<span class="c"># or chop through all of them at once</span>
-<span class="p">$</span> doma list -t crystal --paths | xargs …</pre>
-                    </div>
-                </figure>
+<span class="dim">3 repos · 1 dirty · 1 ahead</span>
+
+<span class="p">$</span> <span class="cmd">doma run crystal -- shards build</span>
+<span class="dim">▶ /Users/me/Projects/doma</span>
+✓ /Users/me/Projects/doma (exit 0)
+<span class="dim">▶ /Users/me/Projects/hwaro</span>
+<span class="hi">✗ /Users/me/Projects/hwaro (exit 1)</span>
+<span class="dim">▶ /Users/me/Projects/noir</span>
+✓ /Users/me/Projects/noir (exit 0)
+
+2 ok · 1 failed
+<span class="hi">  ✗ /Users/me/Projects/hwaro (exit 1)</span>
+
+<span class="p">$</span> <span class="cmd">doma run @failed -- shards build</span></pre>
+                    </figure>
+                </div>
             </section>
 
             <!-- Why -->
-            <section class="board-note">
-                <span class="note-label">why a cutting board</span>
+            <section class="why">
+                <h2 class="pixel">Why a cutting board</h2>
                 <p>
                     I kept losing track of where things lived — twelve Crystal
                     repos in one folder, seven shell experiments in another, the
@@ -134,107 +169,30 @@
                 </p>
             </section>
 
-            <!-- Three moves -->
-            <section class="prep" aria-label="What it does">
-                <header class="prep-head">
-                    <h2>On the board</h2>
-                    <span class="prep-sub">three moves · one workflow</span>
-                </header>
-                <ol class="prep-rows">
-                    <li class="prep-row">
-                        <span class="prep-num" aria-hidden="true">01</span>
-                        <h3>Tag</h3>
-                        <div class="prep-body">
-                            <p>
-                                Label the directories you actually live in — by
-                                language, client, or this week's spike. Tags can
-                                be permanent, or expire on a TTL.
-                            </p>
-                            <code><span class="p">$</span> doma add ~/Projects/doma -t crystal -t cli</code>
-                        </div>
-                    </li>
-                    <li class="prep-row">
-                        <span class="prep-num" aria-hidden="true">02</span>
-                        <h3>Jump</h3>
-                        <div class="prep-body">
-                            <p>
-                                One tag, one keystroke. A built-in TUI picker
-                                opens when more than one directory matches, and
-                                the shell wrapper makes it actually
-                                <em>cd</em>.
-                            </p>
-                            <code><span class="p">$</span> doma cd crystal</code>
-                        </div>
-                    </li>
-                    <li class="prep-row">
-                        <span class="prep-num" aria-hidden="true">03</span>
-                        <h3>Fan out</h3>
-                        <div class="prep-body">
-                            <p>
-                                List paths by tag and pipe them into anything —
-                                build, grep, sync — across the whole pile at
-                                once.
-                            </p>
-                            <code><span class="p">$</span> doma list -t crystal --paths | xargs -I{} sh -c 'cd {} &amp;&amp; shards build'</code>
-                        </div>
-                    </li>
-                </ol>
-            </section>
-
-            <!-- A quick taste -->
-            <section class="taste">
-                <span class="taste-label">a quick taste</span>
-                <figure
-                    class="term"
-                    role="img"
-                    aria-label="more doma commands in a terminal"
-                >
-                    <div class="term-bar">
-                        <span class="term-dot"></span>
-                        <span class="term-dot"></span>
-                        <span class="term-dot"></span>
-                        <span class="term-title">doma · everyday moves</span>
+            <!-- The word, and the dark end of the board again -->
+            <div class="ramp ramp-up" aria-hidden="true"></div>
+            <section class="word">
+                <div class="word-inner">
+                    <span class="word-hangul pixel" lang="ko">도마</span>
+                    <div class="word-entry">
+                        <p class="word-pron">/do·ma/, noun, Korean</p>
+                        <p class="word-def">
+                            The cutting board: the workbench where ingredients
+                            get gathered, grouped, and chopped before going into
+                            the pan. The metaphor stuck.
+                        </p>
                     </div>
-                    <div class="term-body">
-<pre><span class="p">$</span> doma mark spike                        <span class="c"># bookmark cwd for a week, then it expires</span>
-<span class="p">$</span> doma status -t work                    <span class="c"># git status across every tagged repo</span>
-<span class="p">$</span> doma run -t crystal -- shards build    <span class="c"># run a command in each match</span>
-<span class="p">$</span> doma snapshot export &gt; board.json      <span class="c"># the whole board, portable</span></pre>
-                    </div>
-                </figure>
-            </section>
-
-            <!-- Spec rail -->
-            <section class="rail" aria-label="At a glance">
-                <span>single static binary</span>
-                <span>built-in TUI picker</span>
-                <span>TTL tags &amp; marks</span>
-                <span>shell wrapper</span>
-                <span>AI skill for coding agents</span>
-            </section>
-
-            <!-- The word -->
-            <section class="meaning">
-                <div class="meaning-entry">
-                    <span class="meaning-word">도마</span>
-                    <span class="meaning-pron">/do·ma/ — noun · Korean</span>
-                    <p class="meaning-def">
-                        the cutting board — the workbench where ingredients get
-                        gathered, grouped, and chopped before going into the
-                        pan. the metaphor stuck.
-                    </p>
                 </div>
-                <span class="meaning-seal" aria-hidden="true">도마</span>
+                <footer class="landing-footer">
+                    <div class="footer-mark">
+                        <a href="https://www.hahwul.com" target="_blank" rel="noopener" aria-label="hahwul">
+                            <span class="hahwul-img" role="img" aria-label="hahwul"></span>
+                        </a>
+                        <p class="footer-love">Built with Love</p>
+                    </div>
+                </footer>
             </section>
         </main>
-
-        <footer class="landing-footer">
-            <div class="footer-mark">
-                <a href="https://www.hahwul.com" target="_blank" rel="noopener" aria-label="hahwul">
-                    <span class="hahwul-img" role="img" aria-label="hahwul"></span>
-                </a>
-                <p class="footer-love">Built with Love</p>
-            </div>
-        </footer>
+        <script src="/assets/js/board.js"></script>
     </body>
 </html>
