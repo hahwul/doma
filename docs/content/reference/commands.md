@@ -150,11 +150,13 @@ Reports each tagged directory's git working-tree state — branch, ahead/behind 
 ## `export` / `import`
 
 ```
-doma export [--json | --yaml] [-o FILE]
-doma import <file> [--merge | --replace] [-y | --yes]
+doma export [--json | --yaml] [--portable] [-o FILE]
+doma import <file> [--merge | --replace] [--clone] [-n | --dry-run] [-y | --yes]
 ```
 
 `--replace` without `--yes` requires a TTY confirmation.
+
+`export --portable` writes `~/`-relative paths and each repo's `origin` URL; `import --clone` then `git clone`s entries that aren't on disk. See [Snapshots](../../usage/snapshots/).
 
 ## `trash`
 

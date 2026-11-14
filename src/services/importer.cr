@@ -24,7 +24,10 @@ module Doma
       skipped : Int32,
       replaced : Bool,
       added : Int32 = 0,
-      updated : Int32 = 0
+      updated : Int32 = 0,
+      # {path, remote} for applied entries that aren't on disk (see
+      # `absent?`) but came with a remote — what `import --clone` fetches.
+      clonable : Array({String, String}) = [] of {String, String}
 
     # Reused across all v1 entries so we don't allocate a fresh empty
     # hash per row.
@@ -47,6 +50,12 @@ module Doma
       raise ImportError.new("import file is empty: #{path}") if content.strip.empty?
       snapshot = parse(content, path)
       apply(db, snapshot, mode, dry_run)
+    end
+
+    # Nothing to preserve at `path`: missing, or an empty directory (which
+    # `git clone` accepts as a destination).
+    def absent?(path : String) : Bool
+      !Dir.exists?(path) || Dir.empty?(path)
     end
 
     def parse(content : String, source : String? = nil) : Snapshot
@@ -94,6 +103,7 @@ module Doma
       updated = 0
       skipped = 0
       skipped_messages = [] of String
+      clonable = [] of {String, String}
 
       # Single transaction for the whole import — clear + every add — so
       # `--replace` can't half-wipe the database when a later entry fails.
@@ -153,6 +163,9 @@ module Doma
             end
           end
           existed ? (updated += 1) : (added += 1)
+          if (remote = entry.remote.presence) && absent?(abs)
+            clonable << {abs, remote}
+          end
         rescue ex : Doma::ValidationError
           skipped += 1
           skipped_messages << "import: skipped #{entry.path} (#{ex.message})"
@@ -168,7 +181,8 @@ module Doma
       # an error from the transaction itself.
       skipped_messages.each { |msg| Doma::Logger.warn msg }
 
-      Result.new(added + updated, skipped, mode == Mode::Replace, added, updated)
+      # The same path listed twice is still one clone.
+      Result.new(added + updated, skipped, mode == Mode::Replace, added, updated, clonable.uniq(&.[0]))
     end
   end
 end

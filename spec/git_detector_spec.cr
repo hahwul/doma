@@ -22,6 +22,58 @@ private def with_fake_repo(remote_url : String?, &)
 end
 
 describe Doma::GitDetector do
+  describe ".origin_url" do
+    it "returns the origin URL of a repo rooted at the path" do
+      with_fake_repo("git@github.com:me/proj.git") do |dir|
+        Doma::GitDetector.origin_url(dir).should eq("git@github.com:me/proj.git")
+      end
+    end
+
+    it "drops credentials: http(s) userinfo whole, other schemes' passwords" do
+      with_fake_repo("https://me:s3cret@github.com/me/proj.git") do |dir|
+        Doma::GitDetector.origin_url(dir).should eq("https://github.com/me/proj.git")
+      end
+      with_fake_repo("https://ghp_token@github.com/me/proj.git") do |dir|
+        Doma::GitDetector.origin_url(dir).should eq("https://github.com/me/proj.git")
+      end
+      with_fake_repo("ssh://git:s3cret@host:2222/me/proj.git") do |dir|
+        Doma::GitDetector.origin_url(dir).should eq("ssh://git@host:2222/me/proj.git")
+      end
+      with_fake_repo("ssh://git@host/me/proj.git") do |dir|
+        Doma::GitDetector.origin_url(dir).should eq("ssh://git@host/me/proj.git")
+      end
+    end
+
+    it "unquotes the value and skips relative remotes" do
+      with_fake_repo(%("https://host/o/r.git")) do |dir|
+        Doma::GitDetector.origin_url(dir).should eq("https://host/o/r.git")
+      end
+      with_fake_repo("../bare/proj.git") { |dir| Doma::GitDetector.origin_url(dir).should be_nil }
+    end
+
+    it "gives a worktree / submodule (`.git` file) no remote" do
+      with_fake_repo("git@github.com:me/proj.git") do |dir|
+        linked = File.tempname("doma-git-linked")
+        FileUtils.mkdir_p(linked)
+        File.write(File.join(linked, ".git"), "gitdir: #{File.join(dir, ".git")}\n")
+        begin
+          Doma::GitDetector.origin_url(linked).should be_nil
+        ensure
+          FileUtils.rm_rf(linked)
+        end
+      end
+    end
+
+    it "does not borrow a parent repo's remote, and is nil without one" do
+      with_fake_repo("git@github.com:me/proj.git") do |dir|
+        sub = File.join(dir, "src")
+        FileUtils.mkdir_p(sub)
+        Doma::GitDetector.origin_url(sub).should be_nil
+      end
+      with_fake_repo(nil) { |dir| Doma::GitDetector.origin_url(dir).should be_nil }
+    end
+  end
+
   it "returns git=false for a non-repo directory" do
     dir = File.tempname("doma-nogit")
     FileUtils.mkdir_p(dir)

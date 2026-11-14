@@ -12,11 +12,13 @@ module Doma::CLI
       output : String? = nil
       json_set = false
       yaml_set = false
+      portable = false
 
       parser = OptionParser.new do |p|
-        p.banner = "Usage: doma export [--json | --yaml] [-o FILE]"
+        p.banner = "Usage: doma export [--json | --yaml] [--portable] [-o FILE]"
         p.on("--json", "Output as JSON (default)") { format = Doma::Exporter::Format::Json; json_set = true }
         p.on("--yaml", "Output as YAML") { format = Doma::Exporter::Format::Yaml; yaml_set = true }
+        p.on("--portable", "For another machine: ~/-relative paths, plus each repo's origin URL for `import --clone`") { portable = true }
         p.on("-o FILE", "--output=FILE", "Write to FILE instead of stdout") { |f| output = f }
         p.on("-h", "--help", "Show help") do
           puts p
@@ -47,10 +49,10 @@ module Doma::CLI
         if raw = output
           path = Doma::Validator.canonicalize(raw)
           validate_output_path!(path)
-          write_atomic(db, format, path)
+          write_atomic(db, format, path, portable)
           Doma::Logger.success "exported to #{path}"
         else
-          Doma::Exporter.write(db, format, STDOUT)
+          Doma::Exporter.write(db, format, STDOUT, portable)
         end
       end
     end
@@ -72,10 +74,10 @@ module Doma::CLI
     # half-written file in place of a previous good snapshot. Translates
     # IO failures into a friendly Doma::Error so the runner's generic
     # rescue (which prints "internal error:") never sees them.
-    private def write_atomic(db : Doma::Database, format : Doma::Exporter::Format, path : String)
+    private def write_atomic(db : Doma::Database, format : Doma::Exporter::Format, path : String, portable : Bool)
       tmp = "#{path}.#{Process.pid}.tmp"
       begin
-        File.open(tmp, "w") { |f| Doma::Exporter.write(db, format, f) }
+        File.open(tmp, "w") { |f| Doma::Exporter.write(db, format, f, portable) }
         File.rename(tmp, path)
       rescue ex : File::AccessDeniedError | File::Error | IO::Error
         File.delete?(tmp)

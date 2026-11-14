@@ -72,6 +72,7 @@ It is not a frecency jumper: doma never adds a directory on its own, and a direc
 - SQLite-backed (WAL, foreign keys, busy_timeout) — handles concurrent doma calls across multiple shells
 - Path canonicalization: `~`, symlinks, and trailing slashes all collapse to one stable key
 - Transactional writes; atomic snapshot import/export
+- Portable snapshots: `export --portable` writes `~/`-relative paths plus each repo's origin URL, and `import --clone` rebuilds the set on another machine
 - Schema migrations via `PRAGMA user_version` — old DBs upgrade transparently
 - Strict tag validation; sanitized auto-tags so a `.dotfiles` repo doesn't break `--auto-tag`
 

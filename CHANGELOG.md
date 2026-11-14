@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- `export --portable` writes a snapshot meant for another machine: paths under the home directory become `~/…`, and each primary git checkout carries its `origin` URL as `remote` (embedded credentials stripped; worktrees and submodules get none). `import --clone` then registers the entries and `git clone`s the ones that aren't on disk — `--dry-run` previews, re-running skips what exists, a failed clone exits 1 but keeps the entry. No schema bump: older versions import portable snapshots and ignore `remote`
 - Three more dynamic sets, usable anywhere a tag is (`list`, `run`, `status`, `-t` / `-x`, completion): `@ahead` (ahead of the upstream), `@behind` (behind the upstream as of the last fetch), and `@unreleased` (commits since the nearest tag; never-tagged repos are not members) — `doma run @ahead -- git push`, `doma status @unreleased`. `status` answers `@dirty` / `@ahead` / `@behind` from its own probe, and a git set now errors when `git` is missing instead of reading as empty
 
 ### Changed
