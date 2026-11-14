@@ -92,6 +92,20 @@ module Doma
           .map(&.[0])
       end
 
+      # Case-insensitive substring match on the path or the `#tag` list —
+      # the plain `list --pick --query Q` prefilter, which also has to work
+      # without a terminal (`--first`). Keeps input order.
+      def contains(entries : Array(Entry), query : String) : Array(Entry)
+        return entries if query.empty?
+        # NFC both sides: macOS paths come back decomposed (NFD), typed
+        # queries composed, and the two never compare equal otherwise.
+        q = query.unicode_normalize(:nfc).downcase
+        entries.select do |e|
+          e.path.unicode_normalize(:nfc).downcase.includes?(q) ||
+            e.tags.map { |t| "##{t}" }.join(' ').unicode_normalize(:nfc).downcase.includes?(q)
+        end
+      end
+
       private def strip_prefix(token : String, prefix : String) : String?
         token.starts_with?(prefix) ? token[prefix.size..] : nil
       end

@@ -3,8 +3,8 @@ require "termisu"
 require "../db/database"
 require "../models/entry"
 require "../utils/validator"
-require "../services/picker"
 require "./query"
+require "./text"
 
 module Doma
   module TUI
@@ -43,8 +43,10 @@ module Doma
 
       # Constructs the TUI and enters raw mode + the alternate screen. Raises
       # `IO::Error` when there's no controlling terminal — the caller turns
-      # that into a clean user-facing error.
-      def initialize(@db : Doma::Database, @entries : Array(Doma::Entry), query : String = "")
+      # that into a clean user-facing error. `picking` is `list --pick`: the
+      # caller decides what Enter does, so the footer says "pick", not "cd",
+      # and ^a add is off (its reload would drop the caller's filter).
+      def initialize(@db : Doma::Database, @entries : Array(Doma::Entry), query : String = "", *, @picking : Bool = false)
         # Filter before Termisu.new: an exception after raw mode / alt screen
         # is entered would leave the terminal broken (run's ensure isn't
         # reached yet).
@@ -67,11 +69,19 @@ module Doma
         # to; without it, Enter only *prints* the path — so the footer must
         # not promise `cd`.
         @shell_integration = !!ENV["DOMA_CD_FILE"]?.presence
+        @enter_hint, @enter_desc =
+          if @picking
+            {"pick", "pick entry"}
+          elsif @shell_integration
+            {"cd", "cd to entry"}
+          else
+            {"print", "print path to stdout"}
+          end
       end
 
       # Runs the event loop until the user selects (Enter) or cancels
       # (Esc/Ctrl-C). Always restores the terminal, even on a mid-session TTY
-      # hangup (treated as a cancel, mirroring `Picker`'s hardening).
+      # hangup (treated as a cancel).
       def run : Result
         loop do
           render
@@ -112,7 +122,7 @@ module Doma
 
         if event.ctrl?
           case
-          when event.key.a? then begin_add
+          when event.key.a? then begin_add unless @picking
           when event.key.y? then copy_current
           when event.key.p? then move(-1)
           when event.key.n? then move(+1)
@@ -153,7 +163,7 @@ module Doma
         when event.key.backspace?
           @buffer = @buffer[0...-1] unless @buffer.empty?
         else
-          if (c = event.char) && Doma::Picker.printable?(c) && !event.ctrl? && !event.alt?
+          if (c = event.char) && Text.printable?(c) && !event.ctrl? && !event.alt?
             @buffer += c
           end
         end
@@ -163,7 +173,7 @@ module Doma
       private def append_query(event : Termisu::Event::Key)
         return if event.ctrl? || event.alt?
         c = event.char
-        return unless c && Doma::Picker.printable?(c)
+        return unless c && Text.printable?(c)
         @query += c
         refilter
       end
@@ -310,8 +320,8 @@ module Doma
         marker = selected ? '▌' : ' '
         @termisu.set_cell(0, y, marker, fg: Termisu::Color.cyan, attr: base)
 
-        hint = scored.entry.tags.empty? ? "" : Picker.sanitize(scored.entry.tags.map { |t| "##{t}" }.join(" "))
-        hint_room = hint.empty? ? 0 : Math.min(Picker.display_width(hint), (@width // 3).clamp(8, 60))
+        hint = scored.entry.tags.empty? ? "" : Text.sanitize(scored.entry.tags.map { |t| "##{t}" }.join(" "))
+        hint_room = hint.empty? ? 0 : Math.min(Text.display_width(hint), (@width // 3).clamp(8, 60))
         label_limit = @width - (hint.empty? ? 1 : hint_room + 3)
 
         draw_path(2, y, scored, base, selected, label_limit)
@@ -323,12 +333,12 @@ module Doma
 
       private def draw_path(x : Int32, y : Int32, scored : Query::Scored, base : Termisu::Attribute, selected : Bool, limit : Int32)
         # NFC, like Query.filter, so highlight positions line up.
-        path = Picker.sanitize(scored.entry.path.unicode_normalize(:nfc))
+        path = Text.sanitize(scored.entry.path.unicode_normalize(:nfc))
         positions = scored.positions
         col = x
         index = 0
         path.each_char do |ch|
-          w = Picker.char_width(ch)
+          w = Text.char_width(ch)
           if col + w > limit
             @termisu.set_cell(col, y, '…', fg: Termisu::Color.bright_black, attr: base) if col < limit
             break
@@ -350,13 +360,13 @@ module Doma
       private def render_status(y : Int32)
         if !@status.empty?
           color = @status_error ? Termisu::Color.red : Termisu::Color.green
-          draw_text(2, y, Picker.sanitize(@status), fg: color, max_x: @width)
+          draw_text(2, y, Text.sanitize(@status), fg: color, max_x: @width)
           return
         end
 
         count = "#{@scored.size}/#{@entries.size}"
-        enter = @shell_integration ? "enter cd" : "enter print"
-        keys = "↑↓ move · #{enter} · ^a add · ^y copy · ? help · esc quit"
+        add = @picking ? "" : " · ^a add"
+        keys = "↑↓ move · enter #{@enter_hint}#{add} · ^y copy · ? help · esc quit"
         line = "#{count}   #{keys}"
         draw_text(2, y, line, fg: Termisu::Color.bright_black, max_x: @width)
       end
@@ -370,14 +380,13 @@ module Doma
           end
 
         start = draw_text(0, y, prompt, fg: Termisu::Color.cyan, attr: Termisu::Attribute::Bold, max_x: @width)
-        cursor_col = draw_text(start, y, Picker.tail_fit(Picker.sanitize(text), @width - 1 - start), fg: Termisu::Color.default, max_x: @width)
+        cursor_col = draw_text(start, y, Text.tail_fit(Text.sanitize(text), @width - 1 - start), fg: Termisu::Color.default, max_x: @width)
         @termisu.set_cursor(Math.min(cursor_col, @width - 1), y, true)
       end
 
       private def render_help
-        enter_desc = @shell_integration ? "cd to entry" : "print path to stdout"
         lines = [
-          {"doma tui — fuzzy finder", Termisu::Color.cyan, Termisu::Attribute::Bold},
+          {"doma — fuzzy finder", Termisu::Color.cyan, Termisu::Attribute::Bold},
           {"", Termisu::Color.default, Termisu::Attribute::None},
           {"Query operators:", Termisu::Color.bright_white, Termisu::Attribute::Bold},
           {"  tag:NAME    only entries with a matching tag (glob: tag:web/*)", Termisu::Color.default, Termisu::Attribute::None},
@@ -386,15 +395,15 @@ module Doma
           {"  path:TERM   fuzzy-match the whole path (no basename bias)", Termisu::Color.default, Termisu::Attribute::None},
           {"", Termisu::Color.default, Termisu::Attribute::None},
           {"Keys:", Termisu::Color.bright_white, Termisu::Attribute::Bold},
-          {"  ↑/↓  ^p/^n   move          enter    #{enter_desc}", Termisu::Color.default, Termisu::Attribute::None},
-          {"  pgup/pgdn    page          ^a       add a directory", Termisu::Color.default, Termisu::Attribute::None},
+          {"  ↑/↓  ^p/^n   move          enter    #{@enter_desc}", Termisu::Color.default, Termisu::Attribute::None},
+          {"  pgup/pgdn    page#{@picking ? "" : "          ^a       add a directory"}", Termisu::Color.default, Termisu::Attribute::None},
           {"  ^y           copy path     esc/^c   quit", Termisu::Color.default, Termisu::Attribute::None},
           {"  f1 / ?       toggle help", Termisu::Color.default, Termisu::Attribute::None},
         ]
         # When no shell wrapper is capturing stdout, Enter can't change the
         # parent shell's cwd — point the user at the one-time setup that lets
         # it, instead of silently under-delivering on the "cd" hint.
-        unless @shell_integration
+        unless @shell_integration || @picking
           lines << {"", Termisu::Color.default, Termisu::Attribute::None}
           lines << {"Enter prints the path; run `doma setup install` to cd on Enter.", Termisu::Color.yellow, Termisu::Attribute::None}
         end
@@ -416,7 +425,7 @@ module Doma
         limit = max_x || @width
         col = x
         text.each_char do |ch|
-          w = Picker.char_width(ch)
+          w = Text.char_width(ch)
           break if col + w > limit
           @termisu.set_cell(col, y, ch, fg: fg, attr: attr)
           col += w

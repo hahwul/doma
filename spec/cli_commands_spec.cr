@@ -1571,6 +1571,18 @@ describe "doma list --pick" do
     end
   end
 
+  it "[DOMA_CD_FILE] writes the pick there instead of stdout (shell wrapper `doma cd`)" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      run(["add", "/tmp", "-t", "single"], {"DOMA_HOME" => home})
+      cd_file = File.join(home, "cd")
+      r = run(["list", "-t", "single", "--pick"], {"DOMA_HOME" => home, "DOMA_CD_FILE" => cd_file})
+      r[:status].exit_code.should eq(0)
+      r[:out].should be_empty
+      File.read(cd_file).should eq(REAL_TMP)
+    end
+  end
+
   it "[zero matches] errors with 3 and a NotFound hint" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     with_home do |home|

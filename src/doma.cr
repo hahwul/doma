@@ -4,7 +4,8 @@
 #   utils/     logger, config, errors, validator
 #   models/    Entry value type
 #   db/        SQLite-backed Database + Migrations
-#   services/  picker, git_detector, installer, exporter, importer
+#   services/  git_detector, installer, exporter, importer
+#   tui/       interactive finder (`tui`, `list --pick`)
 #   cli/       Runner + per-command classes
 
 require "option_parser"
@@ -24,13 +25,13 @@ require "./utils/parallel"
 require "./models/entry"
 require "./db/migrations"
 require "./db/database"
-require "./services/picker"
 require "./services/git_detector"
 require "./services/installer"
 require "./services/exporter"
 require "./services/importer"
 require "./tui/fuzzy"
 require "./tui/query"
+require "./tui/text"
 require "./tui/app"
 require "./cli/runner"
 

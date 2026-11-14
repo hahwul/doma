@@ -2,7 +2,7 @@ require "option_parser"
 require "json"
 require "colorize"
 require "../../db/database"
-require "../../services/picker"
+require "../../tui/app"
 require "../../utils/config"
 require "../../utils/duration"
 require "../../utils/errors"
@@ -11,6 +11,7 @@ require "../../utils/suggester"
 require "../../utils/tag_glob"
 require "../../utils/tag_renderer"
 require "./sweep_args"
+require "./tui_command"
 
 module Doma::CLI
   # Lists registered directories. Three filter dimensions, all optional
@@ -277,19 +278,19 @@ module Doma::CLI
 
     # Narrow the filtered entries down to one path and print it to stdout.
     # Single-element output mode designed to compose with the shell
-    # wrapper installed by `doma setup install` — that wrapper captures
-    # this output and runs `cd` itself, since a child process can't
-    # change its parent's working directory.
+    # wrapper installed by `doma setup install` — `doma cd` runs this and
+    # `cd`s to the result, since a child process can't change its parent's
+    # working directory.
     #
     # Resolution rules:
     #   - 0 entries          → NotFoundError (with a hint that points
     #                          at `doma add` when the input looks like a
     #                          filesystem path)
-    #   - 1 entry            → print and stamp recency
-    #   - N entries + TTY    → interactive picker; cancellation is exit 130
-    #   - N entries + no TTY → most-recent wins, with a stderr warning so
-    #                          callers piping `--pick` don't silently get
-    #                          a heuristic pick they didn't expect
+    #   - 1 entry            → deliver and stamp recency
+    #   - N entries + TTY    → the TUI finder over just these entries;
+    #                          cancellation is exit 130
+    #   - N entries + no TTY → error (exit 4) unless `--first` / selector
+    #                          `first` opts into the first in sort order
     private def run_pick(db : Doma::Database, entries : Array(Doma::Entry), pick_query : String?, pick_override : Doma::Settings::SelectorMode?, tags : Array(String), excludes : Array(String), query : String?)
       if entries.empty?
         raise Doma::NotFoundError.new(
@@ -298,19 +299,13 @@ module Doma::CLI
         )
       end
 
-      items = entries.map do |e|
-        tags_hint = e.tags.empty? ? nil : e.tags.map { |t| "##{t}" }.join(' ')
-        Doma::Picker::Item.new(value: e.path, label: e.path, hint: tags_hint)
-      end
-      items = Doma::Picker.filter(items, pick_query) if pick_query
-
-      if items.empty?
-        raise Doma::NotFoundError.new("no directories match '#{pick_query}'") if pick_query
-        raise Doma::NotFoundError.new(empty_message(tags, query, excludes))
+      if pick_query
+        entries = Doma::TUI::Query.contains(entries, pick_query)
+        raise Doma::NotFoundError.new("no directories match '#{pick_query}'") if entries.empty?
       end
 
-      if items.size == 1
-        emit_choice(db, items.first.value)
+      if entries.size == 1
+        emit_choice(db, entries.first.path)
         return
       end
 
@@ -327,7 +322,7 @@ module Doma::CLI
           effective = Doma::Settings::SelectorMode::Builtin
         else
           raise Doma::Error.new(
-            "ambiguous --pick (#{pick_context(tags)} matches #{items.size} directories) " \
+            "ambiguous --pick (#{pick_context(tags)} matches #{entries.size} directories) " \
             "and stdin is not a TTY",
             exit_code: 4,
             hint: "narrow the filter, or pass --first to take the most-recent match",
@@ -337,34 +332,33 @@ module Doma::CLI
 
       case effective
       in Doma::Settings::SelectorMode::Builtin
-        prompt = pick_prompt(tags, query)
-        result = Doma::Picker.pick(items, prompt)
-        raise Doma::Error.new("selection cancelled", 130) if result.cancelled
-        if value = result.value
-          emit_choice(db, value)
-        end
+        result = TuiCommand.run_app(db, entries, picking: true)
+        path = result.path
+        raise Doma::Error.new("selection cancelled", 130) unless result.selected? && path
+        emit_choice(db, path)
       in Doma::Settings::SelectorMode::First
         # Deterministic auto-pick. Warn so scripted callers don't silently
         # get a heuristic choice they didn't expect.
         unless Doma::Logger.quiet?
           Doma::Logger.warn(
-            "#{pick_context(tags)} matches #{items.size} directories; picked the first in sort order. " \
+            "#{pick_context(tags)} matches #{entries.size} directories; picked the first in sort order. " \
             "Refine the filter (or --by) to disambiguate."
           )
         end
-        emit_choice(db, items.first.value)
+        emit_choice(db, entries.first.path)
       in Doma::Settings::SelectorMode::Auto
         # Already resolved above; this branch satisfies exhaustiveness.
-        emit_choice(db, items.first.value)
+        emit_choice(db, entries.first.path)
       end
     end
 
-    # Print the picked path, stamping recency first (best-effort — see
-    # `Database#bump_used_safe`). Every selection path funnels through
-    # here so no branch can forget the frecency bump.
+    # Deliver the picked path (stdout, or the wrapper's DOMA_CD_FILE),
+    # stamping recency first (best-effort — see `Database#bump_used_safe`).
+    # Every selection path funnels through here so no branch can forget the
+    # frecency bump.
     private def emit_choice(db : Doma::Database, path : String)
       db.bump_used_safe(path)
-      puts path
+      TuiCommand.deliver(path)
     end
 
     # Human label for what the user filtered by, used in ambiguity
@@ -392,13 +386,6 @@ module Doma::CLI
         input.starts_with?("./") ||
         input.starts_with?("../") ||
         input == "."
-    end
-
-    private def pick_prompt(tags : Array(String), query : String?) : String
-      parts = [] of String
-      tags.each { |t| parts << "-t #{t}" }
-      parts << query if query
-      parts.empty? ? "doma pick" : "doma pick #{parts.join(' ')}"
     end
 
     # Compose the two filters. Doing the intersection client-side keeps
