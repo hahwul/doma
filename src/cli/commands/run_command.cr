@@ -164,6 +164,9 @@ module Doma::CLI
       # resume — even when the child handles the signal itself and lives
       # on: a Ctrl-C always ends the sweep. A second one quits outright.
       @not_passed = targets.map(&.path)
+      # Not `Process.on_terminate`: that also catches TERM and HUP, which
+      # should keep killing doma outright.
+      # ameba:disable Lint/SignalTrap
       Signal::INT.trap do
         if @interrupted
           Doma::LastRun.save(@not_passed)
