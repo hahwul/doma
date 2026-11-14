@@ -10,4 +10,4 @@ doma is a CLI for tagging directories so you can recall, browse, or run commands
 - **[Quickstart](./quickstart/)** — `add`, `cd`, `list`, `run` in one walkthrough.
 - **[Shell integration](./shell-integration/)** — wire `doma cd` so it actually changes directory.
 - **[Concepts](./concepts/)** — how doma thinks: paths, tags, frecency, soft delete.
-- **[Comparison](./comparison/)** — vs zoxide / autojump / fasd / fzf.
+- **[Comparison](./comparison/)** — vs mani / gita / myrepos, and vs zoxide / fzf.

@@ -92,5 +92,5 @@ Single SQLite file: `~/.config/doma/doma.db`. Override with `DOMA_DB`. Strict YA
 ## Next
 
 - [Quickstart](../quickstart/) — five-minute hands-on tour
-- [Comparison](../comparison/) — vs zoxide / autojump / fzf / fasd
+- [Comparison](../comparison/) — vs mani / gita / myrepos, and vs zoxide / fzf
 - [Tagging directories](../../usage/tagging/) — auto-tags, git remote derivation, glob filters
