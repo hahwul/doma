@@ -48,6 +48,16 @@ doma run work -t @dirty -- git stash
 doma list -t @dirty --paths
 ```
 
+The other git sets select the same way:
+
+```bash
+doma run @ahead -- git push            # ahead of its upstream (a branch with no upstream isn't a member)
+doma run work -t @behind -- git pull   # behind as of the last fetch (doma never fetches)
+doma status @unreleased                # commits since the latest tag — what's waiting on a release
+```
+
+`@unreleased` measures from the nearest tag reachable from `HEAD`; a repo that has never been tagged isn't in it.
+
 ## Speed
 
 Each directory is probed with one `git status` call, run in parallel (CPU-count workers by default). Tune with `--jobs N` on slow disks or very large sets:

@@ -1818,16 +1818,16 @@ describe "doma setup completion" do
       buf = IO::Memory.new
       Process.run("bash", ["-c", driver], output: buf, error: Process::Redirect::Close,
         env: {"DOMA_HOME" => home, "PATH" => "#{File.dirname(File.expand_path(DOMA_BIN))}:#{ENV["PATH"]}"})
-      buf.to_s.lines.should eq(["failed", "crystal", "lang:crystal @failed @dirty", ""])
+      buf.to_s.lines.should eq(["failed", "crystal", "lang:crystal @failed @dirty @ahead @behind @unreleased", ""])
     end
   end
 
   it "[zsh/fish] add @sets for list/run/status" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
-    run(["setup", "completion", "zsh"])[:out].should contain("tags+=(@failed @dirty)")
+    run(["setup", "completion", "zsh"])[:out].should contain("tags+=(@failed @dirty @ahead @behind @unreleased)")
     fish = run(["setup", "completion", "fish"])[:out]
-    fish.should contain("__fish_seen_subcommand_from list ls run status' -s t -l tag -x -a '@failed @dirty'")
-    fish.should contain("__fish_seen_subcommand_from run; and test (count (commandline -opc)) -le 2' -a '@failed @dirty'")
+    fish.should contain("__fish_seen_subcommand_from list ls run status' -s t -l tag -x -a '@failed @dirty @ahead @behind @unreleased'")
+    fish.should contain("__fish_seen_subcommand_from run; and test (count (commandline -opc)) -le 2' -a '@failed @dirty @ahead @behind @unreleased'")
   end
 
   it "[zsh] emits a #compdef header and a tag-completion helper" do
@@ -2701,6 +2701,44 @@ describe "doma @sets" do
       ensure
         FileUtils.rm_rf(clean)
         FileUtils.rm_rf(dirty)
+      end
+    end
+  end
+
+  it "[@ahead / @behind / @unreleased] select by upstream and tag distance" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    pending! "git not on PATH" unless STATUS_GIT_OK
+    with_home do |home|
+      origin = make_git_repo("doma-gitset-origin")
+      ahead = File.tempname("doma-gitset-ahead")
+      behind = File.tempname("doma-gitset-behind")
+      begin
+        git_in(origin, ["clone", "-q", origin, ahead])
+        git_in(origin, ["clone", "-q", origin, behind])
+        git_in(ahead, ["commit", "-q", "--allow-empty", "-m", "local"])
+        # origin: tagged, then one commit past the tag. `behind` fetches it
+        # (and the tag) without merging; `ahead` never hears about either.
+        git_in(origin, ["tag", "v1"])
+        git_in(origin, ["commit", "-q", "--allow-empty", "-m", "next"])
+        git_in(behind, ["fetch", "-q", "--tags"])
+        [origin, ahead, behind].each { |d| run(["add", d, "-t", "proj"], {"DOMA_HOME" => home}) }
+
+        pick = ->(set : String) do
+          run(["list", "-t", "proj", "-t", set, "--paths"], {"DOMA_HOME" => home})[:out].lines.map(&.chomp)
+        end
+        pick.call("@ahead").should eq([Doma::Validator.canonicalize(ahead)])
+        pick.call("@behind").should eq([Doma::Validator.canonicalize(behind)])
+        pick.call("@unreleased").should eq([Doma::Validator.canonicalize(origin)])
+
+        # `status` answers the upstream sets from its own probe; an empty
+        # result is a report, not a miss.
+        st = run(["status", "proj", "-t", "@ahead", "--json"], {"DOMA_HOME" => home})
+        JSON.parse(st[:out]).as_a.map(&.["path"].as_s).should eq([Doma::Validator.canonicalize(ahead)])
+        none = run(["status", "proj", "-t", "@ahead", "-t", "@behind"], {"DOMA_HOME" => home})
+        none[:status].exit_code.should eq(0)
+        none[:out].should contain("no repos tagged 'proj' in @ahead + @behind")
+      ensure
+        [origin, ahead, behind].each { |d| FileUtils.rm_rf(d) }
       end
     end
   end

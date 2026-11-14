@@ -125,6 +125,8 @@ doma run crystal --dry-run -- rm -rf build    # print the target set without run
 doma run crystal -t work -x archived -- ...   # AND with -t, subtract with -x (also on list/status)
 doma run @failed -- ...                       # retry only what the last run failed on
 doma run crystal -t @dirty -- git stash       # @dirty = repos with uncommitted changes
+doma run @ahead -- git push                   # @ahead / @behind = vs upstream (as of the last fetch)
+doma status @unreleased --json                # @unreleased = commits since the latest tag
 doma run crystal --no-header -- pwd           # suppress ▶/✓ chrome (failures still surface)
 doma run crystal -- sh -c 'echo "$DOMA_NAME"' # child env: DOMA_PATH, DOMA_NAME, DOMA_ID, DOMA_TAGS (comma-joined)
 ```

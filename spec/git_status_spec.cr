@@ -87,6 +87,15 @@ describe Doma::GitStatus do
     end
   end
 
+  describe ".parse_describe" do
+    it "reads the commit count from `git describe --long`, even past dashed tags" do
+      Doma::GitStatus.parse_describe("v0.5.0-3-g1bb2bb7\n").should eq(3)
+      Doma::GitStatus.parse_describe("v0.5.0-0-g1bb2bb7\n").should eq(0)
+      Doma::GitStatus.parse_describe("release-1.0-12-gabc1234\n").should eq(12)
+      Doma::GitStatus.parse_describe("").should be_nil
+    end
+  end
+
   describe ".probe" do
     it "returns git=false for a directory that isn't a repo" do
       dir = File.tempname("doma-nogit-probe")

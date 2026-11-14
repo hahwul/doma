@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Added
+- Three more dynamic sets, usable anywhere a tag is (`list`, `run`, `status`, `-t` / `-x`, completion): `@ahead` (ahead of the upstream), `@behind` (behind the upstream as of the last fetch), and `@unreleased` (commits since the nearest tag; never-tagged repos are not members) — `doma run @ahead -- git push`, `doma status @unreleased`. `status` answers `@dirty` / `@ahead` / `@behind` from its own probe, and a git set now errors when `git` is missing instead of reading as empty
+
 ### Changed
 - `list --pick` (and so `doma cd <tag>`) opens the same full-screen finder as `doma tui`, scoped to the matching directories, replacing the separate inline picker. Typing fuzzy-filters with highlights and the `tag:` / `-tag:` / `id:` / `path:` operators; `--query` stays a plain substring prefilter. `--builtin` now draws on `/dev/tty` even when stdin isn't a TTY, as documented
 - `setup init` wrappers run `doma cd` through the same `DOMA_CD_FILE` hand-off as `tui`; `list --pick` writes its pick there when `DOMA_CD_FILE` is set. Re-run `doma setup install` or open a new shell to pick up the updated wrapper
