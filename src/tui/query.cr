@@ -27,11 +27,7 @@ module Doma
         tag_includes : Array(String),
         tag_excludes : Array(String),
         id_prefixes : Array(String),
-        terms : Array(Term) do
-        def empty? : Bool
-          tag_includes.empty? && tag_excludes.empty? && id_prefixes.empty? && terms.empty?
-        end
-      end
+        terms : Array(Term)
 
       record Scored, entry : Entry, score : Int32, positions : Array(Int32)
 

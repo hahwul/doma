@@ -27,12 +27,6 @@ module Doma::CLI
     # `setup completion` completes exactly what the parser accepts.
     BY_CHOICES = %w[path recent used recency tag]
 
-    # Sentinel returned to the renderer when an entry has no TTL'd tags
-    # at all, so the inner `t -> TagRenderer.render(t, ttl_map[t]?, color)`
-    # loop never has to special-case "no entry in the bulk map." Frozen
-    # at module load time and never mutated.
-    private EMPTY_TTL = {} of String => Int64
-
     private alias JsonRow = Hash(String, String | Bool | Int64 | Array(String) | Hash(String, Int64))
 
     def run(args : Array(String))
@@ -472,8 +466,8 @@ module Doma::CLI
     private def render_row(e : Doma::Entry, ttl_by_id : Hash(Int64, Hash(String, Int64)), check_existence : Bool, color : Bool) : String
       short_str = color ? e.short_id.colorize(:dark_gray).to_s : e.short_id
       path_str = color ? e.path.colorize(:cyan).to_s : e.path
-      ttl_map = ttl_by_id[e.id]? || EMPTY_TTL
-      tags_str = e.tags.empty? ? "" : e.tags.map { |t| Doma::TagRenderer.render(t, ttl_map[t]?, color) }.join(' ')
+      ttl_map = ttl_by_id[e.id]?
+      tags_str = e.tags.map { |t| Doma::TagRenderer.render(t, ttl_map.try(&.[t]?), color) }.join(' ')
       marker = ""
       if check_existence && !Dir.exists?(e.path)
         marker = color ? " #{"[gone]".colorize(:red)}" : " [gone]"
