@@ -41,7 +41,7 @@ It is not a frecency jumper: doma never adds a directory on its own, and a direc
 - Multiple tags per directory; tags are reusable across paths
 - Auto-tag from basename, Git remote, and project type (`--auto-tag`, `--git-tag`, `--project-tag`: `shard.yml` → `crystal`, `Cargo.toml` → `rust`, …)
 - Bulk onboarding: `doma add -r ~/Projects --project-tag` registers every git repo under a tree
-- Dynamic sets next to tags: `@failed` (what the last `run` failed on) and `@dirty` (repos with uncommitted changes) — `doma run @failed -- make test` retries only the failures
+- Dynamic sets next to tags, computed when you ask: `@failed` (what the last `run` failed on), `@dirty` (uncommitted changes), `@ahead` / `@behind` (vs upstream), `@unreleased` (commits since the latest tag) — `doma run @failed -- make test` retries only the failures, `doma status @unreleased` lists what's waiting on a release
 - One selector for every set command: repeat `-t` to AND, `-x` to exclude (`run crystal -x archived -- …`, `status -t work -t api`, `list -x 'tmp*'`)
 - Glob filter on tags (`list -t 'work/*'`, `run 'work/*' -- cmd`) — shell-style: `*` matches within one segment, `**` crosses `/`, `?` is a single non-`/` character
 - Hierarchical tag display (`tags --tree`)

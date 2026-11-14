@@ -54,24 +54,39 @@ module Doma
     end
 
     def probe(path : String) : Status
+      # git exits non-zero (128) outside a work tree; 0 for both clean
+      # and dirty repos. So success cleanly separates repo from non-repo.
+      capture(path, ["status", "--porcelain=v2", "--branch"]).try { |text| parse(text) } || NON_GIT
+    end
+
+    # stdout of `git -C path <args>`, or nil when git exits non-zero or
+    # can't be run at all (vanished from PATH mid-sweep) — degrade rather
+    # than crash a parallel worker.
+    private def capture(path : String, args : Array(String)) : String?
       output = IO::Memory.new
       status = Process.run(
         "git",
-        args: ["-C", path, "status", "--porcelain=v2", "--branch"],
+        args: ["-C", path] + args,
         output: output,
         error: Process::Redirect::Close,
         input: Process::Redirect::Close,
       )
-      # git exits non-zero (128) outside a work tree; 0 for both clean
-      # and dirty repos. So success? cleanly separates repo from non-repo.
-      return NON_GIT unless status.success?
-      parse(output.to_s)
-    rescue File::NotFoundError
-      # git vanished from PATH between the up-front check and here.
-      # Degrade rather than crash a parallel worker mid-sweep.
-      NON_GIT
-    rescue IO::Error
-      NON_GIT
+      status.success? ? output.to_s : nil
+    rescue File::NotFoundError | IO::Error
+      nil
+    end
+
+    # Commits on HEAD since the nearest reachable tag — the `@unreleased`
+    # probe. nil when there's no tag to measure from (or no repo, no git):
+    # "never tagged" isn't "has unreleased work".
+    def commits_since_tag(path : String) : Int32?
+      capture(path, ["describe", "--tags", "--long"]).try { |text| parse_describe(text) }
+    end
+
+    # `git describe --long` prints `<tag>-<commits>-g<sha>`; the tag itself
+    # may contain dashes (`release-1.0-3-gabc1234`), so anchor on the tail.
+    def parse_describe(output : String) : Int32?
+      output.strip.match(/-(\d+)-g[0-9a-f]+\z/).try(&.[1].to_i?)
     end
 
     # Pure parser over `--porcelain=v2 --branch` output. Split out from

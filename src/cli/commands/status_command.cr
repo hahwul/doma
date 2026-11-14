@@ -66,9 +66,10 @@ module Doma::CLI
       parser.parse(args)
 
       tags = SweepArgs.tags!("status", flag_tags, positional)
-      # `@dirty` here is just `--dirty`, which filters from the probe this
-      # command runs anyway instead of probing every repo twice.
-      dirty_only = true if tags.delete("@dirty")
+      # `@dirty` / `@ahead` / `@behind` filter from the probe this command
+      # runs anyway instead of probing every repo twice; `--dirty` is `@dirty`.
+      probe_sets, tags = tags.partition { |t| SweepArgs::STATUS_SETS.has_key?(t) }
+      probe_sets << "@dirty" if dirty_only && !probe_sets.includes?("@dirty")
       filtered = !tags.empty? || !excludes.empty?
 
       # Fail fast and clearly if git isn't installed — otherwise every
@@ -99,7 +100,8 @@ module Doma::CLI
       end
 
       states = probe_all(entries, jobs)
-      states = states.select { |s| s.exists && s.status.git && !s.status.clean? } if dirty_only
+      # A gone path or non-repo probes as NON_GIT, which is in none of them.
+      states = states.select { |s| probe_sets.all? { |name| SweepArgs::STATUS_SETS[name].call(s.status) } }
 
       if json_mode
         emit_json(states)
@@ -107,8 +109,9 @@ module Doma::CLI
       end
 
       if states.empty?
-        # Only reachable under --dirty: everything matched was clean.
-        Doma::Logger.info tags.empty? ? "all repos are clean" : "all repos tagged #{SweepArgs.phrase(tags, excludes)} are clean"
+        # Only reachable under a probe set: nothing matched was in it.
+        scope = tags.empty? ? "" : " tagged #{SweepArgs.phrase(tags, excludes)}"
+        Doma::Logger.info probe_sets == ["@dirty"] ? "all repos#{scope} are clean" : "no repos#{scope} in #{probe_sets.join(" + ")}"
         return
       end
 

@@ -44,7 +44,7 @@ doma run @failed -- crystal spec      # only those 2; whatever still fails stays
 doma list -t @failed --paths          # or inspect them
 ```
 
-`@dirty` is the other built-in set: git repos with uncommitted changes, probed at selection time (`doma run work -t @dirty -- git stash`). Sets combine with tags in `-t` and `-x` anywhere a tag is accepted (`list`, `run`, `status`). Directories `--fail-fast` never reached count as not-yet-passed and land in `@failed` too. Each sweep replaces the previous list, whatever its tag.
+The other built-in sets come from git, probed at selection time: `@dirty` (uncommitted changes — `doma run work -t @dirty -- git stash`), `@ahead` / `@behind` (vs the upstream as of the last fetch; a branch with no upstream is in neither — `doma run @ahead -- git push`), and `@unreleased` (commits since the latest tag). Sets combine with tags in `-t` and `-x` anywhere a tag is accepted (`list`, `run`, `status`). Directories `--fail-fast` never reached count as not-yet-passed and land in `@failed` too. Each sweep replaces the previous list, whatever its tag.
 
 ## Per-directory environment
 

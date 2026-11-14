@@ -34,8 +34,22 @@ module Doma::CLI
     # Dynamic sets: computed per call rather than stored as tags. Real tags
     # must start alphanumeric, so the `@` namespace can't collide.
     SETS = {
-      "@failed" => "directories that failed the last `doma run`",
-      "@dirty"  => "git repos with uncommitted changes",
+      "@failed"     => "directories that failed the last `doma run`",
+      "@dirty"      => "git repos with uncommitted changes",
+      "@ahead"      => "git repos ahead of their upstream",
+      "@behind"     => "git repos behind their upstream as of the last fetch",
+      "@unreleased" => "git repos with commits since their latest tag",
+    }
+
+    # The sets one `git status` probe answers. Public so `status` can filter
+    # on the probe it runs anyway instead of probing twice.
+    # ponytail: outside `status` each set probes on its own, so
+    # `-t @dirty -t @ahead` runs git twice on the survivors — memoize per
+    # path if that bites.
+    STATUS_SETS = {
+      "@dirty"  => ->(s : Doma::GitStatus::Status) { s.dirty > 0 },
+      "@ahead"  => ->(s : Doma::GitStatus::Status) { s.ahead > 0 },
+      "@behind" => ->(s : Doma::GitStatus::Status) { s.behind > 0 },
     }
 
     # Entries carrying a match for every include and none for any exclude.
@@ -64,14 +78,14 @@ module Doma::CLI
     end
 
     # Applied after tag filtering, and with the cheap `@failed` file read
-    # before `@dirty`, so git only probes what's left.
+    # before the git sets, so git only probes what's left.
     def self.apply_sets(entries : Array(Doma::Entry), includes : Array(String), excludes : Array(String),
                         jobs : Int32? = nil) : Array(Doma::Entry)
-      includes.sort_by { |s| s == "@dirty" ? 1 : 0 }.each do |s|
+      includes.sort_by { |s| s == "@failed" ? 0 : 1 }.each do |s|
         members = members(s, entries, jobs)
         entries = entries.select { |e| members.includes?(e.path) }
       end
-      excludes.sort_by { |s| s == "@dirty" ? 1 : 0 }.each do |s|
+      excludes.sort_by { |s| s == "@failed" ? 0 : 1 }.each do |s|
         members = members(s, entries, jobs)
         entries = entries.reject { |e| members.includes?(e.path) }
       end
@@ -80,12 +94,20 @@ module Doma::CLI
 
     private def self.members(set : String, entries : Array(Doma::Entry), jobs : Int32?) : Set(String)
       return Doma::LastRun.failed.to_set if set == "@failed"
-      # @dirty: one `git status` per candidate, overlapped like `status`.
-      # `probe` never raises; a missing dir or non-repo reads as clean.
-      dirty = Doma::Parallel.map(entries, jobs || Doma::Parallel.default_jobs) do |e|
-        e.path if Doma::GitStatus.probe(e.path).dirty > 0
+      # Without git every probe reads "not a member", and `-x @dirty` would
+      # quietly exclude nothing — refuse instead.
+      unless Doma::GitStatus.available?
+        raise Doma::Error.new("git executable not found on PATH",
+          hint: "#{set} shells out to git; install it or put it on your PATH")
       end
-      dirty.compact.to_set
+      # One git call per candidate, overlapped like `status`. The probes
+      # never raise; a missing dir or non-repo is simply not a member.
+      by_status = STATUS_SETS[set]?
+      hits = Doma::Parallel.map(entries, jobs || Doma::Parallel.default_jobs) do |e|
+        member = by_status ? by_status.call(Doma::GitStatus.probe(e.path)) : (Doma::GitStatus.commits_since_tag(e.path) || 0) > 0
+        e.path if member
+      end
+      hits.compact.to_set
     end
 
     # "'a' AND 'b', excluding 'c'" — for not-found and dry-run messages.
