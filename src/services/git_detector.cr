@@ -42,6 +42,28 @@ module Doma
       EMPTY
     end
 
+    # The `origin` URL of the primary checkout rooted *at* `path`, for
+    # portable snapshots — what `import --clone` will fetch, so it is
+    # deliberately narrow:
+    #   - no walk-up: a plain subdirectory must not claim its parent's
+    #     remote, or the whole parent would be cloned into it
+    #   - `.git` must be a directory: a linked worktree or submodule (a
+    #     `.git` *file*) is part of another repo, and re-cloning it would
+    #     produce an unrelated full clone on the default branch
+    #   - a relative remote (`../bare.git`) means nothing elsewhere
+    # Secrets never leave: http(s) userinfo is dropped whole (tokens sit in
+    # the user slot there), other schemes lose only the password.
+    def origin_url(path : String) : String?
+      git_dir = File.join(path, ".git")
+      return unless Dir.exists?(git_dir)
+      url = read_origin_url(git_dir)
+      return if url.nil? || url.starts_with?('.')
+      url.sub(%r{\A(https?://)[^/@]+@}i, "\\1")
+        .sub(%r{\A([a-z][a-z0-9+.-]*://[^/@:]+):[^/@]*@}i, "\\1@")
+    rescue IO::Error
+      nil
+    end
+
     # Walks up from `start` looking for a directory containing a `.git` entry
     # (either a directory or a worktree gitdir file). Stops at the filesystem
     # root.
@@ -101,10 +123,10 @@ module Doma
           next
         end
         next unless in_origin
-        if stripped.starts_with?("url")
-          parts = stripped.split('=', 2)
-          return parts[1].strip if parts.size == 2
-        end
+        # Exact key (not `urlx`), and git allows the value quoted.
+        key, _, value = stripped.partition('=')
+        value = value.strip.strip('"')
+        return value if key.strip == "url" && !value.empty?
       end
       nil
     end

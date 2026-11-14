@@ -1,6 +1,8 @@
 require "json"
 require "yaml"
 require "../db/database"
+require "../utils/validator"
+require "./git_detector"
 
 module Doma
   # On-disk snapshot of the doma database. Lives in its own file so the
@@ -37,8 +39,14 @@ module Doma
       @[JSON::Field(emit_null: false)]
       @[YAML::Field(emit_null: false)]
       property expirations : Hash(String, Int64)? = nil
+      # `origin` URL, written by `export --portable` so `import --clone` can
+      # fetch the repo on a machine that doesn't have it. Optional and
+      # additive — no schema bump: older binaries ignore the field.
+      @[JSON::Field(emit_null: false)]
+      @[YAML::Field(emit_null: false)]
+      property remote : String? = nil
 
-      def initialize(@path : String, @tags : Array(String), @basename : String? = nil, @expirations : Hash(String, Int64)? = nil)
+      def initialize(@path : String, @tags : Array(String), @basename : String? = nil, @expirations : Hash(String, Int64)? = nil, @remote : String? = nil)
       end
     end
   end
@@ -51,8 +59,12 @@ module Doma
       Yaml
     end
 
-    def build(db : Doma::Database) : Snapshot
+    # `portable` makes the snapshot survive a different machine or user:
+    # paths under the home directory are written `~/…` (which import has
+    # always accepted) and git repos carry their `origin` URL.
+    def build(db : Doma::Database, portable : Bool = false) : Snapshot
       entries = db.directories
+      home = portable ? Doma::Validator.canonicalize("~") : nil
       # One round trip for every directory's TTLs instead of a
       # per-entry `tag_expirations` query — the same N+1 → bulk fix the
       # list render loop already uses. A directory with no live TTL maps
@@ -65,13 +77,16 @@ module Doma
       ttl_by_id = db.tag_expirations_bulk(entries.map(&.id), include_past: true)
       snapshot_entries = entries.map do |e|
         ttls = ttl_by_id[e.id]?.try(&.select { |name, _| e.tags.includes?(name) })
-        Snapshot::Entry.new(e.path, e.tags, e.basename, ttls.try { |t| t.empty? ? nil : t })
+        ttls = ttls.try { |t| t.empty? ? nil : t }
+        next Snapshot::Entry.new(e.path, e.tags, e.basename, ttls) unless home
+        path = e.path == home ? "~" : e.path.starts_with?("#{home}/") ? "~#{e.path[home.size..]}" : e.path
+        Snapshot::Entry.new(path, e.tags, e.basename, ttls, Doma::GitDetector.origin_url(e.path))
       end
       Snapshot.new(snapshot_entries)
     end
 
-    def write(db : Doma::Database, format : Format, io : IO)
-      snapshot = build(db)
+    def write(db : Doma::Database, format : Format, io : IO, portable : Bool = false)
+      snapshot = build(db, portable)
       case format
       in Format::Json
         snapshot.to_json(io)

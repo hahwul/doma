@@ -16,12 +16,12 @@ Based on each project's own documentation at the time of writing.
 |---|---|---|---|---|
 | Registering | CLI (`add`, `add -r`); no file to edit | `mani.yaml` you edit (`mani init` discovers repos) | CLI (`gita add`) | `.mrconfig` you edit, or `mr register` |
 | Grouping | tags; `-t` repeats to AND, `-x` excludes, globs | tags; boolean `--tags-expr` (and / or / not) | groups, context | by directory and config file; no tags |
-| Select by live state | yes — dynamic sets (`@dirty`, `@failed`) | no | no (state is shown, not selectable) | a per-repo `skip` hook; a retry queue for commands that failed offline |
+| Select by live state | yes — dynamic sets (`@dirty`, `@failed`, `@ahead`, `@behind`, `@unreleased`) | no | no (state is shown, not selectable) | a per-repo `skip` hook; a retry queue for commands that failed offline |
 | Run a command across the set | `run`, `--parallel --jobs N` | `exec`, `--parallel --forks N` | `shell`, `super` | `mr run`, `-j N` |
 | Named, reusable tasks | no, by design | yes (`tasks:`) | yes (`cmds.json`) | yes (custom commands in config) |
 | Status dashboard | `status` | no dedicated command (`exec … git status` as a table) | `gita ll` | `mr status` |
 | Machine-readable results | `--json` on `list`, `tags`, `info`, `stats`, `status`, `run` | table / markdown / html | not documented | not documented |
-| Recreate the set on a new machine | no — `export` / `import` carries paths and tags, it doesn't clone | `mani sync` | `gita freeze` + `gita clone -f` | `mr checkout`, `mr bootstrap` |
+| Recreate the set on a new machine | `export --portable` + `import --clone` | `mani sync` | `gita freeze` + `gita clone -f` | `mr checkout`, `mr bootstrap` |
 | Directories that aren't git repos | yes | yes (path-only projects) | git only | other VCSs (svn, hg, …) |
 | Expiring labels | TTL tags, `mark` | no | no | no |
 | Interactive UI | finder for jumping / picking | `mani tui` | no | no |
@@ -29,8 +29,7 @@ Based on each project's own documentation at the time of writing.
 
 ### Where the others are stronger
 
-- **Reproducible workspaces.** mani, gita, and myrepos can all rebuild a set of repositories on a fresh machine from a file. doma can't: its snapshot has paths and tags but no remotes, so it restores labels for directories that already exist.
-- **Shared, declarative config.** `mani.yaml` and `.mrconfig` are files you can commit and hand to a team. doma's state is a local SQLite database — personal by construction.
+- **Shared, declarative config.** `mani.yaml` and `.mrconfig` are files you edit, commit, and hand to a team; the file *is* the workspace. doma's state is a local SQLite database — personal by construction. It can rebuild a set elsewhere (`export --portable`, then `import --clone`), but that snapshot is an export you regenerate, not a source of truth you maintain.
 - **Named tasks.** All three let you define a command once and call it by name. doma deliberately doesn't; `run` takes the command on the command line, and anything reusable belongs in your shell, a `justfile`, or a `Makefile`.
 - **Tag expressions.** mani has boolean expressions over tags. doma has AND (`-t` repeated), NOT (`-x`), and globs, but no general OR.
 - **Other version control systems.** myrepos drives svn, mercurial, and more. doma's `status` and its git-derived sets only understand git (its `run` works on any directory).

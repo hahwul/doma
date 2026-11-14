@@ -2464,6 +2464,80 @@ private def make_git_repo(prefix : String, *, dirty : Bool = false) : String
   dir
 end
 
+describe "doma export --portable / import --clone" do
+  it "recreates a repo under a different home" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    pending! "git not on PATH" unless STATUS_GIT_OK
+    origin = make_git_repo("doma-port-origin")
+    old_home = File.tempname("doma-port-old")
+    new_home = File.tempname("doma-port-new")
+    FileUtils.mkdir_p(old_home)
+    FileUtils.mkdir_p(new_home)
+    begin
+      snapshot = File.join(new_home, "doma.json")
+      with_home do |home|
+        env = {"DOMA_HOME" => home, "HOME" => old_home}
+        work = File.join(old_home, "proj")
+        git_in(origin, ["clone", "-q", origin, work])
+        run(["add", work, "-t", "p"], env)
+
+        # Plain export is unchanged: absolute path, no remote.
+        plain = JSON.parse(run(["export"], env)[:out])["entries"][0]
+        plain["path"].as_s.should eq(Doma::Validator.canonicalize(work))
+        plain["remote"]?.should be_nil
+
+        portable = run(["export", "--portable"], env)[:out]
+        entry = JSON.parse(portable)["entries"][0]
+        entry["path"].as_s.should eq("~/proj")
+        entry["remote"].as_s.should eq(origin)
+        File.write(snapshot, portable)
+      end
+
+      with_home do |home|
+        env = {"DOMA_HOME" => home, "HOME" => new_home}
+        target = File.join(new_home, "proj")
+
+        hint = run(["import", snapshot], env)
+        hint[:out].should contain("--clone")
+        Dir.exists?(target).should be_false
+
+        preview = run(["import", snapshot, "--clone", "--dry-run"], env)
+        preview[:out].should contain("would clone #{origin}")
+        Dir.exists?(target).should be_false
+
+        r = run(["import", snapshot, "--clone"], env)
+        r[:status].exit_code.should eq(0)
+        Dir.exists?(File.join(target, ".git")).should be_true
+        run(["list", "-t", "p", "--paths"], env)[:out].chomp.should eq(Doma::Validator.canonicalize(target))
+      end
+    ensure
+      [origin, old_home, new_home].each { |d| FileUtils.rm_rf(d) }
+    end
+  end
+
+  it "[--clone] reports a failed clone and exits non-zero, keeping the entry" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    pending! "git not on PATH" unless STATUS_GIT_OK
+    with_home do |home|
+      target = File.join(home, "nope")
+      snapshot = File.join(home, "snap.json")
+      bad = File.join(home, "no-such-origin")
+      # The nested entry must not be cloned once its parent failed: that
+      # would create `nope/` and block the parent's retry.
+      File.write(snapshot, {version: 2, entries: [
+        {path: target, tags: ["p"], remote: bad},
+        {path: File.join(target, "inner"), tags: ["q"], remote: bad},
+      ]}.to_json)
+      r = run(["import", snapshot, "--clone"], {"DOMA_HOME" => home})
+      r[:status].exit_code.should eq(1)
+      r[:err].should contain("2 clones failed")
+      r[:err].should contain("its parent failed to clone")
+      Dir.exists?(target).should be_false
+      run(["list", "-t", "p", "--paths"], {"DOMA_HOME" => home})[:out].chomp.should eq(Doma::Validator.canonicalize(target))
+    end
+  end
+end
+
 describe "doma status" do
   it "renders clean / non-git rows and a summary across a tagged set" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)

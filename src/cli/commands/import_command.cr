@@ -1,5 +1,6 @@
 require "option_parser"
 require "../../db/database"
+require "../../services/git_status"
 require "../../services/importer"
 require "../../utils/errors"
 require "../../utils/logger"
@@ -11,10 +12,11 @@ module Doma::CLI
     def run(args : Array(String))
       explicit_mode : Doma::Importer::Mode? = nil
       dry_run = false
+      clone = false
       positional = [] of String
 
       parser = OptionParser.new do |p|
-        p.banner = "Usage: doma import <file> [--merge | --replace] [--dry-run] [--yes]"
+        p.banner = "Usage: doma import <file> [--merge | --replace] [--clone] [--dry-run] [--yes]"
         # Track each flag explicitly so passing both produces a hard
         # error instead of silently letting the second one win.
         p.on("--merge", "Add to existing data (default)") do
@@ -33,6 +35,7 @@ module Doma::CLI
         # before this parser ever sees it; the registration keeps the
         # flag documented in --help and routes to the same switch.
         p.on("-y", "--yes", "Skip the --replace confirmation prompt") { Doma::Runtime.assume_yes = true }
+        p.on("--clone", "git clone entries that aren't on disk (needs remotes from `export --portable`)") { clone = true }
         p.on("-n", "--dry-run", "Report what would be imported without writing anything") { dry_run = true }
         p.on("-h", "--help", "Show help") do
           puts p
@@ -62,7 +65,12 @@ module Doma::CLI
         end
       end
 
-      Doma::Database.open do |db|
+      # Before anything is written, not after the database is already merged.
+      if clone && !Doma::GitStatus.available?
+        raise Doma::Error.new("git executable not found on PATH", hint: "`--clone` shells out to git")
+      end
+
+      clonable = Doma::Database.open do |db|
         result = Doma::Importer.from_file(db, file, mode: mode, dry_run: dry_run)
         if dry_run
           verb = mode == Doma::Importer::Mode::Replace ? "replace" : "merge"
@@ -83,6 +91,50 @@ module Doma::CLI
             "(#{result.added} new, #{result.updated} existing), #{result.skipped} skipped"
           )
         end
+        result.clonable
+      end
+
+      return if clonable.empty?
+      if !clone
+        Doma::Logger.info "#{clonable.size} not on disk but have a remote — `--clone` fetches them"
+      elsif dry_run
+        clonable.each { |(path, remote)| Doma::Logger.info "[dry-run] would clone #{remote} → #{path}" }
+      else
+        clone_missing(clonable)
+      end
+    end
+
+    # Parent paths first, so a repo nested inside another clones into it
+    # instead of blocking it with a non-empty directory.
+    # ponytail: one clone at a time; `Doma::Parallel` if onboarding a big
+    # set is slow (keep nested paths ordered).
+    private def clone_missing(clonable : Array({String, String}))
+      failed = [] of String
+      clonable.sort_by(&.[0]).each do |(path, remote)|
+        # A parent cloned a moment ago may have brought this one with it.
+        next unless Doma::Importer.absent?(path)
+        # Cloning under a parent that just failed would create the parent
+        # directory and block its retry.
+        if failed.any? { |f| path.starts_with?("#{f}/") }
+          failed << path
+          Doma::Logger.warn "skipped #{path} (its parent failed to clone)"
+          next
+        end
+        Doma::Logger.info "cloning #{remote} → #{path}"
+        # The URL comes from a file: `--` keeps it from being read as an
+        # option, and `ext::` (run-a-command transport) stays off even if
+        # the user's git config allows it. git's progress goes to stderr;
+        # stdout stays ours.
+        ok = Process.run("git", ["-c", "protocol.ext.allow=never", "clone", "--", remote, path],
+          output: STDERR, error: STDERR).success?
+        unless ok
+          failed << path
+          Doma::Logger.warn "clone failed: #{path}"
+        end
+      end
+      # The entries are registered either way; `list --check` shows the gaps.
+      unless failed.empty?
+        raise Doma::Error.new("#{failed.size} clone#{failed.size == 1 ? "" : "s"} failed")
       end
     end
 
