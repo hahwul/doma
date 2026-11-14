@@ -8,12 +8,12 @@ weight = 5
 doma status [<tag>]
 ```
 
-`status` is the read-only twin of [`run`](../run/): where `run` executes a command across a tagged set, `status` reports each directory's git state — branch, ahead/behind vs upstream, and a dirty-file count — in one table.
+`status` is the read-only twin of [`run`](../run/): where `run` executes a command across a tagged set, `status` reports each directory's git state — branch, ahead/behind vs upstream, a dirty-file count, stashes, and how long ago the last commit was — in one table.
 
 ```
 $ doma status work
-/Users/me/work/api      ✔ clean            main      ↑2
-/Users/me/work/web      ● 3 dirty          feat/x    ↓1 ↑4
+/Users/me/work/api      ✔ clean  main  ↑2  2h ago
+/Users/me/work/web      ● 3 dirty  feat/x  ↓1 ↑4  ≡2 stashed  3d ago
 /Users/me/work/docs     ✗ not a git repo
 /Users/me/work/legacy   ✗ gone
 
@@ -32,6 +32,8 @@ With no tag, every tracked directory is scanned. Pass a tag (positionally or wit
 | `✗ gone` | path no longer exists — run `doma prune --gone` |
 | branch | current branch, or `(detached)` for a detached HEAD |
 | `↓N ↑M` | N commits behind / M ahead of upstream (omitted when in sync or no upstream) |
+| `≡N stashed` | N stash entries (omitted when none; needs git 2.35+) |
+| `3d ago` | age of the last commit on `HEAD` — what you haven't touched in a while |
 
 ## Just the dirty ones
 
@@ -58,9 +60,17 @@ doma status @unreleased                # commits since the latest tag — what's
 
 `@unreleased` measures from the nearest tag reachable from `HEAD`; a repo that has never been tagged isn't in it.
 
+## Fresh ahead/behind
+
+`status` never touches the network, so `↓N` and `@behind` are as of your last fetch. To refresh first, sweep a fetch over the same set:
+
+```bash
+doma run work --parallel --no-header -- git fetch -q && doma status work
+```
+
 ## Speed
 
-Each directory is probed with one `git status` call, run in parallel (CPU-count workers by default). Tune with `--jobs N` on slow disks or very large sets:
+Each repo is probed with two quick git calls (`git status`, plus `git log -1` for the commit age), run in parallel (CPU-count workers by default). Tune with `--jobs N` on slow disks or very large sets:
 
 ```bash
 doma status --jobs 4
@@ -74,4 +84,4 @@ doma status --jobs 4
 doma status work --json | jq -r '.[] | select(.dirty > 0) | .path'
 ```
 
-The JSON form carries the full breakdown per entry — `branch`, `upstream`, `ahead`, `behind`, `modified`, `staged`, `unstaged`, `untracked`, `conflicts`, `dirty`, `clean`, plus `exists`/`git` flags for non-repo and missing paths.
+The JSON form carries the full breakdown per entry — `branch`, `upstream`, `ahead`, `behind`, `modified`, `staged`, `unstaged`, `untracked`, `conflicts`, `dirty`, `clean`, `stash`, `last_commit_at` (epoch seconds, `null` before the first commit), plus `exists`/`git` flags for non-repo and missing paths.

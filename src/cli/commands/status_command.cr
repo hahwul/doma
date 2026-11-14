@@ -7,6 +7,7 @@ require "../../utils/errors"
 require "../../utils/logger"
 require "../../utils/parallel"
 require "../../utils/suggester"
+require "../../utils/time_formatter"
 require "./sweep_args"
 
 module Doma::CLI
@@ -26,7 +27,8 @@ module Doma::CLI
     private record RepoState,
       entry : Doma::Entry,
       exists : Bool,
-      status : Doma::GitStatus::Status
+      status : Doma::GitStatus::Status,
+      committed_at : Int64? = nil
 
     def run(args : Array(String))
       json_mode = false
@@ -53,9 +55,10 @@ module Doma::CLI
           puts p
           STDOUT.puts ""
           STDOUT.puts "Probes each directory with `git status` and reports branch,"
-          STDOUT.puts "ahead/behind vs upstream, and a dirty-file count. With no tag,"
-          STDOUT.puts "every tracked directory is scanned. Non-git and missing paths"
-          STDOUT.puts "are shown too (use --dirty to hide everything that's clean)."
+          STDOUT.puts "ahead/behind vs upstream, a dirty-file count, stashes, and the"
+          STDOUT.puts "age of the last commit. With no tag, every tracked directory is"
+          STDOUT.puts "scanned. Non-git and missing paths are shown too (use --dirty to"
+          STDOUT.puts "hide everything that's clean)."
           exit 0
         end
         p.unknown_args do |before, after|
@@ -102,6 +105,12 @@ module Doma::CLI
       states = probe_all(entries, jobs)
       # A gone path or non-repo probes as NON_GIT, which is in none of them.
       states = states.select { |s| probe_sets.all? { |name| SweepArgs::STATUS_SETS[name].call(s.status) } }
+      # Commit age is a second git call, so only for the rows that survived.
+      # (`jobs` is captured by the option block, so it needs a local to narrow.)
+      j = jobs
+      states = Doma::Parallel.map(states, j || Doma::Parallel.default_jobs) do |s|
+        s.status.git ? s.copy_with(committed_at: Doma::GitStatus.last_commit_at(s.entry.path)) : s
+      end
 
       if json_mode
         emit_json(states)
@@ -149,7 +158,7 @@ module Doma::CLI
         # ljust on the *raw* path; colorized strings carry invisible ANSI
         # bytes that would throw the column math off.
         pad = " " * (width - s.entry.path.size)
-        cells = [status_cell(s, color), branch_cell(s, color), ab_cell(s, color)]
+        cells = [status_cell(s, color), branch_cell(s, color), ab_cell(s, color), stash_cell(s, color), age_cell(s, color)]
           .reject(&.empty?).join("  ")
         puts "#{path}#{pad}  #{cells}".rstrip
       end
@@ -188,6 +197,17 @@ module Doma::CLI
       return "" if parts.empty?
       out = parts.join(' ')
       color ? out.colorize(:yellow).to_s : out
+    end
+
+    private def stash_cell(s : RepoState, color : Bool) : String
+      return "" unless s.status.stash > 0
+      label = "≡#{s.status.stash} stashed"
+      color ? label.colorize(:blue).to_s : label
+    end
+
+    # How long ago HEAD was committed — the "what have I left alone" column.
+    private def age_cell(s : RepoState, color : Bool) : String
+      s.committed_at.try { |at| Doma::TimeFormatter.relative_past(at, color) } || ""
     end
 
     private def summary_line(states : Array(RepoState), color : Bool) : String
@@ -231,6 +251,8 @@ module Doma::CLI
                 json.field "conflicts", st.conflicts
                 json.field "dirty", st.dirty
                 json.field "clean", st.clean?
+                json.field "stash", st.stash
+                json.field "last_commit_at", s.committed_at
               end
             end
           end

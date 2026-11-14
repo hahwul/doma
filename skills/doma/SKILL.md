@@ -39,7 +39,7 @@ tag, and silent emptiness is worse than asking.
 | Mark missing paths inline | `doma list --check` | Tags entries whose path is gone with `[gone]`. Without it, the footer just counts them |
 | Just the tag names | `doma tags --names` | Cheap probe before committing to a tag. `doma tags --tree` shows the `work/proj/...` hierarchy; `doma tags -0` is NUL-separated for `xargs -0`. Plain `doma tags` hides single-directory basename tags (`--all` shows them); `--names` / `--json` never hide anything |
 | Narrow a set | `doma list -t A -t B --paths` / `-x TAG` | Repeated `-t` ANDs, `-x TAG` (repeatable, glob ok) drops directories carrying it. Same flags on `run` and `status` |
-| Git state across a tagged set | `doma status -t TAG --json` | Per-repo `branch`, `ahead`/`behind`, `dirty`, `clean`, `untracked`, etc. Use for "which of my X repos have uncommitted changes?" — filter `.[] \| select(.dirty > 0)`. Add `--dirty` to pre-filter. Shells out to `git` |
+| Git state across a tagged set | `doma status -t TAG --json` | Per-repo `branch`, `ahead`/`behind`, `dirty`, `clean`, `untracked`, `stash`, `last_commit_at` (epoch), etc. Use for "which of my X repos have uncommitted changes?" — filter `.[] \| select(.dirty > 0)`. Add `--dirty` to pre-filter. Shells out to `git` |
 
 ## When the user wants to register or bookmark paths
 

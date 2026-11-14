@@ -115,6 +115,12 @@ doma run crystal --fail-fast -- crystal spec
 
 `--fail-fast` halts the loop on the first non-zero exit (sequential only — parallel always runs every directory to completion). doma's exit code reflects the failure, and the tally counts the directories it never reached as `skipped`.
 
+### Interrupting a sweep
+
+Ctrl-C stops the running command(s) and keeps doma from starting any more. You still get the tally, doma ends with SIGINT (status 130, so a shell loop around it stops too), and everything that didn't pass — the interrupted directories and the ones never started — goes into `@failed`, so `doma run @failed -- <cmd>` picks up where you stopped. A second Ctrl-C quits immediately, still recording `@failed`.
+
+Ctrl-C always ends the sweep, even when the command handles it itself and keeps running (a REPL cancelling a line): doma waits for that command to exit, then stops.
+
 ## When to reach for `run` vs a manual loop
 
 Use `doma run` when the operation is a single shell command and per-directory logic is uniform.

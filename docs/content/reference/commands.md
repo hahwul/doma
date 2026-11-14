@@ -145,7 +145,7 @@ Dynamic sets work wherever a tag does, in `list`, `run`, and `status`: `@failed`
 doma status [<tag> | -t TAG]... [-x TAG]... [--dirty] [--jobs N] [--json]
 ```
 
-Reports each tagged directory's git working-tree state — branch, ahead/behind vs upstream, dirty-file count. No tag scans every tracked directory; `-t` ANDs more tags and `-x` drops directories carrying a tag, as in `run`. `--dirty` shows only repos with uncommitted changes. Probes run in parallel (`--jobs` to tune; default CPU count) by shelling out to `git`; non-git and missing paths are surfaced too. See [Git status](../../usage/status/).
+Reports each tagged directory's git working-tree state — branch, ahead/behind vs upstream, dirty-file count, stash count, and the age of the last commit. No tag scans every tracked directory; `-t` ANDs more tags and `-x` drops directories carrying a tag, as in `run`. `--dirty` shows only repos with uncommitted changes. Probes run in parallel (`--jobs` to tune; default CPU count) by shelling out to `git`; non-git and missing paths are surfaced too. See [Git status](../../usage/status/).
 
 ## `export` / `import`
 
