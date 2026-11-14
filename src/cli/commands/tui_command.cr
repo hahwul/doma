@@ -52,10 +52,10 @@ module Doma::CLI
           return
         end
 
-        result = run_app(db, entries, initial_query(query, tag))
+        result = TuiCommand.run_app(db, entries, initial_query(query, tag))
         if result.selected? && (path = result.path)
           db.bump_used_safe(path)
-          deliver(path)
+          TuiCommand.deliver(path)
           selected = true
         end
       end
@@ -65,8 +65,9 @@ module Doma::CLI
       exit 130 unless selected
     end
 
-    private def run_app(db : Doma::Database, entries : Array(Doma::Entry), query : String) : Doma::TUI::App::Result
-      Doma::TUI::App.new(db, entries, query).run
+    # Shared with `list --pick` (`picking: true`).
+    def self.run_app(db : Doma::Database, entries : Array(Doma::Entry), query : String = "", *, picking : Bool = false) : Doma::TUI::App::Result
+      Doma::TUI::App.new(db, entries, query, picking: picking).run
     rescue IO::Error
       # No controlling terminal even though stdin looked like a TTY.
       raise Doma::Error.new(
@@ -79,7 +80,8 @@ module Doma::CLI
     # DOMA_CD_FILE we write there (keeping STDOUT — and the terminal — clean);
     # otherwise we print to STDOUT for `$(...)`-style capture. If the file write
     # fails, fall back to STDOUT so the selection is never silently lost.
-    private def deliver(path : String)
+    # Shared with `list --pick`, which the wrapper's `doma cd` runs the same way.
+    def self.deliver(path : String)
       if cd_file = ENV["DOMA_CD_FILE"]?.presence
         File.write(cd_file, path)
       else

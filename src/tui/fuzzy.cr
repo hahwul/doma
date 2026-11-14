@@ -5,9 +5,9 @@ module Doma
     # matched characters. No terminal or database dependencies — it's
     # exercised in isolation by `spec/tui_fuzzy_spec.cr`.
     #
-    # doma deliberately ships no fuzzy matcher elsewhere (the `Picker` filter
-    # is substring-only by design); this one exists only for the interactive
-    # TUI, where ranking and highlight matter.
+    # doma deliberately ships no fuzzy matcher elsewhere (`--pick --query`
+    # is substring-only by design, see `Query.contains`); this one exists only
+    # for the interactive finder, where ranking and highlight matter.
     #
     # The algorithm is a single greedy left-to-right pass: each query
     # character is matched to the next equal target character. That's O(n)

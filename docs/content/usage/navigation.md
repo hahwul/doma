@@ -25,16 +25,19 @@ When the input *looks like a path* (`/var`, `~/Downloads`, `./src`), the miss hi
 
 ## The picker
 
+The picker is the same finder as `doma tui`, opened over just the matching directories:
+
 ```
-doma pick -t crystal›
 ▌ /Users/me/Projects/doma         #cli #crystal
   /Users/me/Projects/sandbox      #crystal
   /Users/me/Projects/cr-utils     #crystal
+3/3   ↑↓ move · enter pick · ^y copy · ? help · esc quit
+›
 ```
 
-- Type to filter (case-insensitive substring across path and tags).
+- Type to fuzzy-filter; the `tag:` / `-tag:` / `id:` / `path:` operators work here too (`?` for help).
 - ↑/↓ to move; Enter to pick; Esc / Ctrl-C to cancel.
-- Order is recency-first.
+- Order is recency-first (or `--by`) until you type.
 
 ## Skipping the picker
 

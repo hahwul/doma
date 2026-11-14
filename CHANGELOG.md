@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+- `list --pick` (and so `doma cd <tag>`) opens the same full-screen finder as `doma tui`, scoped to the matching directories, replacing the separate inline picker. Typing fuzzy-filters with highlights and the `tag:` / `-tag:` / `id:` / `path:` operators; `--query` stays a plain substring prefilter. `--builtin` now draws on `/dev/tty` even when stdin isn't a TTY, as documented
+- `setup init` wrappers run `doma cd` through the same `DOMA_CD_FILE` hand-off as `tui`; `list --pick` writes its pick there when `DOMA_CD_FILE` is set. Re-run `doma setup install` or open a new shell to pick up the updated wrapper
+
 ## v0.5.0
 
 doma leans into being a workbench for *sets* of directories: one selector across `list` / `run` / `status`, dynamic sets for the fix-and-retry loop, and a faster way onto the board.

@@ -39,11 +39,12 @@ module Doma::CLI
     # function shadows the binary in PATH so directory-changing commands work
     # as expected — the binary can't change its parent shell's cwd, so the
     # function recovers the picked path and runs `cd` itself:
-    #   - `doma cd <tag>` → `doma list -t <tag> --pick`, captured via `$(...)`
-    #   - bare `doma` / `doma tui` → the full-screen finder. It must own the
-    #     terminal, so we can't capture its stdout with `$(...)` (that hangs it
-    #     under job control). Instead we hand it DOMA_CD_FILE, let it draw on
-    #     the terminal, then `cd` to the path it wrote there.
+    #   - `doma cd <tag>` → `doma list -t <tag> --pick`
+    #   - bare `doma` / `doma tui` → the full-screen finder
+    # Both can open the finder, which must own the terminal, so we can't
+    # capture their stdout with `$(...)` (that hangs it under job control).
+    # Instead we hand them DOMA_CD_FILE, let them draw on the terminal, then
+    # `cd` to the path written there.
     # Everything else passes through to `command doma` unchanged.
     private def posix_wrapper : String
       <<-SH
@@ -59,31 +60,27 @@ module Doma::CLI
 
         doma() {
           if [ "$1" = "cd" ]; then
-            shift
-            local __doma_target
-            if [ $# -eq 0 ]; then
-              __doma_target="$(command doma list --pick)" || return $?
+            if [ $# -le 1 ]; then
+              set -- list --pick
             else
-              __doma_target="$(command doma list -t "$1" --pick)" || return $?
+              set -- list -t "$2" --pick
             fi
-            [ -n "$__doma_target" ] && builtin cd -- "$__doma_target"
-          elif [ $# -eq 0 ] || [ "$1" = "tui" ]; then
-            # The full-screen finder owns the terminal, so its stdout can't be
-            # captured with $(...) — under job control that hangs it before it
-            # renders. It writes the chosen path to DOMA_CD_FILE instead; we
-            # read that and cd. Its presence also tells the TUI footer that
-            # Enter really does `cd` here.
-            local __doma_cd_file __doma_target __doma_rc
-            __doma_cd_file="$(command mktemp "${TMPDIR:-/tmp}/doma.cd.XXXXXX")" || return $?
-            DOMA_CD_FILE="$__doma_cd_file" command doma "$@"
-            __doma_rc=$?
-            __doma_target="$(cat "$__doma_cd_file" 2>/dev/null)"
-            command rm -f "$__doma_cd_file"
-            [ -n "$__doma_target" ] && builtin cd -- "$__doma_target"
-            return $__doma_rc
-          else
+          elif [ $# -ne 0 ] && [ "$1" != "tui" ]; then
             command doma "$@"
+            return
           fi
+          # The finder owns the terminal, so its stdout can't be captured with
+          # $(...) — under job control that hangs it before it renders. The
+          # chosen path goes to DOMA_CD_FILE instead; we read that and cd. Its
+          # presence also tells the TUI footer that Enter really does `cd`.
+          local __doma_cd_file __doma_target __doma_rc
+          __doma_cd_file="$(command mktemp "${TMPDIR:-/tmp}/doma.cd.XXXXXX")" || return $?
+          DOMA_CD_FILE="$__doma_cd_file" command doma "$@"
+          __doma_rc=$?
+          __doma_target="$(cat "$__doma_cd_file" 2>/dev/null)"
+          command rm -f "$__doma_cd_file"
+          [ -n "$__doma_target" ] && builtin cd -- "$__doma_target"
+          return $__doma_rc
         }
         SH
     end
@@ -101,39 +98,32 @@ module Doma::CLI
 
         function doma
           if test (count $argv) -gt 0; and test $argv[1] = "cd"
-            set -l __doma_args $argv[2..-1]
-            set -l __doma_target
-            if test (count $__doma_args) -eq 0
-              set __doma_target (command doma list --pick)
+            if test (count $argv) -le 1
+              set argv list --pick
             else
-              set __doma_target (command doma list -t $__doma_args[1] --pick)
+              set argv list -t $argv[2] --pick
             end
-            or return $status
-            if test -n "$__doma_target"
-              builtin cd -- $__doma_target
-            end
-          else if test (count $argv) -eq 0; or test $argv[1] = "tui"
-            # The full-screen finder owns the terminal, so its stdout can't be
-            # captured with (...) — under job control that hangs it before it
-            # renders. It writes the chosen path to DOMA_CD_FILE instead; we
-            # read that and cd. Its presence also tells the TUI footer that
-            # Enter really does `cd` here.
-            set -l __doma_tmpl /tmp/doma.cd.XXXXXX
-            test -n "$TMPDIR"; and set __doma_tmpl "$TMPDIR/doma.cd.XXXXXX"
-            set -l __doma_cd_file (command mktemp $__doma_tmpl); or return $status
-            set -lx DOMA_CD_FILE $__doma_cd_file
+          else if test (count $argv) -gt 0; and test $argv[1] != "tui"
             command doma $argv
-            set -l __doma_rc $status
-            set -e DOMA_CD_FILE
-            set -l __doma_target (cat $__doma_cd_file 2>/dev/null)
-            command rm -f $__doma_cd_file
-            if test -n "$__doma_target"
-              builtin cd -- $__doma_target
-            end
-            return $__doma_rc
-          else
-            command doma $argv
+            return $status
           end
+          # The finder owns the terminal, so its stdout can't be captured with
+          # (...) — under job control that hangs it before it renders. The
+          # chosen path goes to DOMA_CD_FILE instead; we read that and cd. Its
+          # presence also tells the TUI footer that Enter really does `cd`.
+          set -l __doma_tmpl /tmp/doma.cd.XXXXXX
+          test -n "$TMPDIR"; and set __doma_tmpl "$TMPDIR/doma.cd.XXXXXX"
+          set -l __doma_cd_file (command mktemp $__doma_tmpl); or return $status
+          set -lx DOMA_CD_FILE $__doma_cd_file
+          command doma $argv
+          set -l __doma_rc $status
+          set -e DOMA_CD_FILE
+          set -l __doma_target (cat $__doma_cd_file 2>/dev/null)
+          command rm -f $__doma_cd_file
+          if test -n "$__doma_target"
+            builtin cd -- $__doma_target
+          end
+          return $__doma_rc
         end
         FISH
     end

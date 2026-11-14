@@ -4,7 +4,7 @@ private def entry(path : String)
   Doma::Entry.new(1_i64, "abc1234", path, File.basename(path), [] of String)
 end
 
-describe "TUI / picker regressions" do
+describe "TUI regressions" do
   describe "Fuzzy with case-expanding characters" do
     it "keeps positions aligned when a char lowercases to two (İ)" do
       m = Doma::TUI::Fuzzy.score("d", "İİİİd").should_not be_nil
@@ -28,25 +28,8 @@ describe "TUI / picker regressions" do
       scored[0].positions.map { |i| drawn.char_at(i) }.join.should eq("한글")
     end
 
-    it "substring-matches an NFC query in Picker.filter" do
-      items = [Doma::Picker::Item.new(value: nfd, label: nfd)]
-      Doma::Picker.filter(items, "한글").size.should eq(1)
-    end
-  end
-
-  describe "Picker display width" do
-    it "counts wide chars as two columns" do
-      Doma::Picker.display_width("ab한글").should eq(6)
-    end
-
-    it "truncates by columns, not codepoints" do
-      cut = Doma::Picker.truncate("한글한글한글", 7)
-      cut.should eq("한글한…")
-      Doma::Picker.display_width(cut).should be <= 7
-    end
-
-    it "leaves text that fits untouched" do
-      Doma::Picker.truncate("한글", 4).should eq("한글")
+    it "substring-matches an NFC query in Query.contains" do
+      Doma::TUI::Query.contains([entry(nfd)], "한글").size.should eq(1)
     end
   end
 
