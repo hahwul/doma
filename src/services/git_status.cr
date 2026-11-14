@@ -30,7 +30,8 @@ module Doma
       staged : Int32,
       unstaged : Int32,
       untracked : Int32,
-      conflicts : Int32 do
+      conflicts : Int32,
+      stash : Int32 = 0 do
       # Distinct changed paths in the working tree. modified/untracked/
       # conflicts each count one line (= one path) and never overlap, so
       # the sum is a true file count — unlike staged+unstaged, which can
@@ -56,7 +57,7 @@ module Doma
     def probe(path : String) : Status
       # git exits non-zero (128) outside a work tree; 0 for both clean
       # and dirty repos. So success cleanly separates repo from non-repo.
-      capture(path, ["status", "--porcelain=v2", "--branch"]).try { |text| parse(text) } || NON_GIT
+      capture(path, ["status", "--porcelain=v2", "--branch", "--show-stash"]).try { |text| parse(text) } || NON_GIT
     end
 
     # stdout of `git -C path <args>`, or nil when git exits non-zero or
@@ -74,6 +75,13 @@ module Doma
       status.success? ? output.to_s : nil
     rescue File::NotFoundError | IO::Error
       nil
+    end
+
+    # Epoch seconds of HEAD's commit; nil without one (unborn branch,
+    # non-repo). A second git call, so only `status` asks — the `@sets`
+    # probe stays at one spawn per directory.
+    def last_commit_at(path : String) : Int64?
+      capture(path, ["log", "-1", "--no-show-signature", "--format=%ct"]).try(&.strip.to_i64?)
     end
 
     # Commits on HEAD since the nearest reachable tag — the `@unreleased`
@@ -96,6 +104,7 @@ module Doma
     #   # branch.head  <name>       — "(detached)" when no branch
     #   # branch.upstream <name>    — absent when no upstream is set
     #   # branch.ab  +<ahead> -<behind>
+    #   # stash <N>                 — only with stashes (and git ≥ 2.35)
     # Entry lines:
     #   1 <XY> ...  ordinary change   — X=staged col, Y=unstaged col, '.'=clean
     #   2 <XY> ...  renamed/copied    — same XY semantics
@@ -113,10 +122,16 @@ module Doma
       unstaged = 0
       untracked = 0
       conflicts = 0
+      stash = 0
 
       output.each_line do |raw|
         line = raw.chomp
         next if line.empty?
+
+        if line.starts_with?("# stash ")
+          stash = line[8..].to_i? || 0
+          next
+        end
 
         if line.starts_with?("# branch.")
           key, _, val = line[2..].partition(' ')
@@ -164,7 +179,7 @@ module Doma
         end
       end
 
-      Status.new(true, branch, upstream, detached, ahead, behind, modified, staged, unstaged, untracked, conflicts)
+      Status.new(true, branch, upstream, detached, ahead, behind, modified, staged, unstaged, untracked, conflicts, stash)
     end
   end
 end

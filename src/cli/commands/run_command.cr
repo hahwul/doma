@@ -23,6 +23,15 @@ module Doma::CLI
       stdout : String,
       stderr : String
 
+    # Exit code of a directory the sweep never started because of Ctrl-C.
+    # Internal only: never announced, never a JSON row.
+    private NOT_RUN = -1
+
+    @interrupted = false
+    # Target paths that haven't passed yet — what becomes @failed. Kept on
+    # the instance so even a forced second Ctrl-C can record it.
+    @not_passed = [] of String
+
     def run(args : Array(String))
       stop_on_fail = false
       parallel = false
@@ -149,16 +158,35 @@ module Doma::CLI
       cmd_rest = cmd_args[1..]
       color = Doma::Logger.color_enabled?
 
+      # Ctrl-C reaches the children on its own (same process group). doma
+      # stays up just long enough to stop starting new ones, print the
+      # tally, and leave the rest in @failed for `doma run @failed` to
+      # resume — even when the child handles the signal itself and lives
+      # on: a Ctrl-C always ends the sweep. A second one quits outright.
+      @not_passed = targets.map(&.path)
+      Signal::INT.trap do
+        if @interrupted
+          Doma::LastRun.save(@not_passed)
+          die_interrupted
+        end
+        @interrupted = true
+      end
+
       # Hoisted above the mode split so the JSON path warns too — the
       # flag is just as inert there.
       Doma::Logger.warn "--fail-fast is ignored in --parallel mode" if parallel && stop_on_fail
 
-      exit(run_json(targets, cmd, cmd_rest, parallel, jobs, stop_on_fail) == 0 ? 0 : 1) if json_mode
+      if json_mode
+        failures = run_json(targets, cmd, cmd_rest, parallel, jobs, stop_on_fail)
+        die_interrupted if @interrupted
+        exit(failures == 0 ? 0 : 1)
+      end
 
       # Each ✗ lands mid-stream; the tally re-lists them at the end so a
       # long sweep's failures don't scroll away.
       failed = [] of {String, Int32}
-      ran = 0
+      # Paths that actually ran, in completion order.
+      visited = [] of String
 
       if parallel
         # Bounded fan-out (see Doma::Parallel): without a cap, one fiber
@@ -177,19 +205,24 @@ module Doma::CLI
           targets, requested_jobs,
           ->(entry : Entry) { run_one(cmd, cmd_rest, entry, attach_stdin: false, capture: false).exit_code }
         ) do |entry, code|
+          next if code == NOT_RUN
           announce(entry.path, code, color, no_header)
-          ran += 1
-          failed << {entry.path, code} unless code == 0
+          visited << entry.path
+          code == 0 ? @not_passed.delete(entry.path) : (failed << {entry.path, code})
         end
       else
         targets.each do |entry|
+          break if @interrupted
           unless no_header
             header = "▶ #{entry.path}"
             STDERR.puts(color ? header.colorize(:cyan).bold.to_s : header)
           end
           code = run_one(cmd, cmd_rest, entry, attach_stdin: true, capture: false).exit_code
+          # Ctrl-C landed between the header and the spawn: it never ran.
+          break if code == NOT_RUN
           announce(entry.path, code, color, no_header)
-          ran += 1
+          visited << entry.path
+          @not_passed.delete(entry.path) if code == 0
           unless code == 0
             failed << {entry.path, code}
             break if stop_on_fail
@@ -197,18 +230,35 @@ module Doma::CLI
         end
       end
 
-      # What `--fail-fast` never reached hasn't passed either, so a retry
-      # of @failed covers it too. (Sequential runs a prefix of `targets`.)
-      Doma::LastRun.save(failed.map(&.[0]) + targets[ran..].map(&.path))
-      # --no-header keeps it only when something failed; -q drops it.
-      if targets.size > 1 && !Doma::Logger.quiet? && (!no_header || !failed.empty?)
-        summarize(targets.size, ran, failed, color)
+      # What `--fail-fast` or Ctrl-C never reached hasn't passed either, so
+      # a retry of @failed covers it too.
+      Doma::LastRun.save(@not_passed)
+      # --no-header keeps it only when something failed or was cut short;
+      # -q drops it.
+      if targets.size > 1 && !Doma::Logger.quiet? && (!no_header || !failed.empty? || @interrupted)
+        summarize(targets.size, visited.size, failed, color)
+      end
+      if @interrupted
+        Doma::Logger.warn "interrupted — what didn't pass is in @failed (`doma run @failed -- …` resumes)"
+        die_interrupted
       end
       exit(failed.empty? ? 0 : 1)
     end
 
+    # End the way an interrupted program should: by the signal itself, so a
+    # shell loop around `doma run` stops too instead of moving on to its
+    # next iteration (a plain `exit 130` reads as "handled it, carry on").
+    # Dying by signal skips the usual exit flush, hence the explicit one.
+    private def die_interrupted : NoReturn
+      STDOUT.flush
+      STDERR.flush
+      Signal::INT.reset
+      Process.signal(Signal::INT, Process.pid)
+      exit 130
+    end
+
     # `3 ok · 1 failed · 2 skipped`, then each failure again. Skipped is
-    # what `--fail-fast` never reached.
+    # what `--fail-fast` or Ctrl-C never reached.
     private def summarize(total : Int32, ran : Int32, failed : Array({String, Int32}), color : Bool)
       parts = ["#{ran - failed.size} ok"]
       parts << "#{failed.size} failed" unless failed.empty?
@@ -256,11 +306,13 @@ module Doma::CLI
                 else
                   collected = [] of RunResult
                   targets.each do |entry|
+                    break if @interrupted
                     # stdin stays closed even sequentially: a captured run
                     # is consumed by a machine, so letting a child inherit
                     # the terminal would let it block on input nobody is
                     # watching for.
                     result = run_one(cmd, cmd_rest, entry, attach_stdin: false, capture: true)
+                    break if result.exit_code == NOT_RUN
                     collected << result
                     break if stop_on_fail && result.exit_code != 0
                   end
@@ -273,9 +325,11 @@ module Doma::CLI
       rows = results.map_with_index do |result, i|
         {path: targets[i].path, exit_code: result.exit_code, stdout: result.stdout, stderr: result.stderr, dry_run: false}
       end
-      puts rows.to_json
-      Doma::LastRun.save(rows.reject { |row| row[:exit_code] == 0 }.map { |row| row[:path] } +
-                         targets[results.size..].map(&.path))
+      # Directories Ctrl-C kept from starting get no row, but they go into
+      # @failed below like everything else that didn't pass.
+      puts rows.reject { |row| row[:exit_code] == NOT_RUN }.to_json
+      rows.each { |row| @not_passed.delete(row[:path]) if row[:exit_code] == 0 }
+      Doma::LastRun.save(@not_passed)
       results.count { |r| r.exit_code != 0 }
     end
 
@@ -288,6 +342,7 @@ module Doma::CLI
     # render JSON or stream.
     private def run_one(cmd : String, args : Array(String), entry : Entry, *, attach_stdin : Bool, capture : Bool) : RunResult
       path = entry.path
+      return RunResult.new(NOT_RUN, "", "") if @interrupted
       # A missing `chdir:` target and a missing *command* both surface as
       # File::NotFoundError, and the runtime's message names the command
       # ("Error executing process: 'true': No such file or directory") —

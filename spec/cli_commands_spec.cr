@@ -2722,6 +2722,33 @@ describe "doma @sets" do
     end
   end
 
+  it "[Ctrl-C] stops the sweep, prints the tally, and leaves the rest in @failed" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      seed_home(home)
+      total = run(["list", "-t", "shared", "--paths"], {"DOMA_HOME" => home})[:out].lines.size
+      err = IO::Memory.new
+      # Signal only doma: the first `sleep` finishes on its own, then the
+      # sweep stops before starting the next directory.
+      process = Process.new(DOMA_BIN, ["run", "shared", "--", "sleep", "1"],
+        env: {"DOMA_HOME" => home}, output: Process::Redirect::Close, error: err)
+      # The ▶ header means the trap is installed; give the first child a
+      # moment to actually spawn so it counts as started, not skipped.
+      200.times do
+        break if err.to_s.includes?("▶")
+        sleep 25.milliseconds
+      end
+      sleep 200.milliseconds
+      process.signal(Signal::INT)
+      # doma re-raises SIGINT on itself once the bookkeeping is done.
+      process.wait.exit_signal?.should eq(Signal::INT)
+      err.to_s.should contain("1 ok · #{total - 1} skipped")
+      err.to_s.should contain("interrupted")
+      r = run(["list", "-t", "@failed", "--paths"], {"DOMA_HOME" => home})
+      r[:out].lines.size.should eq(total - 1)
+    end
+  end
+
   it "[--fail-fast] keeps the never-reached directories in @failed" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     with_home do |home|
