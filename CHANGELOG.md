@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## v0.6.0
+
+The workbench gets a bigger vocabulary and a way to travel: more sets computed from git state, a snapshot that can rebuild a workspace on another machine, and one finder instead of two.
 
 ### Added
 - `export --portable` writes a snapshot meant for another machine: paths under the home directory become `~/…`, and each primary git checkout carries its `origin` URL as `remote` (embedded credentials stripped; worktrees and submodules get none). `import --clone` then registers the entries and `git clone`s the ones that aren't on disk — `--dry-run` previews, re-running skips what exists, a failed clone exits 1 but keeps the entry. No schema bump: older versions import portable snapshots and ignore `remote`
