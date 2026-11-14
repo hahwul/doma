@@ -1,0 +1,27 @@
+<!-- The social card (static/images/og-default.png). To regenerate: serve the docs
+     on :3111 (hwaro serve -i docs -p 3111), then screenshot this file at 1200x630:
+
+       chrome --headless=new --window-size=1200,630 --virtual-time-budget=5000 \
+         --screenshot=docs/static/images/og-default.png file://$PWD/docs/tools/og.html -->
+<!doctype html>
+<meta charset="utf-8">
+<link rel="stylesheet" href="http://localhost:3111/assets/css/01-variables.css">
+<link rel="stylesheet" href="http://localhost:3111/assets/css/02-base.css">
+<style>
+  html, body { margin: 0; width: 1200px; height: 630px; overflow: hidden; background: var(--bark); color: var(--sap); }
+  .og { display: grid; grid-template-columns: 1fr 590px; align-items: center; height: 630px; padding: 0 0 0 72px; }
+  .name { font-size: 96px; line-height: 1; margin: 0 0 28px; color: var(--oak); }
+  .line { font-size: 48px; line-height: 1.15; margin: 0 0 28px; }
+  .sub { font-family: var(--font-sans); font-size: 24px; line-height: 1.4; margin: 0; }
+  .board { width: 590px; }
+</style>
+<div class="og">
+  <div>
+    <p class="name pixel">doma</p>
+    <p class="line pixel">Put your directories on the cutting board.</p>
+    <p class="sub">A workbench for sets of project directories.</p>
+  </div>
+  <div class="board"><canvas class="board-canvas" data-board="pool"></canvas></div>
+</div>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:wght@400..700&display=swap" rel="stylesheet">
+<script src="http://localhost:3111/assets/js/board.js"></script>

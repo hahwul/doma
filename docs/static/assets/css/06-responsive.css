@@ -34,22 +34,22 @@
         left: -100%;
         width: 290px;
         z-index: 400;
-        background: var(--board);
-        transition: left 0.28s var(--ease-out);
-        border-right: 1px solid var(--score-strong);
+        background: var(--page);
+        transition: left 0.2s steps(4);
+        border-right: var(--px) solid var(--bark);
     }
 
     .docs-sidebar.is-open {
         left: 0;
-        box-shadow: 24px 0 60px -24px rgba(36, 30, 21, 0.45);
     }
 
+    /* The scrim is a half-tone, not a translucent black. */
     .sidebar-overlay {
         display: none;
         position: fixed;
         inset: 0;
         z-index: 300;
-        background: rgba(36, 30, 21, 0.35);
+        background: var(--dither-50);
     }
 
     .sidebar-overlay.is-visible {
@@ -68,12 +68,6 @@
     .docs-main table {
         display: block;
         overflow-x: auto;
-    }
-
-    .docs-footer {
-        flex-direction: column;
-        gap: 0.5rem;
-        text-align: center;
     }
 
     .docs-header {
