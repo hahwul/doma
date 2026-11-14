@@ -1,0 +1,129 @@
+/* =============================================================================
+   Base
+   ============================================================================= */
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+html {
+    scroll-behavior: smooth;
+}
+
+body {
+    font-family: var(--font-sans);
+    font-size: 16px;
+    line-height: 1.6;
+    margin: 0;
+    color: var(--ink);
+    background: var(--page);
+    text-rendering: optimizeLegibility;
+}
+
+::selection {
+    background: var(--bark);
+    color: var(--sap);
+}
+
+a {
+    color: var(--walnut);
+    text-decoration: none;
+}
+
+a:hover {
+    color: var(--bark);
+}
+
+:focus-visible {
+    outline: var(--px) solid var(--bark);
+    outline-offset: var(--px);
+}
+
+img {
+    max-width: 100%;
+    height: auto;
+}
+
+/* Pixel type: bitmap glyphs, so no smoothing and no synthesized weights. */
+.pixel,
+.docs-main h1,
+.docs-main h2,
+.sidebar-title,
+.toc-title,
+.docs-main th,
+.wordmark {
+    font-family: var(--font-pixel);
+    font-weight: 700;
+    font-synthesis: none;
+    -webkit-font-smoothing: none;
+    font-smooth: never;
+    letter-spacing: 0;
+}
+
+/* Bitmap images scale by whole pixels only. */
+.board-canvas,
+.logo img {
+    image-rendering: pixelated;
+}
+
+/* ---------------------------------------------------------------------------
+   The slab: a flat block with a checkerboard drop shadow.
+
+   The shadow lives in a transparent right/bottom border, so it survives
+   `overflow: auto` (a pseudo-element would be clipped) and scrolling
+   content never runs over it. Layers, top to bottom: two page-coloured
+   corner patches (a drop shadow leaves those two corners empty), the
+   slab itself, the checker. Set --slab for the fill.
+   --------------------------------------------------------------------------- */
+
+.docs-main pre,
+.docs-main table,
+.docs-search-results,
+.btn,
+.term,
+.info-box {
+    --slab: var(--bark);
+    border: solid transparent;
+    border-width: 0 var(--shadow) var(--shadow) 0;
+    background:
+        linear-gradient(var(--page), var(--page)) 100% 0 / var(--shadow) var(--shadow) no-repeat,
+        linear-gradient(var(--page), var(--page)) 0 100% / var(--shadow) var(--shadow) no-repeat,
+        linear-gradient(var(--slab), var(--slab)) 0 0 / calc(100% - var(--shadow))
+            calc(100% - var(--shadow)) no-repeat,
+        var(--dither-50);
+    background-origin: border-box;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--husk);
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--walnut);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+
+    html {
+        scroll-behavior: auto;
+    }
+}

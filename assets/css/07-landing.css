@@ -1,0 +1,362 @@
+/* =============================================================================
+   Landing
+
+   Dark at both ends, light in the middle. The hero is the board on a dark
+   counter, drawn live; a dither ramp carries it down into the light page,
+   and a second one carries the page back into the dark for the word 도마
+   and the footer.
+   ============================================================================= */
+
+/* The body is the dark end, so a viewport taller than the page (and any
+   overscroll) stays dark past the footer; the light middle paints itself. */
+.landing-body {
+    min-height: 100vh;
+    background: var(--bark);
+}
+
+.landing-body .loop,
+.landing-body .why {
+    background: var(--page);
+}
+
+.landing-header {
+    padding: 0 max(calc((100vw - 1120px) / 2), 4vw);
+}
+
+.landing-header nav {
+    margin-left: auto;
+}
+
+.landing-body section {
+    padding: 0 max(calc((100vw - 1120px) / 2), 4vw);
+}
+
+.landing-body h2 {
+    font-size: 36px;
+    line-height: 1.2;
+    margin: 0 0 2.25rem;
+    text-wrap: balance;
+}
+
+.landing-body :not(pre) > code {
+    font-family: var(--font-mono);
+    font-size: 0.9em;
+}
+
+/* --- Hero --------------------------------------------------------------- */
+
+/* Everything on the dark surface inherits these: the slab's corner
+   patches match it, and checker shadows are drawn in a mid wood tone. */
+.hero,
+.word {
+    --page: var(--bark);
+    --dither-ink: var(--husk);
+    background: var(--bark);
+    color: var(--sap);
+}
+
+.hero :focus-visible,
+.word :focus-visible {
+    outline-color: var(--oak);
+}
+
+.hero-inner {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+    align-items: center;
+    gap: 2rem;
+    padding: 3.5rem 0 2.5rem;
+}
+
+.hero-title {
+    font-size: 60px;
+    line-height: 1.1;
+    margin: 0 0 1.5rem;
+    text-wrap: balance;
+}
+
+.hero-sub {
+    max-width: 30rem;
+    margin: 0 0 2rem;
+    font-size: 1.2rem;
+    line-height: 1.5;
+}
+
+.hero-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1rem 1.25rem;
+    margin-bottom: 1.5rem;
+}
+
+/* Select-to-copy install line */
+.install {
+    padding: 0.62rem 0.9rem;
+    border: var(--px) solid var(--husk);
+    color: var(--sap);
+    font-size: 0.94rem;
+    white-space: nowrap;
+    user-select: all;
+}
+
+.install span {
+    color: var(--husk);
+    user-select: none;
+}
+
+.hero-meta {
+    margin: 0;
+    font-size: 0.94rem;
+    color: var(--oak);
+}
+
+.hero-board {
+    display: flex;
+    justify-content: center;
+}
+
+.board-canvas {
+    display: block;
+}
+
+/* --- Dither ramps -------------------------------------------------------- */
+
+.ramp {
+    height: 96px;
+    background:
+        url("../../images/dither-ramp.png") repeat-x,
+        var(--sap);
+    image-rendering: pixelated;
+}
+
+.ramp-up {
+    transform: scaleY(-1);
+}
+
+/* --- The loop ------------------------------------------------------------ */
+
+.landing-body .loop {
+    padding-top: 2.5rem;
+    padding-bottom: 5rem;
+}
+
+.loop-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1fr);
+    gap: 3.5rem;
+    align-items: start;
+}
+
+.steps {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 2rem;
+}
+
+/* The swatch beside each step is its place in the loop: a quarter-tone,
+   a half, three quarters, solid. */
+.steps li {
+    position: relative;
+    padding-left: 3.25rem;
+}
+
+.steps li::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0.2rem;
+    width: 32px;
+    height: 32px;
+    border: var(--px) solid var(--bark);
+    background: var(--dither-25);
+}
+
+.steps li:nth-child(2)::before {
+    background: var(--dither-50);
+}
+
+.steps li:nth-child(3)::before {
+    background: var(--dither-75);
+}
+
+.steps li:nth-child(4)::before {
+    background: var(--bark);
+}
+
+.steps h3 {
+    margin: 0 0 0.3rem;
+    font-size: 1.3rem;
+    line-height: 1.3;
+}
+
+.steps p {
+    margin: 0 0 0.6rem;
+    max-width: 30rem;
+}
+
+.steps li > code {
+    display: inline-block;
+    padding: 0.2rem 0.5rem;
+    background: var(--shade);
+}
+
+.steps li > code::before {
+    content: "$ ";
+    color: var(--husk);
+}
+
+/* Terminal — a slab, no window chrome */
+.term {
+    margin: 0;
+    padding: 1.4rem 1.5rem;
+    overflow-x: auto;
+    color: var(--sap);
+    scrollbar-color: var(--husk) transparent;
+}
+
+.term pre {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: 0.86rem;
+    line-height: 1.65;
+}
+
+.term .p,
+.term .dim {
+    color: var(--husk);
+}
+
+.term .cmd {
+    font-weight: 700;
+}
+
+.term .hi {
+    color: var(--oak);
+}
+
+/* --- Why ------------------------------------------------------------------ */
+
+.landing-body .why {
+    padding-bottom: 5rem;
+}
+
+.why p {
+    max-width: 44rem;
+    margin: 0;
+    font-size: 1.2rem;
+    line-height: 1.6;
+}
+
+.why code {
+    background: var(--shade);
+    padding: 0.08em 0.34em;
+}
+
+/* --- The word ------------------------------------------------------------- */
+
+.word-inner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1.5rem 3.5rem;
+    padding: 3rem 0 4rem;
+}
+
+/* The glyphs are filled with checker, not a flat colour. */
+.word-hangul {
+    --dither-ink: var(--oak);
+    font-size: 120px;
+    line-height: 1;
+    color: transparent;
+    background: var(--dither-50), linear-gradient(var(--sap), var(--sap));
+    -webkit-background-clip: text;
+    background-clip: text;
+}
+
+.word-entry {
+    max-width: 30rem;
+}
+
+.word-pron {
+    margin: 0 0 0.5rem;
+    font-family: var(--font-mono);
+    font-size: 0.94rem;
+    color: var(--oak);
+}
+
+.word-def {
+    margin: 0;
+    font-size: 1.1rem;
+    line-height: 1.55;
+}
+
+/* --- Footer --------------------------------------------------------------- */
+
+.landing-footer {
+    padding-bottom: 3rem;
+}
+
+.landing-footer .footer-mark {
+    margin-top: 0;
+}
+
+.word .footer-mark .hahwul-img {
+    background-color: var(--husk);
+}
+
+.word .footer-mark .hahwul-img:hover {
+    background-color: var(--sap);
+}
+
+.word .footer-love {
+    color: var(--husk);
+}
+
+/* --- Responsive ------------------------------------------------------------ */
+
+@media (max-width: 1100px) {
+    .hero-title {
+        font-size: 48px;
+    }
+}
+
+@media (max-width: 900px) {
+    .hero-inner,
+    .loop-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .hero-inner {
+        padding-top: 2.5rem;
+    }
+
+    .loop-grid {
+        gap: 2.5rem;
+    }
+}
+
+@media (max-width: 560px) {
+    .hero-title {
+        font-size: 36px;
+    }
+
+    .landing-body h2 {
+        font-size: 24px;
+    }
+
+    .hero-sub,
+    .why p {
+        font-size: 1.08rem;
+    }
+
+    .word-hangul {
+        font-size: 96px;
+    }
+
+    .install {
+        white-space: normal;
+    }
+}

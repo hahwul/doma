@@ -1,0 +1,381 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta name="description" content="How doma differs from multi-repo tools (mani, gita, myrepos) and from directory jumpers (zoxide, autojump, fzf)." />
+        <title>
+            Comparison - doma
+        </title>
+        <meta property="og:title" content="Comparison">
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://doma.hahwul.com/start/comparison/">
+  <meta property="og:description" content="How doma differs from multi-repo tools (mani, gita, myrepos) and from directory jumpers (zoxide, autojump, fzf).">
+  <meta property="og:image" content="https://doma.hahwul.com/images/og-default.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Comparison">
+  <meta name="twitter:description" content="How doma differs from multi-repo tools (mani, gita, myrepos) and from directory jumpers (zoxide, autojump, fzf).">
+  <meta name="twitter:image" content="https://doma.hahwul.com/images/og-default.png">
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+            href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,400..700;1,400..700&family=Atkinson+Hyperlegible+Mono:wght@400..700&display=swap"
+            rel="stylesheet"
+        />
+        <link
+            rel="icon"
+            type="image/png"
+            href="/icons/favicon-96x96.png"
+            sizes="96x96"
+        />
+        <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg" />
+        <link rel="shortcut icon" href="/icons/favicon.ico" />
+        <link
+            rel="apple-touch-icon"
+            sizes="180x180"
+            href="/icons/apple-touch-icon.png"
+        />
+        <meta name="apple-mobile-web-app-title" content="Doma" />
+        <meta name="base-url" content="https://doma.hahwul.com" />
+        <link rel="manifest" href="/icons/site.webmanifest" />
+
+        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark-dimmed.min.css"> <link rel="stylesheet" href="https://doma.hahwul.com/assets/css/01-variables.css?v=21059188">
+<link rel="stylesheet" href="https://doma.hahwul.com/assets/css/02-base.css?v=21059188">
+<link rel="stylesheet" href="https://doma.hahwul.com/assets/css/03-layout.css?v=21059188">
+<link rel="stylesheet" href="https://doma.hahwul.com/assets/css/04-content.css?v=21059188">
+<link rel="stylesheet" href="https://doma.hahwul.com/assets/css/05-components.css?v=21059188">
+<link rel="stylesheet" href="https://doma.hahwul.com/assets/css/06-responsive.css?v=21059188">
+<link rel="stylesheet" href="https://doma.hahwul.com/assets/css/07-landing.css?v=21059188">
+        <script defer src="https://cdn.jsdelivr.net/npm/fuse.js@7.0.0/dist/fuse.min.js"></script>
+    </head>
+    <body data-section="start">
+<header class="docs-header">
+  <button class="mobile-menu-btn" aria-label="Toggle navigation">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h12"/></svg>
+  </button>
+  <a href="https://doma.hahwul.com/" class="logo" aria-label="doma home">
+    <img src="/images/board-mark.png" alt="" width="44" height="44" />
+    <span class="wordmark">doma</span>
+  </a>
+  <nav>
+    <a href="https://doma.hahwul.com/start/" class="active">Start</a>
+    <a href="https://doma.hahwul.com/usage/">Usage</a>
+    <a href="https://doma.hahwul.com/reference/">Reference</a>
+    <a href="https://doma.hahwul.com/ai/">AI agents</a>
+  </nav>
+  <div class="header-right">
+    <div class="docs-search" data-search>
+      <input type="search" class="docs-search-input" placeholder="Search docs…" aria-label="Search docs" autocomplete="off" spellcheck="false">
+      <div class="docs-search-results" role="listbox" hidden></div>
+    </div>
+    <a href="https://github.com/hahwul/doma" class="github-link" target="_blank" rel="noopener" aria-label="GitHub">
+      <svg viewBox="0 0 24 24" fill="currentColor" width="18" height="18"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
+    </a>
+  </div>
+</header>
+<div class="docs-container">
+  <aside class="docs-sidebar">
+  
+  <div class="sidebar-section">
+    <div class="sidebar-title">Start</div>
+    <ul class="sidebar-links">
+      
+      
+      <li><a href="https://doma.hahwul.com/start/">Overview</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/start/installation/">Installation</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/start/quickstart/">Quickstart</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/start/shell-integration/">Shell integration</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/start/concepts/">Concepts</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/start/comparison/" class="active">Comparison</a></li>
+      
+      
+    </ul>
+  </div>
+  
+  <div class="sidebar-section">
+    <div class="sidebar-title">Usage</div>
+    <ul class="sidebar-links">
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/">Overview</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/tagging/">Tagging directories</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/navigation/">Navigation</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/ttl-and-marks/">TTL & marks</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/run/">Bulk run</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/status/">Git status</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/search-and-stats/">Search & stats</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/pipelines/">Pipelines</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/snapshots/">Snapshots</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/usage/recipes/">Recipes</a></li>
+      
+      
+    </ul>
+  </div>
+  
+  <div class="sidebar-section">
+    <div class="sidebar-title">Reference</div>
+    <ul class="sidebar-links">
+      
+      
+      <li><a href="https://doma.hahwul.com/reference/">Overview</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/reference/commands/">Commands</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/reference/config/">Configuration</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/reference/env/">Environment</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/reference/troubleshooting/">Troubleshooting</a></li>
+      
+      
+    </ul>
+  </div>
+  
+  <div class="sidebar-section">
+    <div class="sidebar-title">AI agents</div>
+    <ul class="sidebar-links">
+      
+      
+      <li><a href="https://doma.hahwul.com/ai/">Overview</a></li>
+      
+      
+      
+      <li><a href="https://doma.hahwul.com/ai/skill/">AI skill</a></li>
+      
+      
+    </ul>
+  </div>
+  
+</aside>
+  <main class="docs-main no-toc">
+    <h1>Comparison</h1>
+    <p>doma is a workbench for sets of project directories, so its real neighbors are the multi-repo tools: <a href="https://github.com/alajmo/mani">mani</a>, <a href="https://github.com/nosarthur/gita">gita</a>, and <a href="https://myrepos.branchable.com/">myrepos</a>. It also gets compared to directory jumpers like zoxide because it can <code>cd</code>; that comparison is further down.</p>
+<p>Short version: the multi-repo tools start from a list of repositories you maintain. doma starts from labels you attach as you go, and lets you select by what is true <em>right now</em> — which repos are dirty, which failed the last run.</p>
+<h2 id="vs-mani-gita-myrepos">vs mani / gita / myrepos</h2>
+<p>Based on each project's own documentation at the time of writing.</p>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>doma</th>
+<th>mani</th>
+<th>gita</th>
+<th>myrepos (<code>mr</code>)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Registering</td>
+<td>CLI (<code>add</code>, <code>add -r</code>); no file to edit</td>
+<td><code>mani.yaml</code> you edit (<code>mani init</code> discovers repos)</td>
+<td>CLI (<code>gita add</code>)</td>
+<td><code>.mrconfig</code> you edit, or <code>mr register</code></td>
+</tr>
+<tr>
+<td>Grouping</td>
+<td>tags; <code>-t</code> repeats to AND, <code>-x</code> excludes, globs</td>
+<td>tags; boolean <code>--tags-expr</code> (and / or / not)</td>
+<td>groups, context</td>
+<td>by directory and config file; no tags</td>
+</tr>
+<tr>
+<td>Select by live state</td>
+<td>yes — dynamic sets (<code>@dirty</code>, <code>@failed</code>, <code>@ahead</code>, <code>@behind</code>, <code>@unreleased</code>)</td>
+<td>no</td>
+<td>no (state is shown, not selectable)</td>
+<td>a per-repo <code>skip</code> hook; a retry queue for commands that failed offline</td>
+</tr>
+<tr>
+<td>Run a command across the set</td>
+<td><code>run</code>, <code>--parallel --jobs N</code></td>
+<td><code>exec</code>, <code>--parallel --forks N</code></td>
+<td><code>shell</code>, <code>super</code></td>
+<td><code>mr run</code>, <code>-j N</code></td>
+</tr>
+<tr>
+<td>Named, reusable tasks</td>
+<td>no, by design</td>
+<td>yes (<code>tasks:</code>)</td>
+<td>yes (<code>cmds.json</code>)</td>
+<td>yes (custom commands in config)</td>
+</tr>
+<tr>
+<td>Status dashboard</td>
+<td><code>status</code></td>
+<td>no dedicated command (<code>exec … git status</code> as a table)</td>
+<td><code>gita ll</code></td>
+<td><code>mr status</code></td>
+</tr>
+<tr>
+<td>Machine-readable results</td>
+<td><code>--json</code> on <code>list</code>, <code>tags</code>, <code>info</code>, <code>stats</code>, <code>status</code>, <code>run</code></td>
+<td>table / markdown / html</td>
+<td>not documented</td>
+<td>not documented</td>
+</tr>
+<tr>
+<td>Recreate the set on a new machine</td>
+<td><code>export --portable</code> + <code>import --clone</code></td>
+<td><code>mani sync</code></td>
+<td><code>gita freeze</code> + <code>gita clone -f</code></td>
+<td><code>mr checkout</code>, <code>mr bootstrap</code></td>
+</tr>
+<tr>
+<td>Directories that aren&#39;t git repos</td>
+<td>yes</td>
+<td>yes (path-only projects)</td>
+<td>git only</td>
+<td>other VCSs (svn, hg, …)</td>
+</tr>
+<tr>
+<td>Expiring labels</td>
+<td>TTL tags, <code>mark</code></td>
+<td>no</td>
+<td>no</td>
+<td>no</td>
+</tr>
+<tr>
+<td>Interactive UI</td>
+<td>finder for jumping / picking</td>
+<td><code>mani tui</code></td>
+<td>no</td>
+<td>no</td>
+</tr>
+<tr>
+<td>Runtime</td>
+<td>single static binary</td>
+<td>single binary</td>
+<td>Python 3</td>
+<td>Perl script</td>
+</tr>
+</tbody>
+</table>
+<h3 id="where-the-others-are-stronger">Where the others are stronger</h3>
+<ul>
+<li><strong>Shared, declarative config.</strong> <code>mani.yaml</code> and <code>.mrconfig</code> are files you edit, commit, and hand to a team; the file <em>is</em> the workspace. doma's state is a local SQLite database — personal by construction. It can rebuild a set elsewhere (<code>export --portable</code>, then <code>import --clone</code>), but that snapshot is an export you regenerate, not a source of truth you maintain.</li>
+<li><strong>Named tasks.</strong> All three let you define a command once and call it by name. doma deliberately doesn't; <code>run</code> takes the command on the command line, and anything reusable belongs in your shell, a <code>justfile</code>, or a <code>Makefile</code>.</li>
+<li><strong>Tag expressions.</strong> mani has boolean expressions over tags. doma has AND (<code>-t</code> repeated), NOT (<code>-x</code>), and globs, but no general OR.</li>
+<li><strong>Other version control systems.</strong> myrepos drives svn, mercurial, and more. doma's <code>status</code> and its git-derived sets only understand git (its <code>run</code> works on any directory).</li>
+</ul>
+<h3 id="where-doma-is-different">Where doma is different</h3>
+<ul>
+<li><strong>No file to maintain.</strong> A directory joins a set the moment you <code>doma add . -t work</code>. There is no manifest to open, and <code>add -r ~/Projects --project-tag</code> labels a whole tree by project type.</li>
+<li><strong>Selecting by state, not just by name.</strong> <code>doma run @failed -- make test</code> retries only what the last sweep failed on; <code>doma run work -t @dirty -- git stash</code> acts on only the repos with uncommitted changes. The other tools show state in their dashboards but can't select on it.</li>
+<li><strong>Built to be scripted.</strong> <code>list</code>, <code>tags</code>, <code>info</code>, <code>stats</code>, <code>status</code>, and <code>run</code> all have <code>--json</code>, failures have <a href="../../reference/commands/#exit-codes">distinct exit codes</a>, and destructive commands refuse to run unattended without consent. That's also what makes doma usable from an <a href="../../ai/">AI coding agent</a>.</li>
+<li><strong>Labels that expire.</strong> <code>doma mark spike</code> tags the current directory for a week; <code>--ttl</code> sets any lifetime. Useful for &quot;the three repos I'm touching for this migration&quot;.</li>
+<li><strong>Not only repositories.</strong> Any directory can be labeled, swept with <code>run</code>, and jumped to.</li>
+</ul>
+<h3 id="which-one">Which one</h3>
+<ul>
+<li><strong>mani</strong> — a team shares one workspace definition, new machines should clone everything from it, and you want named tasks.</li>
+<li><strong>gita</strong> — the work is git-centric and you mostly want to delegate git subcommands to groups of repos.</li>
+<li><strong>myrepos</strong> — a long-lived <code>~/.mrconfig</code>, several version control systems, per-repo custom commands.</li>
+<li><strong>doma</strong> — the set is personal and changes often, you want to act on &quot;whatever is dirty / failed / tagged X right now&quot;, or a script or agent needs structured results.</li>
+</ul>
+<p>They aren't mutually exclusive: a <code>mani.yaml</code> can own what gets cloned while doma labels and sweeps what's on disk.</p>
+<h2 id="vs-zoxide-autojump-z-fasd">vs zoxide / autojump / z / fasd</h2>
+<p>These are <em>jumpers</em>. They watch <code>cd</code> and rank directories by how often and how recently you visit them, then <code>z foo</code> jumps to the best match.</p>
+<p>doma is not competing here. It never adds a directory on its own, and recall is by label rather than by inferred frecency. <code>doma cd &lt;tag&gt;</code> and the bare-<code>doma</code> finder exist because once directories are labeled, jumping to one is nearly free — not because doma is trying to out-guess zoxide.</p>
+<p><strong>Use zoxide when</strong> you want zero-friction recall and don't care about labels.
+<strong>Use doma when</strong> you want explicit categories, or need to operate on every directory in a category at once.</p>
+<p>They compose fine: <code>z</code> for casual jumping, <code>doma</code> for the labeled sets. fasd adds recent <em>files</em> on top of the same model; that side is out of doma's scope.</p>
+<h2 id="vs-fzf">vs fzf</h2>
+<p>fzf is a fuzzy finder — a generic pipe consumer that stores nothing. doma is an upstream of it: it remembers paths and labels, and you can pipe them into fzf if you prefer it to doma's own finder.</p>
+<pre><code class="language-bash hljs"><span class="hljs-built_in">cd</span> <span class="hljs-string">&quot;</span><span class="hljs-keyword">$(</span>doma list --paths <span class="hljs-punctuation">|</span> fzf<span class="hljs-keyword">)</span><span class="hljs-string">&quot;</span>   <span class="hljs-comment"># fzf over doma-tracked directories</span>
+doma <span class="hljs-built_in">cd</span>                           <span class="hljs-comment"># or doma&#39;s built-in finder</span>
+</code></pre>
+<h2 id="when-you-dont-need-doma">When you don't need doma</h2>
+<p>If the set of directories you work in is small enough to type by hand, or your editor's project switcher covers it, doma is overkill. The value compounds when:</p>
+<ul>
+<li>You have 10+ directories you actually return to.</li>
+<li>You operate on them in <em>categories</em> (<code>run shards build across all my Crystal projects</code>).</li>
+<li>You want bookmarks that auto-expire (<code>mark spike</code> for the week).</li>
+<li>You want an AI coding agent to know which directories qualify for a category-spanning task (<a href="../../ai/">AI agents</a>).</li>
+</ul>
+
+    <footer class="docs-footer">
+      <div class="footer-mark">
+        <a href="https://www.hahwul.com" target="_blank" rel="noopener" aria-label="hahwul">
+          <span class="hahwul-img" role="img" aria-label="hahwul"></span>
+        </a>
+        <p class="footer-love">Built with Love</p>
+      </div>
+    </footer>
+  </main>
+  
+</div>
+
+<script src="https://doma.hahwul.com/assets/js/board.js?v=21059188"></script>
+<script src="https://doma.hahwul.com/assets/js/search.js?v=21059188"></script>
+<script>
+  (function () {
+    var btn = document.querySelector(".mobile-menu-btn");
+    var sidebar = document.querySelector(".docs-sidebar");
+    if (!btn || !sidebar) return;
+    var overlay = document.createElement("div");
+    overlay.className = "sidebar-overlay";
+    document.body.appendChild(overlay);
+    function toggle(open) {
+      sidebar.classList.toggle("is-open", open);
+      overlay.classList.toggle("is-visible", open);
+    }
+    btn.addEventListener("click", function () {
+      toggle(!sidebar.classList.contains("is-open"));
+    });
+    overlay.addEventListener("click", function () {
+      toggle(false);
+    });
+  })();
+</script>
+</body>
+</html>
