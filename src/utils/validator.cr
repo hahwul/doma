@@ -129,17 +129,27 @@ module Doma
     # Canonicalize a user-supplied path. By default the path must exist; pass
     # `must_exist: false` for import flows that may reference paths from
     # other machines.
+    #
+    # Leading/trailing spaces are legal in directory names, so the path is
+    # used as given (like `canonicalize`); only a blank one is rejected.
     def path!(raw : String, *, must_exist : Bool = true) : String
-      cleaned = raw.strip
-      raise ValidationError.new("path is empty") if cleaned.empty?
-      abs = canonicalize(cleaned)
+      raise ValidationError.new("path is empty") if raw.strip.empty?
+      abs = canonicalize(raw)
       if abs.bytesize > MAX_PATH_LEN
         raise ValidationError.new("path exceeds #{MAX_PATH_LEN} bytes")
       end
-      if must_exist && !Dir.exists?(abs)
+      if must_exist && !directory?(abs)
         raise ValidationError.new("not a directory: #{abs}")
       end
       abs
+    end
+
+    # `Dir.exists?` raises (EACCES) under a non-traversable parent instead
+    # of returning false; surface that as a per-path ValidationError.
+    private def directory?(abs : String) : Bool
+      Dir.exists?(abs)
+    rescue ex : File::Error
+      raise ValidationError.new("cannot access #{abs}: #{ex.message}")
     end
 
     # Canonicalize a path. The single source of truth for path expansion
@@ -158,7 +168,11 @@ module Doma
     # producing two rows for the same physical directory.
     #
     # Trailing slashes are stripped so `/tmp` and `/tmp/` are the same key.
+    #
+    # An empty string is rejected rather than expanded to the cwd, so an
+    # unset `$dir` in `doma rm "$dir"` can't act on the current directory.
     def canonicalize(raw : String) : String
+      raise ValidationError.new("path is empty") if raw.empty?
       expanded = expand_home(raw)
       resolved = if File.exists?(expanded)
                    begin

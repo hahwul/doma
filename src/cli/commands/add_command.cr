@@ -117,7 +117,10 @@ module Doma::CLI
           failures = process_each(positional, json_mode ? results : nil) do |path|
             short_id_redirect_hint(preview_db, path)
             abs = Doma::Validator.path!(path)
-            applied = (Doma::Validator.tags!(raw_tags) + derive_tags(abs, use_basename, use_git, git_explicit, use_project)).uniq
+            user_tags = Doma::Validator.tags!(raw_tags)
+            derived = derive_tags(abs, use_basename, use_git, git_explicit, use_project) - user_tags
+            applied = (user_tags + derived).uniq
+            _, _, unchanged = plan(preview_db, abs, user_tags, derived, expires_at)
             summary = applied.empty? ? "(no tags)" : "tags: #{applied.join(", ")}"
             summary += " (#{ttl_label})" if ttl_label
             if json_mode
@@ -126,8 +129,10 @@ module Doma::CLI
                 "path"      => abs,
                 "tags"      => applied,
                 "dry_run"   => true,
-                "unchanged" => false,
+                "unchanged" => unchanged,
               }
+            elsif unchanged
+              Doma::Logger.info "[dry-run] no change: #{abs} #{summary}"
             else
               Doma::Logger.info "[dry-run] would add #{abs} #{summary}"
             end
@@ -154,28 +159,17 @@ module Doma::CLI
           # User-supplied tags must validate strictly; auto-derived tags
           # (basename, git remote) flow through `sanitize_tag` so a repo
           # named `.dotfiles` doesn't blow up the whole `add`.
-          applied = (Doma::Validator.tags!(raw_tags) + derive_tags(abs, use_basename, use_git, git_explicit, use_project)).uniq
+          user_tags = Doma::Validator.tags!(raw_tags)
+          derived = derive_tags(abs, use_basename, use_git, git_explicit, use_project) - user_tags
+          applied = (user_tags + derived).uniq
 
-          # Snapshot the pre-state so we can tell apart a real write from
-          # a re-add of an already-tagged path. The latter currently
-          # prints "✓ added …" identical to the new-write case, which
-          # masks a no-op (e.g. accidentally re-running `doma add` in a
-          # script). Comparing the existing tag set + per-tag TTLs to
-          # what we're about to apply is enough to flag both
-          # "all tags already present, same TTL" and
-          # "no tags passed and path is already registered."
-          prev_info = db.find_entry(abs)
-          prev_tags = Set(String).new
-          prev_exp = {} of String => Int64
-          if pi = prev_info
-            prev_tags = pi.tags.to_set
-            prev_exp = db.tag_expirations(pi.id, include_past: true)
-          end
+          prev_info, derived_writes, unchanged = plan(db, abs, user_tags, derived, expires_at)
 
-          db.add(abs, applied, validate_path: false, expires_at: expires_at)
-
-          unchanged = !prev_info.nil? && applied.all? do |t|
-            prev_tags.includes?(t) && prev_exp[t]? == expires_at
+          # The TTL is for the tags the user named; derived tags are
+          # written permanent. One transaction so both land or neither.
+          db.transaction do |cnn|
+            db.add_tx(cnn, abs, user_tags, validate_path: false, expires_at: expires_at)
+            db.add_tx(cnn, abs, derived_writes, validate_path: false)
           end
 
           summary = applied.empty? ? "(no tags)" : "tags: #{applied.join(", ")}"
@@ -228,6 +222,23 @@ module Doma::CLI
     # needs the lookup.
     private def short_id_after_add(db : Doma::Database, abs : String, prev : Doma::Entry?) : String
       prev.try(&.short_id) || db.find_entry(abs).try(&.short_id) || ""
+    end
+
+    # Snapshot the pre-state so a re-add of an already-tagged path reads
+    # as "no change" instead of "added" (masking e.g. an accidental re-run
+    # in a script). Returns {prev entry, derived tags to write, unchanged}.
+    # Under a TTL, a derived tag the row already carries is left alone so
+    # `mark review` can't turn a permanent #crystal into a temporary one.
+    private def plan(db : Doma::Database, abs : String, user_tags : Array(String),
+                     derived : Array(String), expires_at : Int64?) : {Doma::Entry?, Array(String), Bool}
+      prev = db.find_entry(abs)
+      return {nil, derived, false} unless prev
+      prev_tags = prev.tags.to_set
+      prev_exp = db.tag_expirations(prev.id, include_past: true)
+      derived = derived.reject { |t| prev_tags.includes?(t) } if expires_at
+      unchanged = user_tags.all? { |t| prev_tags.includes?(t) && prev_exp[t]? == expires_at } &&
+                  derived.all? { |t| prev_tags.includes?(t) && !prev_exp.has_key?(t) }
+      {prev, derived, unchanged}
     end
 
     private def process_each(paths : Array(String), json_results : Array(JsonRow)? = nil, &)

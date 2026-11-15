@@ -22,6 +22,8 @@ Accepted units: `s`, `m`, `h`, `d`, `w`. Single number + single unit. No compoun
 doma add . -t bookmark --tmp
 ```
 
+The TTL applies only to the tags you name with `-t`. Auto-derived tags (basename, project type, git remote) stay permanent, and one the path already carries keeps its current lifetime.
+
 ## The `mark` shortcut
 
 The most common case is "tag the current directory for a week":
@@ -42,7 +44,11 @@ To mark a path other than the current directory, use `-p`:
 doma mark -p ~/Projects/sandbox spike
 ```
 
-For a custom TTL, fall back to `doma add --ttl` directly.
+For a custom lifetime, pass `--ttl`:
+
+```bash
+doma mark spike --ttl 4h
+```
 
 ## What "expired" means
 
@@ -92,4 +98,4 @@ The last form is occasionally useful: "this thing I marked for the week — actu
 | "Keep this for two days" | `doma add . -t reading --ttl 2d` |
 | "Track this project long-term" | `doma add . -t crystal` (no TTL) |
 
-`mark` is the limited form — positional tag list, 7-day TTL, cwd by default with `-p` for an explicit path. Anything beyond that uses `add` directly.
+`mark` is the limited form — positional tag list, 7-day TTL (or `--ttl DUR`), cwd by default with `-p` for an explicit path. Anything beyond that uses `add` directly.

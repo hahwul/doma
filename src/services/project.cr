@@ -25,8 +25,16 @@ module Doma
       "CMakeLists.txt"   => "cpp",
     }
 
+    # Best-effort like the other auto-tag sources: an unreadable marker
+    # (dir without search permission) counts as absent instead of raising.
     def types(dir : String) : Array(String)
-      MARKERS.compact_map { |file, tag| tag if File.file?(File.join(dir, file)) }.uniq!
+      MARKERS.compact_map { |file, tag| tag if marker?(File.join(dir, file)) }.uniq!
+    end
+
+    private def marker?(path : String) : Bool
+      File.file?(path)
+    rescue File::Error
+      false
     end
 
     # ponytail: fixed depth, enough for ~/src/host/owner/repo; add a
