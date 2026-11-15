@@ -67,6 +67,20 @@ describe "fix: config-color" do
     end
   end
 
+  it "#82 config get db_path stays empty when DOMA_DB overrides it" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      r = run(["config", "get", "db_path"], home, {"DOMA_DB" => File.join(home, "other.db")})
+      r[:status].exit_code.should eq(0)
+      r[:out].strip.should eq("")
+    end
+  end
+
+  it "stderr writers stay plain when stderr is redirected" do
+    # A non-TTY io never gets color (barring --color), whatever STDOUT is.
+    Doma::Logger.color_enabled?(IO::Memory.new).should be_false
+  end
+
   it "#91 unwritable config location is a ConfigError, not an internal error" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     with_home do |home|

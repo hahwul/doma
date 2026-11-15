@@ -276,7 +276,7 @@ module Doma::CLI
     private def effective_value(settings : Doma::Settings, key : String) : String
       case key
       # Blank counts as unset, same as `Config.db_path`.
-      when "db_path"           then settings.db_path.presence || File.join(Doma::Config.home, "doma.db")
+      when "db_path"           then settings.db_path.presence || (ENV["DOMA_DB"]?.presence ? "" : File.join(Doma::Config.home, "doma.db"))
       when "selector"          then settings.selector.to_s.downcase
       when "auto_tag.basename" then settings.auto_tag.basename.to_s
       when "auto_tag.git"      then settings.auto_tag.git.to_s

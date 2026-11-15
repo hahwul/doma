@@ -166,7 +166,7 @@ module Doma::CLI
 
       cmd = cmd_args.first
       cmd_rest = cmd_args[1..]
-      color = Doma::Logger.color_enabled?
+      color = Doma::Logger.color_enabled?(STDERR) # every `color`-gated line goes to stderr
 
       # Ctrl-C reaches the children on its own (same process group). doma
       # stays up just long enough to stop starting new ones, print the

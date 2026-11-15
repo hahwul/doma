@@ -397,7 +397,7 @@ module Doma::CLI
       if path_like?(candidate)
         # Already registered (just not under that tag/query): pointing at
         # `doma add` would only print "no change".
-        if entry = db.find_entry(Doma::Validator.canonicalize(candidate))
+        if entry = db.find_entry(db.row_path(candidate))
           # find_entry includes expired tags; --pick would never match those.
           now = Time.utc.to_unix
           expired = db.tag_expirations(entry.id, include_past: true).select { |_, at| at <= now }
