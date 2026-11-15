@@ -18,7 +18,7 @@ Resolution rules:
 
 - **Single match** → that path is printed.
 - **Multiple matches + TTY** → built-in picker opens.
-- **Multiple matches + non-TTY** → most-recent match wins, with a stderr advisory.
+- **Multiple matches + non-TTY** → exit code 4 (ambiguous). Pass `--first` (or `doma config set selector first`) to take the first match in sort order (most-recent by default) instead, with a stderr advisory.
 - **Zero matches** → exit code 3, NotFound error.
 
 When the input *looks like a path* (`/var`, `~/Downloads`, `./src`), the miss hint steers you to `doma add` instead of an unrelated tag.

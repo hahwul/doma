@@ -128,50 +128,39 @@ class Doma::Database
     rows.map { |row| build_entry(row) }
   end
 
-  # Number of `directory_tags` rows whose TTL has lapsed. The list
-  # command uses this to surface a "N tag(s) hidden by TTL" banner so
-  # users notice when --include-expired would change the picture.
-  def expired_tag_count : Int64
+  # Number of `directory_tags` rows whose TTL has lapsed, optionally
+  # only on directories `ids`. The list command passes the entries
+  # `--include-expired` would show, so its "N tag(s) hidden by TTL"
+  # banner counts what that flag would actually change, not the whole DB.
+  def expired_tag_count(ids : Array(Int64)? = nil) : Int64
+    return 0_i64 if ids && ids.empty?
+    uniq_ids = ids.try(&.uniq) || [] of Int64
+    scope = ids ? " AND directory_id IN (#{Doma::Sql.placeholders_for(uniq_ids.size)})" : ""
     @db.scalar(
-      "SELECT COUNT(*) FROM directory_tags WHERE #{IS_EXPIRED}"
+      "SELECT COUNT(*) FROM directory_tags WHERE #{IS_EXPIRED}#{scope}",
+      args: uniq_ids.map(&.as(DB::Any))
     ).as(Int64)
   end
 
   # Substring search across path, basename, and tag name. Returns
-  # deduped entries in `sort` order (path by default). Same
-  # single-query GROUP_CONCAT shape as `directories()` so both share
-  # `build_entry`.
+  # deduped entries in `sort` order (path by default).
   #
-  # When `include_expired` is true, the tag-name match branch no longer
-  # filters expired rows, and the displayed tag list includes expired
-  # entries — so combining `-t TAG --include-expired <query>` in the
-  # list command honors the flag end-to-end.
+  # Matched in Crystal, not SQL LIKE: LIKE only folds ASCII case and
+  # never normalizes, so an NFD-stored path (what macOS hands back for
+  # Hangul/accents) missed an NFC-typed query. NFC + downcase both
+  # sides, same as `TUI::Query.contains`.
+  #
+  # A path / basename hit works regardless of tag expiry; a tag-name
+  # hit only counts for tags `directories` returns, i.e. active ones
+  # unless `include_expired` — so `-t TAG --include-expired <query>`
+  # honors the flag end-to-end.
   def search(query : String, *, sort : SortBy = SortBy::Path, include_expired : Bool = false) : Array(Entry)
-    term = "%#{escape_like(query)}%"
-    tag_select = include_expired ? TAGS_GROUP_CONCAT_ALL : TAGS_GROUP_CONCAT_ACTIVE
-    tag_expired_pred = include_expired ? "" : " AND #{NOT_EXPIRED_DT}"
-    # Two match strategies join via UNION:
-    #   1. Path / basename hit — works regardless of tag expiry
-    #      (a directory with all its tags expired but a matching path
-    #      should still surface).
-    #   2. Tag-name hit — only counts when the tag row is still
-    #      active, unless --include-expired is set.
-    rows = @db.query_all(
-      <<-SQL, term, term, term, as: ENTRY_ROW
-        SELECT #{ENTRY_COLUMNS}, #{tag_select}
-        FROM directories d
-        WHERE d.id IN (
-          SELECT id FROM directories
-            WHERE path LIKE ? ESCAPE '\\' OR basename LIKE ? ESCAPE '\\'
-          UNION
-          SELECT dt.directory_id FROM directory_tags dt
-            INNER JOIN tags t ON t.id = dt.tag_id
-            WHERE t.name LIKE ? ESCAPE '\\'#{tag_expired_pred}
-        )
-        #{order_clause(sort)}
-        SQL
-    )
-    rows.map { |row| build_entry(row) }
+    q = query.unicode_normalize(:nfc).downcase
+    directories(sort: sort, include_expired: include_expired).select do |e|
+      e.path.unicode_normalize(:nfc).downcase.includes?(q) ||
+        e.basename.unicode_normalize(:nfc).downcase.includes?(q) ||
+        e.tags.any?(&.unicode_normalize(:nfc).downcase.includes?(q))
+    end
   end
 
   # Returns a {tag_name => expires_at_epoch} map for all tags on the
@@ -296,12 +285,5 @@ class Doma::Database
     id, short_id, path, basename, created_at, last_used_at, joined = row
     tags = joined ? joined.split('\u001f').reject(&.empty?) : [] of String
     Entry.new(id, short_id, path, basename, tags, created_at, last_used_at)
-  end
-
-  # SQLite LIKE uses '\' as the configured escape character below. We wrap
-  # any of the three LIKE meta-chars so a user query containing '%' or '_'
-  # is treated literally.
-  private def escape_like(raw : String) : String
-    raw.gsub(/[\\%_]/) { |m| "\\#{m}" }
   end
 end
