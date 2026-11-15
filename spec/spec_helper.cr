@@ -2,6 +2,12 @@ require "spec"
 require "file_utils"
 require "../src/doma"
 
+# CLI specs spawn bin/doma, which inherits this process's ENV. A DOMA_DB or
+# DOMA_CONFIG exported in the developer's shell would win over the per-spec
+# DOMA_HOME and point the suite at their real database, so drop every
+# state-changing override before any spec runs.
+%w[DOMA_DB DOMA_CONFIG DOMA_YES DOMA_CD_FILE].each { |k| ENV.delete(k) }
+
 # What `/tmp` canonicalizes to: `/private/tmp` on macOS, `/tmp` on Linux.
 REAL_TMP = File.realpath("/tmp")
 
