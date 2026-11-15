@@ -23,16 +23,21 @@ module Doma::CLI
     def run(args : Array(String))
       query : String? = nil
       tag : String? = nil
+      positional = [] of String
 
       parser = OptionParser.new do |p|
-        p.banner = "Usage: doma tui [--query Q] [-t TAG]"
+        p.banner = "Usage: doma tui [<query>] [--query Q] [-t TAG]"
         p.on("--query Q", "Pre-fill the search box") { |q| query = q }
         p.on("-t TAG", "--tag TAG", "Pre-seed a tag: filter") { |t| tag = t }
         p.on("-h", "--help", "Show help") do
           puts p
           exit 0
         end
-        p.unknown_args { |_, _| }
+        # Positionals join the query, like `doma list <query>`.
+        p.unknown_args do |before, after|
+          positional.concat(before)
+          positional.concat(after)
+        end
       end
       parser.parse(args)
 
@@ -52,7 +57,7 @@ module Doma::CLI
           return
         end
 
-        result = TuiCommand.run_app(db, entries, initial_query(query, tag))
+        result = TuiCommand.run_app(db, entries, initial_query(query, tag, positional))
         if path = result.path
           db.bump_used_safe(path)
           TuiCommand.deliver(path)
@@ -74,6 +79,12 @@ module Doma::CLI
         "no controlling terminal for the TUI",
         hint: "use `doma list` for non-interactive output"
       )
+    rescue ex : Termisu::Error
+      # Terminal setup failed, e.g. TERM unset (env -i, cron).
+      raise Doma::Error.new(
+        "cannot start the TUI: #{ex.message}",
+        hint: "set TERM (e.g. TERM=xterm-256color), or use `doma list` for non-interactive output"
+      )
     end
 
     # Hand the chosen path back to the caller. With a wrapper-provided
@@ -91,10 +102,11 @@ module Doma::CLI
       puts path
     end
 
-    private def initial_query(query : String?, tag : String?) : String
+    private def initial_query(query : String?, tag : String?, positional : Array(String)) : String
       parts = [] of String
       parts << "tag:#{tag}" if tag && !tag.empty?
       parts << query if query && !query.empty?
+      parts.concat(positional.reject(&.empty?))
       parts.join(" ")
     end
   end

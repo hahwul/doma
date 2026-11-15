@@ -59,7 +59,7 @@ module Doma::CLI
           Doma::Validator.split_tag_flag!(t).each { |x| tags << x }
         end
         p.on("-x TAG", "--exclude=TAG", "Drop directories carrying TAG (repeatable, glob ok)") do |t|
-          Doma::Validator.split_tag_flag!(t).each { |x| excludes << x }
+          Doma::Validator.split_tag_flag!(t, "-x").each { |x| excludes << x }
         end
         p.on("--by SORT", "Sort by 'path' (default), 'recent' ('used'/'recency'), or 'tag' (group)") do |val|
           case val
@@ -93,8 +93,8 @@ module Doma::CLI
         # Single-element resolution: print one path so the shell can `cd`
         # to it. Replaces the old top-level `cd` command — the shell
         # wrapper (doma setup install) calls this under the hood.
-        # Multiple matches + TTY → interactive picker; non-TTY → first
-        # (most-recent) with an ambiguity warning on stderr.
+        # Multiple matches + TTY → interactive picker; non-TTY → exit 4
+        # unless `--first` / selector `first` (see `run_pick`).
         p.on("--pick", "Resolve to a single path (interactive if TTY)") { pick_mode = true }
         p.on("--query Q", "Pre-fill the picker filter (used with --pick)") { |q| pick_query = q }
         p.on("--first", "With --pick: always pick the first match (no prompt)") do
@@ -161,8 +161,21 @@ module Doma::CLI
           return
         end
 
+        # Expired tags `--include-expired` would reveal for *this* filter.
+        # That flag can widen the result (`-t old` with `old` expired), so
+        # recollect with it on. With @sets, count only the listed entries
+        # instead of re-probing git for the wider pool.
+        hidden_ttl = -> do
+          if include_expired || Doma::Logger.quiet?
+            0_i64
+          else
+            pool = set_in.empty? && set_ex.empty? ? collect(db, tag_in, tag_ex, query, by, true) : entries
+            db.expired_tag_count(pool.map(&.id))
+          end
+        end
+
         if entries.empty?
-          report_empty(db, tags, excludes, query)
+          report_empty(db, tags, excludes, query, hidden_ttl.call)
           return
         end
 
@@ -171,7 +184,7 @@ module Doma::CLI
           return
         end
 
-        emit_text(db, entries, ttl_by_id, group_by_tag, check_existence, include_expired)
+        emit_text(entries, ttl_by_id, group_by_tag, check_existence, hidden_ttl.call)
       end
     end
 
@@ -191,8 +204,9 @@ module Doma::CLI
     # Nothing matched: explain why (the empty_message), then layer on the
     # most useful next step — a typo/parent hint for a bogus tag, or the
     # first-run "add ." cue when the database is simply empty.
-    private def report_empty(db : Doma::Database, tags : Array(String), excludes : Array(String), query : String?)
+    private def report_empty(db : Doma::Database, tags : Array(String), excludes : Array(String), query : String?, hidden : Int64)
       STDERR.puts(empty_message(tags, query, excludes))
+      print_ttl_footer(hidden)
       # Only suggest for literal (non-glob) tag names that aren't in
       # the catalog at all. An empty AND intersection between two
       # known tags is a legitimate result, not a typo.
@@ -233,7 +247,7 @@ module Doma::CLI
     # (optionally grouped under tag headers), then the two footers that
     # surface what the default view hides — TTL-expired tags and missing
     # paths — alongside the flag that would reveal each.
-    private def emit_text(db : Doma::Database, entries : Array(Doma::Entry), ttl_by_id : Hash(Int64, Hash(String, Int64)), group_by_tag : Bool, check_existence : Bool, include_expired : Bool)
+    private def emit_text(entries : Array(Doma::Entry), ttl_by_id : Hash(Int64, Hash(String, Int64)), group_by_tag : Bool, check_existence : Bool, hidden : Int64)
       color = Doma::Logger.color_enabled?
       if group_by_tag
         group_entries_by_tag(entries).each do |(tag_key, group)|
@@ -246,17 +260,7 @@ module Doma::CLI
         entries.each { |e| puts render_row(e, ttl_by_id, check_existence, color) }
       end
 
-      # Footer: when expired rows were filtered out, surface the count
-      # and the flag that would reveal them. Symmetrical with the
-      # `[gone]` story for missing paths — silent suppression is a UX
-      # trap if the user is wondering why they don't see something.
-      unless include_expired
-        hidden = db.expired_tag_count
-        if hidden > 0
-          noun = hidden == 1 ? "tag" : "tags"
-          STDERR.puts "  #{hidden} #{noun} hidden by TTL — pass --include-expired to show"
-        end
-      end
+      print_ttl_footer(hidden)
 
       # Mirror the TTL footer for missing paths: when --check wasn't
       # passed, count entries whose path is gone and surface the flag
@@ -264,13 +268,33 @@ module Doma::CLI
       # to live ones in the default listing — the user only finds out
       # after `cd` fails. Counting walks `entries` we already have, so
       # no extra DB round trip.
-      unless check_existence
-        gone = entries.count { |e| !Dir.exists?(e.path) }
+      unless check_existence || Doma::Logger.quiet?
+        gone = entries.count { |e| gone?(e.path) }
         if gone > 0
           noun = gone == 1 ? "path is" : "paths are"
           STDERR.puts "  #{gone} #{noun} missing — pass --check to mark, or `doma prune --gone` to drop"
         end
       end
+    end
+
+    # Footer: when expired rows were filtered out, surface the count
+    # and the flag that would reveal them. Symmetrical with the
+    # `[gone]` story for missing paths — silent suppression is a UX
+    # trap if the user is wondering why they don't see something.
+    # `hidden` is already 0 under --include-expired / -q.
+    private def print_ttl_footer(hidden : Int64)
+      return unless hidden > 0
+      noun = hidden == 1 ? "tag" : "tags"
+      STDERR.puts "  #{hidden} #{noun} hidden by TTL — pass --include-expired to show"
+    end
+
+    # Only a definite ENOENT/ENOTDIR counts as gone. `Dir.exists?` raises
+    # on EACCES (parent without search permission); that path may well
+    # exist, and one unreadable entry must not crash the whole listing.
+    private def gone?(path : String) : Bool
+      !Dir.exists?(path)
+    rescue File::Error
+      false
     end
 
     # Narrow the filtered entries down to one path and print it to stdout.
@@ -371,6 +395,16 @@ module Doma::CLI
       candidate = tags.first? || query
       return unless candidate
       if path_like?(candidate)
+        # Already registered (just not under that tag/query): pointing at
+        # `doma add` would only print "no change".
+        if entry = db.find_entry(Doma::Validator.canonicalize(candidate))
+          # find_entry includes expired tags; --pick would never match those.
+          now = Time.utc.to_unix
+          expired = db.tag_expirations(entry.id, include_past: true).select { |_, at| at <= now }
+          active = entry.tags.reject { |t| expired.has_key?(t) }
+          via = active.empty? ? "it has no tags (doma add #{candidate} -t TAG)" : "pick it by tag: #{active.map { |t| "##{t}" }.join(' ')}"
+          return "#{entry.path} is already registered; #{via}"
+        end
         return "to register this path, run: doma add #{candidate}"
       end
       SweepArgs.miss_hint(tags.empty? ? [candidate] : tags, db.tag_names)
@@ -452,7 +486,7 @@ module Doma::CLI
       ttl_map = ttl_by_id[e.id]?
       tags_str = e.tags.map { |t| Doma::TagRenderer.render(t, ttl_map.try(&.[t]?), color) }.join(' ')
       marker = ""
-      if check_existence && !Dir.exists?(e.path)
+      if check_existence && gone?(e.path)
         marker = color ? " #{"[gone]".colorize(:red)}" : " [gone]"
       end
       "#{short_str}  #{path_str}\t#{tags_str}#{marker}"
@@ -478,7 +512,7 @@ module Doma::CLI
       if ttl_map = ttl_by_id[e.id]?
         row["expirations"] = ttl_map
       end
-      row["exists"] = Dir.exists?(e.path) if check_existence
+      row["exists"] = !gone?(e.path) if check_existence
       row
     end
   end
