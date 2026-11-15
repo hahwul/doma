@@ -35,7 +35,10 @@ module Doma
     end
 
     def from_file(db : Doma::Database, path : String, *, mode : Mode = Mode::Merge, dry_run : Bool = false) : Result
-      raise ImportError.new("import file not found: #{path}") unless File.file?(path)
+      # Not `File.file?`: a pipe (`<(…)`, `/dev/stdin`) is readable too.
+      unless File.exists?(path) && !Dir.exists?(path)
+        raise ImportError.new("import file not found: #{path}")
+      end
       content = begin
         File.read(path)
       rescue ex : IO::Error
@@ -52,6 +55,9 @@ module Doma
     # `git clone` accepts as a destination).
     def absent?(path : String) : Bool
       !Dir.exists?(path) || Dir.empty?(path)
+    rescue File::Error
+      # Exists but unreadable: not something to clone into.
+      false
     end
 
     def parse(content : String, source : String? = nil) : Snapshot
@@ -141,15 +147,36 @@ module Doma
           # one zero-tag `add_tx` so the directory row gets created;
           # without this the importer would silently increment the
           # `imported` counter while leaving the database unchanged.
-          if entry.tags.empty?
-            db.add_tx(cnn, entry.path, entry.tags, validate_path: false)
+          #
+          # Validate every tag before the first write: the per-TTL
+          # groups below each hit `add_tx`, so a bad tag in a later
+          # group would otherwise skip the entry after earlier groups
+          # (and the directory row) were already written.
+          ttls = {} of String => Int64?
+          entry.tags.each do |raw|
+            ttl = entry.expirations.try(&.[raw]?)
+            parts = raw.split(',').map { |part| legacy_tag(part, entry.path, skipped_messages) }
+            Doma::Validator.tags!(parts).each do |tag|
+              ttls[tag] = ttls.has_key?(tag) ? longer_ttl(ttls[tag], ttl) : ttl
+            end
+          end
+          # Merge must not let an old snapshot's deadline shorten (or
+          # expire) a live binding: keep the longer lifetime, as
+          # `move`/`rename` do (MERGE_KEEP_LONGER_TTL).
+          if existed && mode == Mode::Merge
+            cnn.query_all(
+              "SELECT t.name, dt.expires_at FROM directory_tags dt " \
+              "JOIN tags t ON t.id = dt.tag_id WHERE dt.directory_id = " \
+              "(SELECT id FROM directories WHERE path = ?)",
+              abs, as: {String, Int64?}
+            ).each do |(name, live)|
+              ttls[name] = longer_ttl(ttls[name], live) if ttls.has_key?(name)
+            end
+          end
+          if ttls.empty?
+            db.add_tx(cnn, entry.path, [] of String, validate_path: false)
           else
-            # Validate every tag before the first write: the per-TTL
-            # groups below each hit `add_tx`, so a bad tag in a later
-            # group would otherwise skip the entry after earlier groups
-            # (and the directory row) were already written.
-            Doma::Validator.tags!(entry.tags)
-            entry.tags.group_by { |t| entry.expirations.try(&.[t]?) }.each do |ttl, tag_group|
+            ttls.keys.group_by { |t| ttls[t] }.each do |ttl, tag_group|
               db.add_tx(cnn, entry.path, tag_group, validate_path: false, expires_at: ttl)
             end
           end
@@ -174,6 +201,21 @@ module Doma
 
       # The same path listed twice is still one clone.
       Result.new(added + updated, skipped, mode == Mode::Replace, added, updated, clonable.uniq(&.[0]))
+    end
+
+    # nil (permanent) beats any TTL; otherwise the later deadline wins.
+    private def longer_ttl(a : Int64?, b : Int64?) : Int64?
+      a && b ? Math.max(a, b) : nil
+    end
+
+    # v0.1–v0.2.0 accepted empty segments (`work/`, `a//b`); such tags
+    # can still sit in an upgraded DB and its exports. Normalize them so
+    # restoring that backup doesn't skip the whole directory.
+    private def legacy_tag(raw : String, path : String, messages : Array(String)) : String
+      fixed = raw.strip.squeeze('/').rstrip('/')
+      return raw if fixed.empty? || fixed == raw.strip
+      messages << "import: renamed legacy tag '#{raw.strip}' to '#{fixed}' on #{path}"
+      fixed
     end
   end
 end
