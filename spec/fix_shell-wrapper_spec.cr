@@ -128,12 +128,12 @@ describe "setup install regressions" do
     home = File.tempname("doma-sw-eof")
     FileUtils.mkdir_p(home)
     begin
-      py = <<-PY
+      py = <<-'PY'
         import os, pty, sys, time
         pid, fd = pty.fork()
         if pid == 0:
             os.execv(sys.argv[1], sys.argv[1:])
-        time.sleep(0.5); os.write(fd, b"\\x04")
+        time.sleep(0.5); os.write(fd, b"\x04")
         while True:
             try:
                 if not os.read(fd, 4096): break

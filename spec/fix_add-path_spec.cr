@@ -43,7 +43,7 @@ describe "fix add-path" do
 
       db = Doma::Database.open(File.join(home, "doma.db"))
       begin
-        entry = db.find_entry(proj).not_nil!
+        entry = (db.find_entry(proj) || raise "entry missing")
         exp = db.tag_expirations(entry.id, include_past: true)
         exp.keys.should eq(["review"])
         entry.tags.sort.should eq(%w[crystal proj review work])
@@ -62,7 +62,7 @@ describe "fix add-path" do
       doma(home, ["add", proj, "-t", "work"] + flags)[:status].success?.should be_true
       db = Doma::Database.open(File.join(home, "doma.db"))
       begin
-        id = db.find_entry(proj).not_nil!.id
+        id = (db.find_entry(proj) || raise "entry missing").id
         db.transaction do |cnn|
           cnn.exec("UPDATE directory_tags SET expires_at = 1000 WHERE directory_id = ? " \
                    "AND tag_id = (SELECT id FROM tags WHERE name = 'crystal')", id)
@@ -74,7 +74,7 @@ describe "fix add-path" do
       r = doma(home, ["add", proj, "-t", "review", "--ttl", "1d"] + flags)
       r[:out].should match(/tags: review \(expires [^)]+\), proj, crystal/)
       row = JSON.parse(doma(home, ["add", proj, "-t", "review", "--ttl", "1d", "--json"] + flags)[:out]).as_a.first
-      row["derived_tags"].as_a.map(&.as_s).sort.should eq(%w[crystal proj])
+      row["derived_tags"].as_a.map(&.as_s).sort!.should eq(%w[crystal proj])
 
       db = Doma::Database.open(File.join(home, "doma.db"))
       begin
@@ -92,7 +92,7 @@ describe "fix add-path" do
       doma(home, ["add", proj, "-t", "bm", "--tmp", "--auto-tag"])[:status].success?.should be_true
       db = Doma::Database.open(File.join(home, "doma.db"))
       begin
-        entry = db.find_entry(proj).not_nil!
+        entry = (db.find_entry(proj) || raise "entry missing")
         db.tag_expirations(entry.id, include_past: true).keys.should eq(["bm"])
         entry.tags.sort.should eq(%w[bm fresh])
       ensure

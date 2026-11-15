@@ -333,7 +333,7 @@ module Doma::CLI
           Doma::Logger.debug "--git-tag had no effect: #{abs} is not a git working tree"
         end
       end
-      sources.compact_map { |raw| Doma::Validator.sanitize_tag(raw) }.uniq
+      sources.compact_map { |raw| Doma::Validator.sanitize_tag(raw) }.uniq!
     end
   end
 end

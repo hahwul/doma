@@ -114,6 +114,8 @@ class Doma::Database
   # it through `canonicalize` would realpath it onto a *different* row,
   # or onto none. Only a miss falls back to the canonical form.
   def row_path(path : String) : String
+    # Same empty-path refusal as `canonicalize`: `expand_home("")` is the cwd.
+    raise ValidationError.new("path is empty") if path.empty?
     expanded = Validator.expand_home(path)
     expanded = expanded.rchop('/') unless expanded == "/"
     return expanded if @db.query_one?("SELECT 1 FROM directories WHERE path = ?", expanded, as: Int64)

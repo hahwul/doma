@@ -36,7 +36,7 @@ module Doma
 
     def from_file(db : Doma::Database, path : String, *, mode : Mode = Mode::Merge, dry_run : Bool = false) : Result
       # Not `File.file?`: a pipe (`<(…)`, `/dev/stdin`) is readable too.
-      unless File.exists?(path) && !Dir.exists?(path)
+      if !File.exists?(path) || Dir.exists?(path)
         raise ImportError.new("import file not found: #{path}")
       end
       content = begin

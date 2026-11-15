@@ -71,7 +71,7 @@ describe "run/status fixes" do
   it "run targets in path order, like list --paths (16)" do
     pending! "binary not built" unless File.exists?(FIX_RS_BIN)
     with_rs_home do |home|
-      dirs = %w(a b c).map { |n| File.join(home, n).tap { |d| Dir.mkdir(d) } }
+      dirs = %w[a b c].map { |n| File.join(home, n).tap { |d| Dir.mkdir(d) } }
       rs(["add"] + dirs + ["-t", "w"], home)
       rs(["list", "-t", "w", "--pick", "c"], home)
       listed = rs(["list", "-t", "w", "--paths"], home)[:out]

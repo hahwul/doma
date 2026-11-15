@@ -89,7 +89,7 @@ describe "rm/info fixes" do
   it "#69: a bad item mid-batch doesn't skip the rest, and exits 2" do
     pending! "binary not built" unless File.exists?(FIX_BIN)
     with_fix_home do |home|
-      e, f, g = %w(e f g).map { |n| File.join(home, n).tap { |d| FileUtils.mkdir_p(d) } }
+      e, f, g = %w[e f g].map { |n| File.join(home, n).tap { |d| FileUtils.mkdir_p(d) } }
       doma(["add", e, f, g], home)
       sql(home, "UPDATE directories SET short_id = 'abcd111' WHERE basename = 'e'")
       sql(home, "UPDATE directories SET short_id = 'abcd222' WHERE basename = 'f'")
