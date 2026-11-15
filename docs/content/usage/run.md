@@ -68,7 +68,7 @@ doma run 'work/*' -- sh -c 'echo "$DOMA_ID $DOMA_TAGS"'
 doma run crystal --parallel -- shards build
 ```
 
-A fiber per directory; per-directory exit reports come at the end. Best for summary-style output rather than rich live logs.
+Up to `--jobs` directories run at once; each ✓/✗ is printed as its directory finishes, then the tally. Best for summary-style output rather than rich live logs.
 
 Cap the fan-out with `--jobs N` (default: CPU count). Without a cap, a `git fetch` sweep across 200 repos would open 200 connections at once.
 
