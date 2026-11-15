@@ -11,22 +11,24 @@ module Doma::CLI
   # validation, and partial-success semantics stay identical.
   #
   # Multiple positional args are accepted and treated as additional
-  # tags, mirroring `add -t a -t b -t c`. For custom TTL, fall back to
-  # `add --ttl <DUR>`; this command is intentionally stripped down.
+  # tags, mirroring `add -t a -t b -t c`. `--ttl DUR` and `--json` are
+  # forwarded to `add` as-is.
   class MarkCommand
     def run(args : Array(String))
       tags = [] of String
       target_path : String? = nil
       ttl : String? = nil
+      json = false
 
       parser = OptionParser.new do |p|
-        p.banner = "Usage: doma mark [-p PATH] [--ttl DUR] (<tag> [<tag> ...] | -t TAG [-t TAG ...])"
+        p.banner = "Usage: doma mark [-p PATH] [--ttl DUR] [--json] (<tag> [<tag> ...] | -t TAG [-t TAG ...])"
         p.on("-p PATH", "--path=PATH", "Mark this path instead of the current directory") do |v|
           target_path = v
         end
         p.on("--ttl DUR", "Expire after DUR (e.g. 30m, 1h, 2w) instead of the 7d default") do |v|
           ttl = v
         end
+        p.on("--json", "Output as JSON (forwarded to add)") { json = true }
         p.on("-t TAG", "--tag=TAG", "Add this tag (alias for positional; repeatable, comma-separated allowed)") do |t|
           Doma::Validator.split_tag_flag!(t).each { |part| tags << part }
         end
@@ -68,6 +70,7 @@ module Doma::CLI
       else
         forwarded << "--tmp"
       end
+      forwarded << "--json" if json
       tags.each { |t| forwarded << "-t" << t }
       # Path last, behind `--`, so a dash-prefixed `-p -n` isn't parsed
       # by `add` as a flag.
