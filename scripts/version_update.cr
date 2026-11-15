@@ -138,7 +138,7 @@ unless valid_version?(new_version)
   exit 1
 end
 
-if new_version == current_version
+if unique_versions.size <= 1 && new_version == current_version
   puts "⚠️  New version is the same as current version. No changes made."
   exit 0
 end

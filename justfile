@@ -33,6 +33,7 @@ clean:
 # Run the full spec suite.
 [group('development')]
 test:
+    shards build
     crystal spec
 
 # Auto-format and auto-fix lint issues.
