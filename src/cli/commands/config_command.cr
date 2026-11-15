@@ -137,8 +137,10 @@ module Doma::CLI
       # Seed an empty file so $EDITOR doesn't open a non-existent path
       # (Vim/etc handle it, but seeding makes intent obvious).
       unless File.exists?(path)
-        Dir.mkdir_p(File.dirname(path))
-        write_or_config_error(path) { File.write(path, "") }
+        write_or_config_error(path) do
+          Dir.mkdir_p(File.dirname(path))
+          File.write(path, "")
+        end
       end
 
       # `.presence`: a set-but-empty VISUAL must not hide a valid EDITOR.
@@ -258,10 +260,10 @@ module Doma::CLI
       # Write through a symlinked config (dotfiles) instead of replacing
       # the link, and make sure a custom DOMA_CONFIG's directory exists.
       path = File.realpath(path) if File.symlink?(path) && File.exists?(path)
-      Dir.mkdir_p(File.dirname(path))
       # Write atomically so a crash mid-write doesn't truncate the file.
       tmp = "#{path}.tmp"
       write_or_config_error(path) do
+        Dir.mkdir_p(File.dirname(path))
         File.write(tmp, settings.to_yaml)
         File.rename(tmp, path)
       ensure

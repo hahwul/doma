@@ -26,7 +26,9 @@ module Doma
     # because mixing colored stderr with non-tty stdout in a pipeline tends
     # to leak escape codes into grep/jq more often than the reverse.
     def color_enabled? : Bool
-      !@@no_color && (@@force_color || STDOUT.tty?)
+      # TERM=dumb mirrors Crystal's own default, which `Colorize.enabled =
+      # true` above overrides; `--color` still forces it.
+      !@@no_color && (@@force_color || (STDOUT.tty? && ENV["TERM"]? != "dumb"))
     end
 
     def info(msg : String)
