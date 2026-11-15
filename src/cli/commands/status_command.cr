@@ -3,6 +3,7 @@ require "json"
 require "colorize"
 require "../../db/database"
 require "../../services/git_status"
+require "../../tui/text"
 require "../../utils/errors"
 require "../../utils/logger"
 require "../../utils/parallel"
@@ -136,9 +137,16 @@ module Doma::CLI
     private def probe_all(entries : Array(Doma::Entry), jobs : Int32?) : Array(RepoState)
       Doma::Parallel.map(entries, jobs || Doma::Parallel.default_jobs) do |entry|
         inspect_one(entry)
+      rescue ex : Doma::Error
+        # git couldn't be spawned at all: a "not a git repo" row would be
+        # a wrong answer, so let the clear error end the sweep.
+        raise ex
       rescue
         # Degrade cleanly: one probe blowing up must never abort the sweep.
-        RepoState.new(entry, Dir.exists?(entry.path), Doma::GitStatus::NON_GIT)
+        # Don't re-stat here: an unstat-able path (EACCES on a parent) is
+        # what usually lands us here, and it would raise again. It's not
+        # known to be gone, so don't steer toward `prune --gone`.
+        RepoState.new(entry, true, Doma::GitStatus::NON_GIT)
       end
     end
 
@@ -151,13 +159,14 @@ module Doma::CLI
 
     private def render_text(states : Array(RepoState))
       color = Doma::Logger.color_enabled?
-      width = states.max_of(&.entry.path.size)
+      # Display width, not `size`: a CJK/Hangul char takes two columns.
+      width = states.max_of { |s| Doma::TUI::Text.display_width(s.entry.path) }
 
       states.each do |s|
         path = color ? s.entry.path.colorize(:cyan).to_s : s.entry.path
         # ljust on the *raw* path; colorized strings carry invisible ANSI
         # bytes that would throw the column math off.
-        pad = " " * (width - s.entry.path.size)
+        pad = " " * (width - Doma::TUI::Text.display_width(s.entry.path))
         cells = [status_cell(s, color), branch_cell(s, color), ab_cell(s, color), stash_cell(s, color), age_cell(s, color)]
           .reject(&.empty?).join("  ")
         puts "#{path}#{pad}  #{cells}".rstrip

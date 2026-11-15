@@ -33,6 +33,12 @@ module Doma::CLI
     @not_passed = [] of String
 
     def run(args : Array(String))
+      # The runtime ignores SIGPIPE, and an ignored signal survives exec:
+      # every child would see it ignored, so `cat big | head -1` inside a
+      # sweep prints "Broken pipe". Restore the default. doma's own write
+      # to a closed stdout then dies by SIGPIPE, the same 141 the runner
+      # reports for EPIPE.
+      Signal::PIPE.reset
       stop_on_fail = false
       parallel = false
       no_header = false
@@ -84,6 +90,10 @@ module Doma::CLI
       # Capture before parse: a bare `--` is consumed by the parser, so
       # we can't tell afterwards whether the user supplied a separator.
       had_separator = args.includes?("--")
+      # Also before parse (it consumes args): was a bare word typed before
+      # the first -t? It's the tag in `run work -t api cmd`, but part of
+      # the command in `run -t api cmd`.
+      tag_first = positional_before_tag_flag?(args)
       parser.parse(args)
       if jobs && !parallel
         raise Doma::ValidationError.new("--jobs requires --parallel")
@@ -107,7 +117,7 @@ module Doma::CLI
         raise Doma::ValidationError.new("command is required after '--'") if had_separator
         raise Doma::ValidationError.new(
           "no command to run — commands go after a '--' separator",
-          hint: missing_separator_hint(flag_tags, positional_tags)
+          hint: missing_separator_hint(tag_first, flag_tags, excludes, positional_tags)
         )
       end
 
@@ -117,7 +127,7 @@ module Doma::CLI
       raise Doma::ValidationError.new("tag is required") if tags.empty?
 
       targets, all_tags = Doma::Database.open do |db|
-        {SweepArgs.select(db, tags, excludes, Doma::Database::SortBy::Recent, jobs).uniq!(&.path), db.tag_names}
+        {SweepArgs.select(db, tags, excludes, Doma::Database::SortBy::Path, jobs).uniq!(&.path), db.tag_names}
       end
 
       if targets.empty?
@@ -148,7 +158,7 @@ module Doma::CLI
         # Suppressed under -q, which asks for just the machine-readable set.
         unless Doma::Logger.quiet?
           noun = targets.size == 1 ? "directory" : "directories"
-          STDERR.puts "[dry-run] would run `#{cmd_args.join(" ")}` in #{targets.size} #{noun} tagged #{SweepArgs.phrase(tags, excludes)}"
+          STDERR.puts "[dry-run] would run `#{Process.quote(cmd_args)}` in #{targets.size} #{noun} tagged #{SweepArgs.phrase(tags, excludes)}"
         end
         targets.each { |entry| puts entry.path }
         return
@@ -274,19 +284,47 @@ module Doma::CLI
       end
     end
 
-    # Builds a "did you mean" line for the no-`--` mistake by
-    # reconstructing the user's likely intent. With `-t TAG` every
-    # positional is the command; otherwise the first positional is the
-    # tag and the rest is the command. Falls back to the generic form
-    # when there isn't enough to reconstruct.
-    private def missing_separator_hint(flag_tags : Array(String), positional_tags : Array(String)) : String
-      if !flag_tags.empty?
-        cmd = positional_tags.join(" ")
-        return "did you mean: doma run -t #{flag_tags.first} -- #{cmd}".rstrip if !cmd.empty?
-      elsif positional_tags.size >= 2
-        return "did you mean: doma run #{positional_tags.first} -- #{positional_tags[1..].join(" ")}"
+    # True when a positional comes before the first -t/--tag token.
+    # Skips option values so `run -t git git pull` (value == command) and
+    # `run --jobs 4 t -t t2 cmd` (value looks positional) read right.
+    private def positional_before_tag_flag?(args : Array(String)) : Bool
+      skip = false
+      args.each do |a|
+        break if a == "--"
+        if skip
+          skip = false
+          next
+        end
+        case a
+        when "-t", "--tag"               then return false
+        when "-x", "--exclude", "--jobs" then skip = true
+        else
+          return false if a.starts_with?("-t") || a.starts_with?("--tag=")
+          return true unless a.starts_with?('-')
+        end
       end
-      "usage: doma run <tag> -- <cmd>"
+      false
+    end
+
+    # Builds a "did you mean" line for the no-`--` mistake by
+    # reconstructing the user's likely intent. The first positional is the
+    # tag when there's no `-t`, or when it was typed first (`run work -t
+    # api cmd`); otherwise every positional is the command (`run -t api
+    # cmd`). Every -t and -x is carried over so the suggestion never
+    # widens the target set. Falls back to the generic form when there
+    # isn't enough to reconstruct.
+    private def missing_separator_hint(tag_first : Bool, flag_tags : Array(String), excludes : Array(String), positional_tags : Array(String)) : String
+      tag = nil
+      cmd = positional_tags
+      if positional_tags.size >= 2 && (flag_tags.empty? || tag_first)
+        tag = positional_tags.first
+        cmd = positional_tags[1..]
+      end
+      return "usage: doma run <tag> -- <cmd>" if cmd.empty? || (tag.nil? && flag_tags.empty?)
+      parts = tag ? [tag] : [] of String
+      flag_tags.each { |t| parts << "-t" << t }
+      excludes.each { |t| parts << "-x" << t }
+      "did you mean: doma run #{Process.quote(parts)} -- #{Process.quote(cmd)}"
     end
 
     # `--json` sweep: capture each directory's streams and emit one row
@@ -304,7 +342,11 @@ module Doma::CLI
                   # serialized once the whole sweep is in.
                   j = jobs || Doma::Parallel.default_jobs
                   Doma::Parallel.map(targets, j) do |entry|
-                    run_one(cmd, cmd_rest, entry, attach_stdin: false, capture: true)
+                    run_one(cmd, cmd_rest, entry, attach_stdin: false, capture: true).tap do |r|
+                      # Pruned the moment it passes, so a forced second
+                      # Ctrl-C mid-sweep doesn't record it in @failed.
+                      @not_passed.delete(entry.path) if r.exit_code == 0
+                    end
                   end
                 else
                   collected = [] of RunResult
@@ -317,6 +359,7 @@ module Doma::CLI
                     result = run_one(cmd, cmd_rest, entry, attach_stdin: false, capture: true)
                     break if result.exit_code == NOT_RUN
                     collected << result
+                    @not_passed.delete(entry.path) if result.exit_code == 0
                     break if stop_on_fail && result.exit_code != 0
                   end
                   collected
@@ -331,7 +374,6 @@ module Doma::CLI
       # Directories Ctrl-C kept from starting get no row, but they go into
       # @failed below like everything else that didn't pass.
       puts rows.reject { |row| row[:exit_code] == NOT_RUN }.to_json
-      rows.each { |row| @not_passed.delete(row[:path]) if row[:exit_code] == 0 }
       Doma::LastRun.save(@not_passed)
       results.count { |r| r.exit_code != 0 }
     end
@@ -355,6 +397,11 @@ module Doma::CLI
       unless Dir.exists?(path)
         return fail_result(path, "directory no longer exists (run `doma prune --gone` to drop dead paths)", 127, capture)
       end
+      # Same confusion for a dir that exists but can't be entered: the
+      # chdir's EACCES would read as the command lacking permission.
+      unless File::Info.executable?(path)
+        return fail_result(path, "cannot enter directory: permission denied", 126, capture)
+      end
       input = attach_stdin ? STDIN : Process::Redirect::Close
       # Lets the child see which entry it runs for without `{path}`
       # templating or `sh -c` quoting.
@@ -377,7 +424,8 @@ module Doma::CLI
       out_io = IO::Memory.new
       err_io = IO::Memory.new
       status = Process.run(cmd, args: args, chdir: path, env: env, output: out_io, error: err_io, input: input)
-      RunResult.new(exit_code_of(status), out_io.to_s, err_io.to_s)
+      # Scrubbed: a child's non-UTF-8 bytes would make the JSON invalid.
+      RunResult.new(exit_code_of(status), out_io.to_s.scrub, err_io.to_s.scrub)
     rescue ex : File::NotFoundError
       fail_result(entry.path, ex.message || "command not found", 127, capture)
     rescue ex
