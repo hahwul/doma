@@ -22,7 +22,7 @@ Accepted units: `s`, `m`, `h`, `d`, `w`. Single number + single unit. No compoun
 doma add . -t bookmark --tmp
 ```
 
-The TTL applies only to the tags you name with `-t`. Auto-derived tags (basename, project type, git remote) stay permanent, and one the path already carries keeps its current lifetime.
+The TTL applies only to the tags you name with `-t`. Auto-derived tags (basename, project type, git remote) are always written permanent, so `mark` or `--ttl` also clears a leftover TTL on one.
 
 ## The `mark` shortcut
 

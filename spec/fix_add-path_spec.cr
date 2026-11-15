@@ -53,6 +53,38 @@ describe "fix add-path" do
     end
   end
 
+  it "mark refreshes an expired derived tag to permanent and labels the TTL on user tags only" do
+    with_ws do |home, ws|
+      proj = File.join(ws, "proj")
+      Dir.mkdir(proj)
+      File.touch(File.join(proj, "shard.yml"))
+      flags = ["--project-tag", "--auto-tag", "--no-git-tag"]
+      doma(home, ["add", proj, "-t", "work"] + flags)[:status].success?.should be_true
+      db = Doma::Database.open(File.join(home, "doma.db"))
+      begin
+        id = db.find_entry(proj).not_nil!.id
+        db.transaction do |cnn|
+          cnn.exec("UPDATE directory_tags SET expires_at = 1000 WHERE directory_id = ? " \
+                   "AND tag_id = (SELECT id FROM tags WHERE name = 'crystal')", id)
+        end
+      ensure
+        db.close
+      end
+
+      r = doma(home, ["add", proj, "-t", "review", "--ttl", "1d"] + flags)
+      r[:out].should match(/tags: review \(expires [^)]+\), proj, crystal/)
+      row = JSON.parse(doma(home, ["add", proj, "-t", "review", "--ttl", "1d", "--json"] + flags)[:out]).as_a.first
+      row["derived_tags"].as_a.map(&.as_s).sort.should eq(%w[crystal proj])
+
+      db = Doma::Database.open(File.join(home, "doma.db"))
+      begin
+        db.tag_expirations(id, include_past: true).keys.should eq(["review"])
+      ensure
+        db.close
+      end
+    end
+  end
+
   it "new derived tags under --ttl are written permanent (#0)" do
     with_ws do |home, ws|
       proj = File.join(ws, "fresh")

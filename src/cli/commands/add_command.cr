@@ -120,16 +120,16 @@ module Doma::CLI
             user_tags = Doma::Validator.tags!(raw_tags)
             derived = derive_tags(abs, use_basename, use_git, git_explicit, use_project) - user_tags
             applied = (user_tags + derived).uniq
-            _, _, unchanged = plan(preview_db, abs, user_tags, derived, expires_at)
-            summary = applied.empty? ? "(no tags)" : "tags: #{applied.join(", ")}"
-            summary += " (#{ttl_label})" if ttl_label
+            _, unchanged = plan(preview_db, abs, user_tags, derived, expires_at)
+            summary = summarize(user_tags, derived, ttl_label)
             if json_mode
               results << JsonRow{
-                "input"     => path,
-                "path"      => abs,
-                "tags"      => applied,
-                "dry_run"   => true,
-                "unchanged" => unchanged,
+                "input"        => path,
+                "path"         => abs,
+                "tags"         => applied,
+                "derived_tags" => derived,
+                "dry_run"      => true,
+                "unchanged"    => unchanged,
               }
             elsif unchanged
               Doma::Logger.info "[dry-run] no change: #{abs} #{summary}"
@@ -163,28 +163,30 @@ module Doma::CLI
           derived = derive_tags(abs, use_basename, use_git, git_explicit, use_project) - user_tags
           applied = (user_tags + derived).uniq
 
-          prev_info, derived_writes, unchanged = plan(db, abs, user_tags, derived, expires_at)
+          prev_info, unchanged = plan(db, abs, user_tags, derived, expires_at)
 
           # The TTL is for the tags the user named; derived tags are
-          # written permanent. One transaction so both land or neither.
+          # written permanent (which also clears a stale TTL on one).
+          # One transaction so both land or neither.
           db.transaction do |cnn|
             db.add_tx(cnn, abs, user_tags, validate_path: false, expires_at: expires_at)
-            db.add_tx(cnn, abs, derived_writes, validate_path: false)
+            db.add_tx(cnn, abs, derived, validate_path: false)
           end
 
-          summary = applied.empty? ? "(no tags)" : "tags: #{applied.join(", ")}"
-          summary += " (#{ttl_label})" if ttl_label
+          summary = summarize(user_tags, derived, ttl_label)
 
           if json_mode
             short_id = short_id_after_add(db, abs, prev_info)
             row = JsonRow{
-              "input"     => path,
-              "path"      => abs,
-              "short_id"  => short_id,
-              "tags"      => applied,
-              "unchanged" => unchanged,
-              "dry_run"   => false,
+              "input"        => path,
+              "path"         => abs,
+              "short_id"     => short_id,
+              "tags"         => applied,
+              "derived_tags" => derived,
+              "unchanged"    => unchanged,
+              "dry_run"      => false,
             }
+            # `expires_at` covers the user tags only; `derived_tags` are permanent.
             expires_at.try { |exp| row["expires_at"] = exp }
             results << row
           else
@@ -226,19 +228,29 @@ module Doma::CLI
 
     # Snapshot the pre-state so a re-add of an already-tagged path reads
     # as "no change" instead of "added" (masking e.g. an accidental re-run
-    # in a script). Returns {prev entry, derived tags to write, unchanged}.
-    # Under a TTL, a derived tag the row already carries is left alone so
-    # `mark review` can't turn a permanent #crystal into a temporary one.
+    # in a script). Returns {prev entry, unchanged}.
     private def plan(db : Doma::Database, abs : String, user_tags : Array(String),
-                     derived : Array(String), expires_at : Int64?) : {Doma::Entry?, Array(String), Bool}
+                     derived : Array(String), expires_at : Int64?) : {Doma::Entry?, Bool}
       prev = db.find_entry(abs)
-      return {nil, derived, false} unless prev
+      return {nil, false} unless prev
       prev_tags = prev.tags.to_set
       prev_exp = db.tag_expirations(prev.id, include_past: true)
-      derived = derived.reject { |t| prev_tags.includes?(t) } if expires_at
       unchanged = user_tags.all? { |t| prev_tags.includes?(t) && prev_exp[t]? == expires_at } &&
                   derived.all? { |t| prev_tags.includes?(t) && !prev_exp.has_key?(t) }
-      {prev, derived, unchanged}
+      {prev, unchanged}
+    end
+
+    # The TTL label sits on the user tags only; derived tags are permanent.
+    # e.g. "tags: review (expires …), proj, crystal".
+    private def summarize(user_tags : Array(String), derived : Array(String), ttl_label : String?) : String
+      return "(no tags)" if user_tags.empty? && derived.empty?
+      parts = [] of String
+      unless user_tags.empty?
+        parts << user_tags.join(", ")
+        parts[-1] += " (#{ttl_label})" if ttl_label
+      end
+      parts.concat(derived)
+      "tags: #{parts.join(", ")}"
     end
 
     private def process_each(paths : Array(String), json_results : Array(JsonRow)? = nil, &)
@@ -321,7 +333,7 @@ module Doma::CLI
           Doma::Logger.debug "--git-tag had no effect: #{abs} is not a git working tree"
         end
       end
-      sources.compact_map { |raw| Doma::Validator.sanitize_tag(raw) }
+      sources.compact_map { |raw| Doma::Validator.sanitize_tag(raw) }.uniq
     end
   end
 end
