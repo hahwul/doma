@@ -40,18 +40,20 @@ module Doma::CLI
       # other way to signal consent, so refuse rather than silently
       # deleting something permanently. Same rule as `trash empty`.
       if hard && Doma::Runtime.non_interactive_without_consent?
-        Doma::Logger.error "--hard requires --yes (or DOMA_YES=1) when stdin is not a TTY"
+        Doma::Logger.error "--hard requires --yes (or DOMA_YES=1) when not attached to a terminal (stdin/stdout)"
         exit 1
       end
 
-      # Validate up front so a misspelled or invalid tag name fails fast
-      # with a clear error, instead of silently no-op'ing inside
-      # `remove_tags` (where a non-existent tag name simply matches no
-      # rows). Mirrors `add_command`'s validation step.
-      cleaned_tags = Doma::Validator.tags!(tags)
-
       missing = 0
+      failures = 0
       Doma::Database.open do |db|
+        # Validate up front so an invalid tag name fails fast with a
+        # clear error. A name already stored is exempt: older versions
+        # accepted names today's creation rules reject (`work/`), and rm
+        # must still be able to drop them.
+        known = tags.empty? ? [] of String : db.tag_names
+        cleaned_tags = tags.uniq.map { |t| known.includes?(t) ? t : Doma::Validator.tag!(t) }
+
         positional.each do |raw|
           # Accept the same `list`-printed short_id that `cd` does. Only
           # falls back when the token isn't shaped like a path (no `/`,
@@ -59,8 +61,8 @@ module Doma::CLI
           # path interpretation.
           path = resolve_target(db, raw)
 
+          abs = db.row_path(path)
           if cleaned_tags.empty?
-            abs = Doma::Validator.canonicalize(path)
             # Snapshot first so a soft-delete can restore the row
             # exactly. `--hard` skips the snapshot; bulk cleanup paths
             # (`doma prune --gone | --expired`) skip it on their own.
@@ -96,35 +98,63 @@ module Doma::CLI
               STDERR.puts "  #{not_registered_hint(db, raw)}"
             end
           else
+            on_path = db.find_entry(abs).try(&.tags) || [] of String
             case db.remove_tags(path, cleaned_tags)
             in Doma::Database::RemoveTagsResult::Removed
-              Doma::Logger.success "untagged #{Doma::Validator.canonicalize(path)} (#{cleaned_tags.join(", ")})"
+              absent = cleaned_tags - on_path
+              note = absent.empty? ? "" : "; not on path: #{absent.join(", ")}"
+              Doma::Logger.success "untagged #{abs} (#{(cleaned_tags & on_path).join(", ")}#{note})"
             in Doma::Database::RemoveTagsResult::NoMatch
               # None of the requested tags were on this path. Treat like
               # `not registered`: nothing was actually changed, so exit
               # non-zero (matches `&& next` script semantics). Partial
               # success — at least one tag removed — still returns Removed.
               missing += 1
-              Doma::Logger.error "no matching tag(s) on #{Doma::Validator.canonicalize(path)} (#{cleaned_tags.join(", ")})"
+              Doma::Logger.error "no matching tag(s) on #{abs} (#{cleaned_tags.join(", ")})"
             in Doma::Database::RemoveTagsResult::NotRegistered
               missing += 1
               Doma::Logger.error "not registered: #{raw}"
               STDERR.puts "  #{not_registered_hint(db, raw)}"
             end
           end
+        rescue ex : Doma::ValidationError
+          # One bad item (ambiguous short_id prefix, unexpandable path)
+          # must not skip the rest of the batch.
+          failures += 1
+          Doma::Logger.error ex.message || "invalid input: #{raw}"
+          if hint = ex.hint
+            STDERR.puts "  #{hint}"
+          end
         end
       end
       # NotFoundError exit code (3) — matches `doma info <unknown>` and
       # makes `doma rm <unknown> && next` fail loudly. Successful removes
       # in the same batch are still committed (partial-success batch
-      # semantics, same as `add`).
+      # semantics, same as `add`). A validation failure outranks a miss
+      # (exit 2), same as `add`.
+      exit 2 if failures > 0
       exit 3 if missing > 0
     end
 
     private def resolve_target(db : Doma::Database, raw : String) : String
       return raw if File.exists?(raw)
       return raw unless Doma::ShortIdResolver.looks_like?(raw)
+      # A registered hex-named dir that's gone from disk is still that
+      # row — don't let its name resolve as another entry's short_id.
+      return raw if registered_path?(db, raw)
       Doma::ShortIdResolver.resolve(db, raw) || raw
+    end
+
+    private def registered_path?(db : Doma::Database, raw : String) : Bool
+      !db.find_entry(db.row_path(raw)).nil?
+    rescue Doma::ValidationError
+      false # relative input with no cwd: only the short_id reading is left
+    end
+
+    # Single-quote `raw` for a copy-pasteable hint when it has shell
+    # metacharacters (spaces, quotes, ...); plain paths stay readable.
+    private def shell_arg(raw : String) : String
+      raw.matches?(/\A[A-Za-z0-9_.\/~+:@%,=-]+\z/) ? raw : "'#{raw.gsub("'", %q('\''))}'"
     end
 
     # `not registered` follow-up. The default hint points the user at
@@ -148,7 +178,7 @@ module Doma::CLI
                "doma rm <path> -t #{raw} (or `doma rename #{raw} <new>` to relabel)"
       end
 
-      "to register it, run: doma add #{raw}"
+      "to register it, run: doma add #{shell_arg(raw)}"
     end
   end
 end

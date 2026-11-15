@@ -66,7 +66,10 @@ module Doma::CLI
         # the canonical stored path, and echoing the raw args here (e.g.
         # `/tmp/...` instead of `/private/tmp/...`, or a trailing slash)
         # made move look like it touched a different path than it stored.
-        old_abs = Doma::Validator.canonicalize(old_path)
+        # `row_path`, not `canonicalize`: it's what `move_path` resolves the
+        # source with, so a stored path that's now a symlink onto another
+        # row names the row that actually moves.
+        old_abs = db.row_path(old_path)
         new_abs = Doma::Validator.canonicalize(new_path)
         unless db.find_entry(old_abs)
           raise Doma::NotFoundError.new(
