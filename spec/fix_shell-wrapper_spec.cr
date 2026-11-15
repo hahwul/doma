@@ -42,15 +42,19 @@ private POSIX_INIT = %(eval "$(doma setup init bash)"\n)
 private FISH_INIT  = "doma setup init fish | source\n"
 
 describe "shell wrapper regressions" do
-  {"bash", "zsh"}.each do |shell|
+  # /bin/bash is 3.2 on macOS: empty arrays trip `set -u` there.
+  {"bash", "zsh", "/bin/bash"}.each do |shell|
     it "[#{shell}] cd --help prints usage, globals before cd, extra args, cd failure, aliased cat" do
       pending! "binary not built" unless File.exists?(SW_BIN)
       pending! "#{shell} not installed" unless Process.find_executable(shell)
       sw_seed do |home|
         script = <<-SH
-          #{shell == "bash" ? "shopt -s expand_aliases" : ""}
+          #{shell.ends_with?("bash") ? "shopt -s expand_aliases" : ""}
           alias cat="cat -n"
           #{POSIX_INIT}
+          set -u
+          doma tags >/dev/null; echo "tags=$?"
+          doma cd; echo "bare=$?"
           doma cd --help; echo "help=$?"
           doma -q cd solo; echo "q=$? $PWD"; cd /
           doma cd work --first; echo "first=$? $PWD"; cd /
@@ -60,6 +64,9 @@ describe "shell wrapper regressions" do
         r = sw_sh(shell, script, home)
         r[:out].should contain("Usage: doma cd")
         r[:out].should contain("help=0")
+        r[:out].should contain("tags=0")
+        r[:err].should_not contain("unbound")
+        r[:err].should_not contain("parameter not set")
         r[:out].should contain("q=0 #{home}/solo")
         r[:out].should match(/first=0 #{Regex.escape(home)}\/work\d/)
         r[:out].should_not contain("gone=0")

@@ -69,8 +69,8 @@ module Doma::CLI
               *) break ;;
             esac
           done
-          if [ "$1" = "cd" ]; then
-            case $2 in
+          if [ "${1-}" = "cd" ]; then
+            case ${2-} in
               -h|--help)
                 echo "Usage: doma cd [<tag>] [<doma list option>...]  (e.g. doma cd work --first)"
                 return 0 ;;
@@ -82,8 +82,8 @@ module Doma::CLI
               shift 2
               set -- list -t "$__doma_tag" --pick "$@"
             fi
-          elif [ $# -ne 0 ] && [ "$1" != "tui" ]; then
-            command doma "${__doma_g[@]}" "$@"
+          elif [ $# -ne 0 ] && [ "${1-}" != "tui" ]; then
+            command doma ${__doma_g[@]+"${__doma_g[@]}"} "$@"
             return
           fi
           # The finder owns the terminal, so its stdout can't be captured with
@@ -92,7 +92,7 @@ module Doma::CLI
           # presence also tells the TUI footer that Enter really does `cd`.
           local __doma_cd_file __doma_target __doma_rc
           __doma_cd_file="$(command mktemp "${TMPDIR:-/tmp}/doma.cd.XXXXXX")" || return $?
-          DOMA_CD_FILE="$__doma_cd_file" command doma "${__doma_g[@]}" "$@"
+          DOMA_CD_FILE="$__doma_cd_file" command doma ${__doma_g[@]+"${__doma_g[@]}"} "$@"
           __doma_rc=$?
           __doma_target="$(command cat "$__doma_cd_file" 2>/dev/null)"
           command rm -f "$__doma_cd_file"
