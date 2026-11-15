@@ -40,7 +40,7 @@ For scripts and one-offs, use `list --pick` inline:
 cd "$(doma list -t crystal --pick)"
 ```
 
-`--pick` prints exactly one path: the only match if there's one, an interactive picker if you're on a TTY, or the most-recent match (with a stderr advisory) if you're piping.
+`--pick` prints exactly one path: the only match if there's one, an interactive picker if you're on a TTY, or, if you're piping, it exits 4 instead of guessing — add `--first` to take the most-recent match (with a stderr advisory).
 
 ## Uninstalling
 

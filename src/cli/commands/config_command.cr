@@ -81,6 +81,7 @@ module Doma::CLI
 
     private def cmd_get(args : Array(String))
       key = require_arg(args, "key", "doma config get <key>")
+      reject_extra!(args)
       validate_key!(key)
       puts effective_value(load_file, key)
     end
@@ -88,6 +89,7 @@ module Doma::CLI
     private def cmd_set(args : Array(String))
       key = require_arg(args, "key", "doma config set <key> <value>")
       raw = require_arg(args, "value", "doma config set <key> <value>")
+      reject_extra!(args)
       validate_key!(key)
       coerced = coerce(key, raw)
 
@@ -99,6 +101,7 @@ module Doma::CLI
 
     private def cmd_unset(args : Array(String))
       key = require_arg(args, "key", "doma config unset <key>")
+      reject_extra!(args)
       validate_key!(key)
       settings, repaired = load_for_write(key)
       if settings[key].nil? && !repaired
@@ -134,17 +137,22 @@ module Doma::CLI
       # Seed an empty file so $EDITOR doesn't open a non-existent path
       # (Vim/etc handle it, but seeding makes intent obvious).
       unless File.exists?(path)
-        Dir.mkdir_p(File.dirname(path))
-        File.write(path, "")
+        write_or_config_error(path) do
+          Dir.mkdir_p(File.dirname(path))
+          File.write(path, "")
+        end
       end
 
-      editor = ENV["VISUAL"]? || ENV["EDITOR"]?
+      # `.presence`: a set-but-empty VISUAL must not hide a valid EDITOR.
+      editor = ENV["VISUAL"]?.presence || ENV["EDITOR"]?.presence
       if editor.nil? || editor.strip.empty?
         raise Doma::ConfigError.new(
           "no editor configured: set $VISUAL or $EDITOR (e.g. `export EDITOR=nano`)"
         )
       end
-      status = Process.run(editor, [path], shell: true, input: STDIN, output: STDOUT, error: STDERR)
+      # Editors with arguments ("code --wait") are common; with a space in
+      # the command Crystal won't append "${@}" itself and raises instead.
+      status = Process.run(%(#{editor} "${@}"), [path], shell: true, input: STDIN, output: STDOUT, error: STDERR)
       exit(status.exit_code? || 128 + (status.exit_signal?.try(&.value) || 0)) unless status.success?
 
       # Validate the post-edit file so users learn about syntax errors
@@ -252,18 +260,23 @@ module Doma::CLI
       # Write through a symlinked config (dotfiles) instead of replacing
       # the link, and make sure a custom DOMA_CONFIG's directory exists.
       path = File.realpath(path) if File.symlink?(path) && File.exists?(path)
-      Dir.mkdir_p(File.dirname(path))
       # Write atomically so a crash mid-write doesn't truncate the file.
       tmp = "#{path}.tmp"
-      File.write(tmp, settings.to_yaml)
-      File.rename(tmp, path)
+      write_or_config_error(path) do
+        Dir.mkdir_p(File.dirname(path))
+        File.write(tmp, settings.to_yaml)
+        File.rename(tmp, path)
+      ensure
+        File.delete?(tmp)
+      end
       # Invalidate the memoized Settings so later reads see the new values.
       Doma::Settings.current = nil
     end
 
     private def effective_value(settings : Doma::Settings, key : String) : String
       case key
-      when "db_path"           then settings.db_path || ""
+      # Blank counts as unset, same as `Config.db_path`.
+      when "db_path"           then settings.db_path.presence || (ENV["DOMA_DB"]?.presence ? "" : File.join(Doma::Config.home, "doma.db"))
       when "selector"          then settings.selector.to_s.downcase
       when "auto_tag.basename" then settings.auto_tag.basename.to_s
       when "auto_tag.git"      then settings.auto_tag.git.to_s
@@ -286,6 +299,20 @@ module Doma::CLI
           exit 0
         end
       end
+      reject_extra!(args)
+    end
+
+    # Read-only stores (Nix/home-manager symlinks) or a DOMA_CONFIG in an
+    # unwritable dir: a clean ConfigError (exit 5), not an internal error.
+    private def write_or_config_error(path : String, &)
+      yield
+    rescue ex : IO::Error
+      raise Doma::ConfigError.new("cannot write config (#{path}): #{ex.message}")
+    end
+
+    # Unquoted `set db_path ~/my dir/x.db` must not persist a truncated path.
+    private def reject_extra!(args : Array(String))
+      raise Doma::ValidationError.new("unexpected argument '#{args.first}'") unless args.empty?
     end
 
     private def require_arg(args : Array(String), name : String, usage : String) : String

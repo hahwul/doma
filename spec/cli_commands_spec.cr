@@ -1108,7 +1108,7 @@ describe "doma setup init" do
     r = run(["setup", "init", "zsh"])
     r[:status].exit_code.should eq(0)
     r[:out].should contain("doma() {")
-    r[:out].should contain(%(if [ "$1" = "cd" ]; then))
+    r[:out].should contain(%(if [ "${1-}" = "cd" ]; then))
     r[:out].should contain("builtin cd --")
     # Wrapper delegates resolution to `doma list --pick` rather than a
     # dedicated `cd` subcommand — the binary no longer ships one.
@@ -1116,7 +1116,7 @@ describe "doma setup init" do
     # The full-screen TUI can't have its stdout captured by $(...) (it hangs
     # under job control), so the wrapper hands it DOMA_CD_FILE, lets it draw
     # on the terminal, then cds to the path written there.
-    r[:out].should contain(%(DOMA_CD_FILE="$__doma_cd_file" command doma "$@"))
+    r[:out].should contain(%(DOMA_CD_FILE="$__doma_cd_file" command doma ${__doma_g[@]+"${__doma_g[@]}"} "$@"))
     r[:out].should contain("command mktemp")
   end
 
@@ -1673,7 +1673,7 @@ describe "doma setup install advanced" do
     begin
       r = run(
         ["setup", "install", "fish", "--yes"],
-        {"DOMA_HOME" => home, "HOME" => home, "SHELL" => "/bin/zsh"},
+        {"DOMA_HOME" => home, "HOME" => home, "SHELL" => "/bin/zsh", "XDG_CONFIG_HOME" => ""},
       )
       r[:status].exit_code.should eq(0)
       File.exists?(File.join(home, ".config/fish/config.fish")).should be_true

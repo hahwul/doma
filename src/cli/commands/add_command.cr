@@ -117,17 +117,22 @@ module Doma::CLI
           failures = process_each(positional, json_mode ? results : nil) do |path|
             short_id_redirect_hint(preview_db, path)
             abs = Doma::Validator.path!(path)
-            applied = (Doma::Validator.tags!(raw_tags) + derive_tags(abs, use_basename, use_git, git_explicit, use_project)).uniq
-            summary = applied.empty? ? "(no tags)" : "tags: #{applied.join(", ")}"
-            summary += " (#{ttl_label})" if ttl_label
+            user_tags = Doma::Validator.tags!(raw_tags)
+            derived = derive_tags(abs, use_basename, use_git, git_explicit, use_project) - user_tags
+            applied = (user_tags + derived).uniq
+            _, unchanged = plan(preview_db, abs, user_tags, derived, expires_at)
+            summary = summarize(user_tags, derived, ttl_label)
             if json_mode
               results << JsonRow{
-                "input"     => path,
-                "path"      => abs,
-                "tags"      => applied,
-                "dry_run"   => true,
-                "unchanged" => false,
+                "input"        => path,
+                "path"         => abs,
+                "tags"         => applied,
+                "derived_tags" => derived,
+                "dry_run"      => true,
+                "unchanged"    => unchanged,
               }
+            elsif unchanged
+              Doma::Logger.info "[dry-run] no change: #{abs} #{summary}"
             else
               Doma::Logger.info "[dry-run] would add #{abs} #{summary}"
             end
@@ -154,43 +159,34 @@ module Doma::CLI
           # User-supplied tags must validate strictly; auto-derived tags
           # (basename, git remote) flow through `sanitize_tag` so a repo
           # named `.dotfiles` doesn't blow up the whole `add`.
-          applied = (Doma::Validator.tags!(raw_tags) + derive_tags(abs, use_basename, use_git, git_explicit, use_project)).uniq
+          user_tags = Doma::Validator.tags!(raw_tags)
+          derived = derive_tags(abs, use_basename, use_git, git_explicit, use_project) - user_tags
+          applied = (user_tags + derived).uniq
 
-          # Snapshot the pre-state so we can tell apart a real write from
-          # a re-add of an already-tagged path. The latter currently
-          # prints "✓ added …" identical to the new-write case, which
-          # masks a no-op (e.g. accidentally re-running `doma add` in a
-          # script). Comparing the existing tag set + per-tag TTLs to
-          # what we're about to apply is enough to flag both
-          # "all tags already present, same TTL" and
-          # "no tags passed and path is already registered."
-          prev_info = db.find_entry(abs)
-          prev_tags = Set(String).new
-          prev_exp = {} of String => Int64
-          if pi = prev_info
-            prev_tags = pi.tags.to_set
-            prev_exp = db.tag_expirations(pi.id, include_past: true)
+          prev_info, unchanged = plan(db, abs, user_tags, derived, expires_at)
+
+          # The TTL is for the tags the user named; derived tags are
+          # written permanent (which also clears a stale TTL on one).
+          # One transaction so both land or neither.
+          db.transaction do |cnn|
+            db.add_tx(cnn, abs, user_tags, validate_path: false, expires_at: expires_at)
+            db.add_tx(cnn, abs, derived, validate_path: false)
           end
 
-          db.add(abs, applied, validate_path: false, expires_at: expires_at)
-
-          unchanged = !prev_info.nil? && applied.all? do |t|
-            prev_tags.includes?(t) && prev_exp[t]? == expires_at
-          end
-
-          summary = applied.empty? ? "(no tags)" : "tags: #{applied.join(", ")}"
-          summary += " (#{ttl_label})" if ttl_label
+          summary = summarize(user_tags, derived, ttl_label)
 
           if json_mode
             short_id = short_id_after_add(db, abs, prev_info)
             row = JsonRow{
-              "input"     => path,
-              "path"      => abs,
-              "short_id"  => short_id,
-              "tags"      => applied,
-              "unchanged" => unchanged,
-              "dry_run"   => false,
+              "input"        => path,
+              "path"         => abs,
+              "short_id"     => short_id,
+              "tags"         => applied,
+              "derived_tags" => derived,
+              "unchanged"    => unchanged,
+              "dry_run"      => false,
             }
+            # `expires_at` covers the user tags only; `derived_tags` are permanent.
             expires_at.try { |exp| row["expires_at"] = exp }
             results << row
           else
@@ -228,6 +224,33 @@ module Doma::CLI
     # needs the lookup.
     private def short_id_after_add(db : Doma::Database, abs : String, prev : Doma::Entry?) : String
       prev.try(&.short_id) || db.find_entry(abs).try(&.short_id) || ""
+    end
+
+    # Snapshot the pre-state so a re-add of an already-tagged path reads
+    # as "no change" instead of "added" (masking e.g. an accidental re-run
+    # in a script). Returns {prev entry, unchanged}.
+    private def plan(db : Doma::Database, abs : String, user_tags : Array(String),
+                     derived : Array(String), expires_at : Int64?) : {Doma::Entry?, Bool}
+      prev = db.find_entry(abs)
+      return {nil, false} unless prev
+      prev_tags = prev.tags.to_set
+      prev_exp = db.tag_expirations(prev.id, include_past: true)
+      unchanged = user_tags.all? { |t| prev_tags.includes?(t) && prev_exp[t]? == expires_at } &&
+                  derived.all? { |t| prev_tags.includes?(t) && !prev_exp.has_key?(t) }
+      {prev, unchanged}
+    end
+
+    # The TTL label sits on the user tags only; derived tags are permanent.
+    # e.g. "tags: review (expires …), proj, crystal".
+    private def summarize(user_tags : Array(String), derived : Array(String), ttl_label : String?) : String
+      return "(no tags)" if user_tags.empty? && derived.empty?
+      parts = [] of String
+      unless user_tags.empty?
+        parts << user_tags.join(", ")
+        parts[-1] += " (#{ttl_label})" if ttl_label
+      end
+      parts.concat(derived)
+      "tags: #{parts.join(", ")}"
     end
 
     private def process_each(paths : Array(String), json_results : Array(JsonRow)? = nil, &)
@@ -310,7 +333,7 @@ module Doma::CLI
           Doma::Logger.debug "--git-tag had no effect: #{abs} is not a git working tree"
         end
       end
-      sources.compact_map { |raw| Doma::Validator.sanitize_tag(raw) }
+      sources.compact_map { |raw| Doma::Validator.sanitize_tag(raw) }.uniq!
     end
   end
 end

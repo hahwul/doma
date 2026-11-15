@@ -2,6 +2,9 @@ require "base64"
 require "termisu"
 require "../db/database"
 require "../models/entry"
+require "../services/git_detector"
+require "../services/project"
+require "../utils/config"
 require "../utils/validator"
 require "./query"
 require "./text"
@@ -195,6 +198,10 @@ module Doma
         @scored = Query.filter(@entries, Query.parse(@query))
         @cursor = 0
         @offset = 0
+      rescue ex : Doma::ValidationError
+        # e.g. an over-long `tag:` glob — report inline, keep the session.
+        @scored = [] of Query::Scored
+        set_status(ex.message || "invalid query", error: true)
       end
 
       private def reload
@@ -236,6 +243,7 @@ module Doma
         abs = Doma::Validator.path!(raw)
         names = tags_raw.split.reject(&.empty?)
         tags = names.empty? ? [] of String : Doma::Validator.tags!(names)
+        tags = (tags + auto_tags(abs)).uniq
         # Path already validated above; skip db.add's redundant re-validation
         # (matches AddCommand).
         @db.add(abs, tags, validate_path: false)
@@ -247,6 +255,20 @@ module Doma
         # An interactive add must never tear down the session — surface any
         # other failure (DB hiccup, missing cwd) as a status message.
         set_status("add failed: #{ex.message}", error: true)
+      end
+
+      # The `auto_tag` config defaults, as `doma add` applies them with no
+      # flags. ponytail: mirrors AddCommand#derive_tags (private there);
+      # share one helper once add_command.cr exposes it.
+      private def auto_tags(abs : String) : Array(String)
+        cfg = Doma::Settings.current.auto_tag
+        sources = [] of String
+        sources << File.basename(abs) if cfg.basename
+        sources.concat(Doma::Project.types(abs)) if cfg.project
+        if cfg.git && (info = Doma::GitDetector.detect(abs)).git
+          sources.concat(info.to_tags)
+        end
+        sources.compact_map { |raw| Doma::Validator.sanitize_tag(raw) }
       end
 
       # OSC-52 clipboard write straight to /dev/tty — no subprocess. Silently

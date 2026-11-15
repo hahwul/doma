@@ -63,6 +63,19 @@ describe Doma::Logger do
         Doma::Logger.color_enabled?.should be_false
       end
     end
+
+    it "lets --color force color even under TERM=dumb" do
+      with_logger_state do
+        prev_term = ENV["TERM"]?
+        ENV["TERM"] = "dumb"
+        Doma::Logger.no_color = false
+        Doma::Logger.force_color = true
+        Doma::Logger.color_enabled?.should be_true
+      ensure
+        Doma::Logger.force_color = false
+        prev_term ? (ENV["TERM"] = prev_term) : ENV.delete("TERM")
+      end
+    end
   end
 end
 

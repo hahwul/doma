@@ -1,3 +1,5 @@
+require "../utils/errors"
+
 module Doma
   # Probes a directory's git working-tree state by spawning
   # `git status --porcelain=v2 --branch` once per directory.
@@ -11,8 +13,9 @@ module Doma
   # PATH once up front (see `.available?`) so a missing binary surfaces as
   # one clear error instead of N "not a git repo" rows.
   #
-  # Never raises: a non-repo, an unreadable tree, or a vanished git binary
-  # all come back as a Status with `git == false`.
+  # A non-repo, an unreadable tree, or a vanished git binary all come back
+  # as a Status with `git == false`. Only a failure to spawn git at all
+  # (e.g. out of file descriptors) raises, as a Doma::Error.
   module GitStatus
     extend self
 
@@ -61,20 +64,30 @@ module Doma
     end
 
     # stdout of `git -C path <args>`, or nil when git exits non-zero or
-    # can't be run at all (vanished from PATH mid-sweep) — degrade rather
-    # than crash a parallel worker.
+    # vanished from PATH mid-sweep — degrade rather than crash a parallel
+    # worker. Any other spawn failure (EMFILE under a big `--jobs`) raises
+    # a Doma::Error: reading it as "not a git repo" would be a confident
+    # wrong answer, and would silently drop repos from @dirty & co.
+    #
+    # `--no-optional-locks`: a status probe must not take index.lock and
+    # rewrite the index under the user's own concurrent git commands.
     private def capture(path : String, args : Array(String)) : String?
       output = IO::Memory.new
       status = Process.run(
         "git",
-        args: ["-C", path] + args,
+        args: ["--no-optional-locks", "-C", path] + args,
         output: output,
         error: Process::Redirect::Close,
         input: Process::Redirect::Close,
       )
       status.success? ? output.to_s : nil
-    rescue File::NotFoundError | IO::Error
+    rescue File::NotFoundError
       nil
+    rescue ex : IO::Error
+      raise Doma::Error.new(
+        "could not run git in #{path}: #{ex.message}",
+        hint: "lower --jobs, or raise the open-file limit (`ulimit -n`)"
+      )
     end
 
     # Epoch seconds of HEAD's commit; nil without one (unborn branch,

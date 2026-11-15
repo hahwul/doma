@@ -1,5 +1,10 @@
 require "colorize"
 
+# `color_enabled?` (and the `color` flags derived from it) is the only
+# gate. Crystal's own default also turns Colorize off whenever STDERR
+# isn't a TTY, which stripped stdout color on `doma list 2>/dev/null`.
+Colorize.enabled = true
+
 module Doma
   module Logger
     extend self
@@ -15,15 +20,16 @@ module Doma
 
     def force_color=(value : Bool)
       @@force_color = value
-      # Colorize strips escapes on its own when not on a TTY.
-      Colorize.enabled = true if value
     end
 
-    # Color is keyed off STDOUT specifically, even for stderr-bound calls,
-    # because mixing colored stderr with non-tty stdout in a pipeline tends
-    # to leak escape codes into grep/jq more often than the reverse.
-    def color_enabled? : Bool
-      !@@no_color && (@@force_color || STDOUT.tty?)
+    # Color is keyed off STDOUT for every call, because mixing colored
+    # stderr with non-tty stdout in a pipeline tends to leak escape codes
+    # into grep/jq. Stderr-bound writers pass `STDERR` so a redirected
+    # stderr (`2>build.log`) stays plain too — the check Crystal's own
+    # default did before `Colorize.enabled = true` above.
+    def color_enabled?(io : IO = STDOUT) : Bool
+      # TERM=dumb mirrors Crystal's own default; `--color` still forces it.
+      !@@no_color && (@@force_color || (STDOUT.tty? && io.tty? && ENV["TERM"]? != "dumb"))
     end
 
     def info(msg : String)
@@ -37,16 +43,16 @@ module Doma
     end
 
     def warn(msg : String)
-      STDERR.puts(color_enabled? ? "! #{msg}".colorize(:yellow).to_s : "! #{msg}")
+      STDERR.puts(color_enabled?(STDERR) ? "! #{msg}".colorize(:yellow).to_s : "! #{msg}")
     end
 
     def error(msg : String)
-      STDERR.puts(color_enabled? ? "✗ #{msg}".colorize(:red).to_s : "✗ #{msg}")
+      STDERR.puts(color_enabled?(STDERR) ? "✗ #{msg}".colorize(:red).to_s : "✗ #{msg}")
     end
 
     def debug(msg : String)
       return unless @@debug
-      STDERR.puts(color_enabled? ? "· #{msg}".colorize(:dark_gray).to_s : "· #{msg}")
+      STDERR.puts(color_enabled?(STDERR) ? "· #{msg}".colorize(:dark_gray).to_s : "· #{msg}")
     end
   end
 end

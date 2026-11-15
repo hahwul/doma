@@ -60,7 +60,7 @@ module Doma::CLI
 
       Doma::Installer.install!(plan)
       Doma::Logger.success "installed to #{plan.rc_path}"
-      Doma::Logger.info "restart your shell, or run: source #{plan.rc_path}"
+      Doma::Logger.info "restart your shell, or run: source #{Process.quote(plan.rc_path)}"
     end
 
     private def confirm(plan : Doma::Installer::Plan) : Bool
@@ -75,7 +75,7 @@ module Doma::CLI
       STDERR.puts "Append doma shell integration to #{plan.rc_path}? [Y/n] "
       STDERR.flush
       raw = STDIN.gets
-      return true if raw.nil?
+      return false if raw.nil? # Ctrl-D backs out; only Enter takes the default
       response = raw.strip.downcase
       response.empty? || response.in?({"y", "yes"})
     end

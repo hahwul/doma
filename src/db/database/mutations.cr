@@ -108,8 +108,22 @@ class Doma::Database
     Removed
   end
 
+  # The stored key `path` refers to. An input that already names a row
+  # verbatim (a short_id-resolved `entry.path`, or a typed path) acts on
+  # that row even if a component has since become a symlink — re-running
+  # it through `canonicalize` would realpath it onto a *different* row,
+  # or onto none. Only a miss falls back to the canonical form.
+  def row_path(path : String) : String
+    # Same empty-path refusal as `canonicalize`: `expand_home("")` is the cwd.
+    raise ValidationError.new("path is empty") if path.empty?
+    expanded = Validator.expand_home(path)
+    expanded = expanded.rchop('/') unless expanded == "/"
+    return expanded if @db.query_one?("SELECT 1 FROM directories WHERE path = ?", expanded, as: Int64)
+    Validator.canonicalize(path)
+  end
+
   def remove_tags(path : String, tags : Array(String)) : RemoveTagsResult
-    abs = Validator.canonicalize(path)
+    abs = row_path(path)
     result = RemoveTagsResult::NotRegistered
     @db.transaction do |tx|
       cnn = tx.connection
@@ -135,7 +149,7 @@ class Doma::Database
   end
 
   def remove_path(path : String) : Bool
-    abs = Validator.canonicalize(path)
+    abs = row_path(path)
     affected = 0_i64
     @db.transaction do |tx|
       cnn = tx.connection
@@ -151,7 +165,7 @@ class Doma::Database
   # is dropped. Returns one of `:moved`, `:merged`, or raises if either
   # side validates badly.
   def move_path(old_path : String, new_path : String, *, validate_path : Bool = true) : Symbol
-    old_abs = Validator.canonicalize(old_path)
+    old_abs = row_path(old_path)
     new_abs = validate_path ? Validator.path!(new_path) : Validator.canonicalize(new_path)
     return :noop if old_abs == new_abs
 
@@ -208,7 +222,7 @@ class Doma::Database
   # existence — `cd` still wants to print whatever was selected even
   # if the underlying row got pruned in a parallel session.
   def bump_used!(path : String)
-    abs = Validator.canonicalize(path)
+    abs = row_path(path)
     @db.exec(
       "UPDATE directories SET last_used_at = ? WHERE path = ?",
       Time.utc.to_unix, abs

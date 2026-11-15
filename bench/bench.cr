@@ -71,8 +71,6 @@ with_seeded_db do |db|
   time("directories() — no filter") { db.directories.size }
   time("directories('tag-3')") { db.directories("tag-3").size }
   time("directories(sort: Recent)") { db.directories(sort: Doma::Database::SortBy::Recent).size }
-  time("paths_for_tag('tag-3')") { db.paths_for_tag("tag-3").size }
-  time("paths_for_tag('tag-*') glob") { db.paths_for_tag("tag-*").size }
   time("search('dir-9')") { db.search("dir-9").size }
 
   puts ""

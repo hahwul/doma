@@ -49,7 +49,10 @@ module Doma::CLI
       parser.parse(args)
 
       raise Doma::ValidationError.new("input file is required") if positional.empty?
-      file = Doma::Validator.canonicalize(positional.first)
+      raise Doma::ValidationError.new("unexpected argument '#{positional[1]}'") if positional.size > 1
+      # Only expand `~`/relative: `realpath` would rewrite `/dev/stdin`
+      # (a redirect) into a bogus `/dev/fd/<name>`.
+      file = Doma::Validator.expand_home(positional.first)
 
       # `explicit_mode` keeps its `Mode?` type because it's assigned
       # inside the parser's blocks; the conditional unwrap below is what

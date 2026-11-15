@@ -44,9 +44,13 @@ module Doma
         prefix = "#{input}/"
         children = candidates.select(&.starts_with?(prefix))
         unless children.empty?
+          # `*` stays one level deep; when only deeper tags exist
+          # (`work/team/api`), `work/*` would match nothing — offer `**`.
+          direct = children.reject(&.[prefix.size..].includes?('/'))
+          glob, children = direct.empty? ? {"#{input}/**", children} : {"#{input}/*", direct}
           sample = children.first(2).join(", ")
           more = children.size > 2 ? ", ..." : ""
-          return "did you mean '#{input}/*'? (matches #{sample}#{more})"
+          return "did you mean '#{glob}'? (matches #{sample}#{more})"
         end
       end
 
