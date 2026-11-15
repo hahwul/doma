@@ -65,6 +65,25 @@ describe "fix trash-prune-db" do
     end
   end
 
+  it "#35 symlinked DB in a read-only directory opens when the real dir is writable" do
+    with_dir do |dir|
+      Dir.mkdir(File.join(dir, "real"))
+      Dir.mkdir(File.join(dir, "ro"))
+      real = File.join(dir, "real", "d.db")
+      Doma::Database.open(real) { }
+      File.delete?("#{real}-wal")
+      File.delete?("#{real}-shm")
+      link = File.join(dir, "ro", "d.db")
+      File.symlink(real, link)
+      File.chmod(File.join(dir, "ro"), 0o555)
+      begin
+        Doma::Database.open(link) { }
+      ensure
+        File.chmod(File.join(dir, "ro"), 0o755)
+      end
+    end
+  end
+
   it "#20 discard! drops only one of two identical trash lines" do
     with_temp_db do |_|
       e = entry("/x/race")

@@ -64,9 +64,11 @@ module Doma
         end
         # WAL must create `-wal`/`-shm` next to the file; in a read-only
         # directory that fails as the same opaque ConnectionRefused.
-        # Already-present sidecars are fine.
-        parent = File.dirname(target)
-        unless File::Info.writable?(parent) || (File.exists?("#{target}-wal") && File.exists?("#{target}-shm"))
+        # Already-present sidecars are fine. SQLite follows symlinks, so
+        # the sidecars live next to the real file, not the link.
+        real = File.realpath(target)
+        parent = File.dirname(real)
+        unless File::Info.writable?(parent) || (File.exists?("#{real}-wal") && File.exists?("#{real}-shm"))
           raise Doma::ConfigError.new("database directory is not writable (WAL needs it): #{parent}")
         end
       else
