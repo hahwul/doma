@@ -1116,7 +1116,7 @@ describe "doma setup init" do
     # The full-screen TUI can't have its stdout captured by $(...) (it hangs
     # under job control), so the wrapper hands it DOMA_CD_FILE, lets it draw
     # on the terminal, then cds to the path written there.
-    r[:out].should contain(%(DOMA_CD_FILE="$__doma_cd_file" command doma "$@"))
+    r[:out].should contain(%(DOMA_CD_FILE="$__doma_cd_file" command doma "${__doma_g[@]}" "$@"))
     r[:out].should contain("command mktemp")
   end
 

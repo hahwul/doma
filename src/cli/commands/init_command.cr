@@ -59,14 +59,31 @@ module Doma::CLI
         # finder and `cd` to whatever you select.
 
         doma() {
+          # Global flags may come before the subcommand (`doma -q cd x`); set
+          # them aside so cd/tui are still recognized, and pass them on.
+          local -a __doma_g
+          __doma_g=()
+          while [ $# -gt 0 ]; do
+            case $1 in
+              -q|--quiet|-v|--verbose|--debug|--color|--no-color|-y|--yes) __doma_g+=("$1"); shift ;;
+              *) break ;;
+            esac
+          done
           if [ "$1" = "cd" ]; then
+            case $2 in
+              -h|--help)
+                echo "Usage: doma cd [<tag>] [<doma list option>...]  (e.g. doma cd work --first)"
+                return 0 ;;
+            esac
             if [ $# -le 1 ]; then
               set -- list --pick
             else
-              set -- list -t "$2" --pick
+              local __doma_tag="$2"
+              shift 2
+              set -- list -t "$__doma_tag" --pick "$@"
             fi
           elif [ $# -ne 0 ] && [ "$1" != "tui" ]; then
-            command doma "$@"
+            command doma "${__doma_g[@]}" "$@"
             return
           fi
           # The finder owns the terminal, so its stdout can't be captured with
@@ -75,11 +92,13 @@ module Doma::CLI
           # presence also tells the TUI footer that Enter really does `cd`.
           local __doma_cd_file __doma_target __doma_rc
           __doma_cd_file="$(command mktemp "${TMPDIR:-/tmp}/doma.cd.XXXXXX")" || return $?
-          DOMA_CD_FILE="$__doma_cd_file" command doma "$@"
+          DOMA_CD_FILE="$__doma_cd_file" command doma "${__doma_g[@]}" "$@"
           __doma_rc=$?
-          __doma_target="$(cat "$__doma_cd_file" 2>/dev/null)"
+          __doma_target="$(command cat "$__doma_cd_file" 2>/dev/null)"
           command rm -f "$__doma_cd_file"
-          [ -n "$__doma_target" ] && builtin cd -- "$__doma_target"
+          if [ -n "$__doma_target" ]; then
+            builtin cd -- "$__doma_target" || return $?
+          fi
           return $__doma_rc
         }
         SH
@@ -97,14 +116,27 @@ module Doma::CLI
         # open the interactive finder and `cd` to whatever you select.
 
         function doma
+          # Global flags may come before the subcommand (`doma -q cd x`); set
+          # them aside so cd/tui are still recognized, and pass them on.
+          set -l __doma_g
+          while test (count $argv) -gt 0; and contains -- $argv[1] -q --quiet -v --verbose --debug --color --no-color -y --yes
+            set -a __doma_g $argv[1]
+            set -e argv[1]
+          end
           if test (count $argv) -gt 0; and test $argv[1] = "cd"
+            if test (count $argv) -ge 2; and contains -- $argv[2] -h --help
+              echo "Usage: doma cd [<tag>] [<doma list option>...]  (e.g. doma cd work --first)"
+              return 0
+            end
             if test (count $argv) -le 1
               set argv list --pick
             else
-              set argv list -t $argv[2] --pick
+              set -l __doma_tag $argv[2]
+              set -e argv[1..2]
+              set argv list -t $__doma_tag --pick $argv
             end
           else if test (count $argv) -gt 0; and test $argv[1] != "tui"
-            command doma $argv
+            command doma $__doma_g $argv
             return $status
           end
           # The finder owns the terminal, so its stdout can't be captured with
@@ -115,13 +147,13 @@ module Doma::CLI
           test -n "$TMPDIR"; and set __doma_tmpl "$TMPDIR/doma.cd.XXXXXX"
           set -l __doma_cd_file (command mktemp $__doma_tmpl); or return $status
           set -lx DOMA_CD_FILE $__doma_cd_file
-          command doma $argv
+          command doma $__doma_g $argv
           set -l __doma_rc $status
           set -e DOMA_CD_FILE
-          set -l __doma_target (cat $__doma_cd_file 2>/dev/null)
+          set -l __doma_target (command cat $__doma_cd_file 2>/dev/null)
           command rm -f $__doma_cd_file
           if test -n "$__doma_target"
-            builtin cd -- $__doma_target
+            builtin cd -- $__doma_target; or return $status
           end
           return $__doma_rc
         end

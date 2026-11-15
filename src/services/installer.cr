@@ -43,7 +43,7 @@ module Doma
       case shell
       when "zsh"  then Validator.expand_home(File.join(ENV["ZDOTDIR"]?.presence || "~", ".zshrc"))
       when "bash" then Validator.expand_home("~/.bashrc")
-      when "fish" then Validator.expand_home("~/.config/fish/config.fish")
+      when "fish" then File.join(ENV["XDG_CONFIG_HOME"]?.presence || Validator.expand_home("~/.config"), "fish", "config.fish")
       else
         raise ValidationError.new("unsupported shell '#{shell}' (try bash, zsh, or fish)")
       end
