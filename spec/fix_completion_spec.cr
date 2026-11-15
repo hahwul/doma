@@ -15,11 +15,11 @@ private def script(shell : String) : String
 end
 
 # Runs `driver` under `shell` in a scratch dir holding d/plain,
-# 'd/with space' and d/file.json, with isolated doma state.
+# 'd/with space/inner' and d/file.json, with isolated doma state.
 private def drive(shell : String, driver : String) : Array(String)
   dir = File.tempname("doma-fixcomp")
   FileUtils.mkdir_p(File.join(dir, "w", "d", "plain"))
-  FileUtils.mkdir_p(File.join(dir, "w", "d", "with space"))
+  FileUtils.mkdir_p(File.join(dir, "w", "d", "with space", "inner"))
   File.write(File.join(dir, "w", "d", "file.json"), "{}")
   home = File.join(dir, "home")
   FileUtils.mkdir_p(home)
@@ -87,7 +87,11 @@ describe "completion fixes" do
 
   it "[#25/#80] bash keeps paths with spaces whole and asks readline for filename handling" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
-    bash(["doma add d/wi", "doma import d/f"]).should eq(["d/with space|", "d/file.json|"])
+    # The harness has no live compopt (3.2 lacks it; 4+ refuses outside a
+    # completion), so this is the self-escaping fallback.
+    bash(["doma add d/wi", "doma import d/f"]).should eq(["d/with\\ space|", "d/file.json|"])
+    # Second TAB, no bash-completion: the escaped space stays in one word.
+    bash(["doma add d/with\\ space/"]).should eq(["d/with\\ space/inner|"])
     script("bash").should contain("compopt -o filenames")
   end
 

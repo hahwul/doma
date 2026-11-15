@@ -206,12 +206,15 @@ module Doma::CLI
 
         # COMPREPLY from `compgen -d|-f|-c`: split on newlines only (names
         # may hold spaces), and let readline escape them and append `/` to
-        # directories (compopt needs bash 4+; 3.2 skips it).
+        # directories. bash 3.2 has no compopt, so escape them here instead.
         __doma_paths() {
-          local IFS=$'\\n'
-          compopt -o filenames 2>/dev/null
+          local IFS=$'\\n' i
           COMPREPLY=( $(compgen "$1" -- "$cur") )
           __doma_ltrim
+          compopt -o filenames 2>/dev/null && return
+          for i in "${!COMPREPLY[@]}"; do
+            COMPREPLY[$i]=$(printf '%q' "${COMPREPLY[$i]}")
+          done
         }
 
         _doma() {
@@ -222,10 +225,11 @@ module Doma::CLI
             _init_completion -n :@ || return
           else
             # Rebuild words from the raw line: COMP_WORDS is split at every
-            # COMP_WORDBREAKS char, which would cut `@failed` in two.
+            # COMP_WORDBREAKS char, which would cut `@failed` in two. No -r:
+            # `d/with\\ space` stays one (unescaped) word.
             local line="${COMP_LINE:0:COMP_POINT}"
-            read -ra words <<< "$line"
-            [[ ${#words[@]} -eq 0 || "$line" == *[[:space:]] ]] && words+=("")
+            read -a words <<< "$line"
+            [[ ${#words[@]} -eq 0 || ( "$line" == *[[:space:]] && "$line" != *'\\ ' ) ]] && words+=("")
             cword=$(( ${#words[@]} - 1 ))
             cur="${words[cword]}"
             prev="${words[cword-1]}"
