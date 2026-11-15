@@ -180,10 +180,7 @@ module Doma::CLI
     private def emit_json(entries : Array(Doma::Entry), ttl_by_id : Hash(Int64, Hash(String, Int64)), group_by_tag : Bool, check_existence : Bool)
       if group_by_tag
         # Object keyed by tag name; untagged entries land under "".
-        grouped = {} of String => Array(JsonRow)
-        group_entries_by_tag(entries).each do |(tag_key, group)|
-          grouped[tag_key] = group.map { |e| json_row(e, ttl_by_id, check_existence) }
-        end
+        grouped = group_entries_by_tag(entries).to_h { |(tag_key, group)| {tag_key, group.map { |e| json_row(e, ttl_by_id, check_existence) }} }
         puts grouped.to_json
       else
         payload = entries.map { |e| json_row(e, ttl_by_id, check_existence) }
@@ -333,8 +330,7 @@ module Doma::CLI
       case effective
       in Doma::Settings::SelectorMode::Builtin
         result = TuiCommand.run_app(db, entries, picking: true)
-        path = result.path
-        raise Doma::Error.new("selection cancelled", 130) unless result.selected? && path
+        raise Doma::Error.new("selection cancelled", 130) unless path = result.path
         emit_choice(db, path)
       in Doma::Settings::SelectorMode::First
         # Deterministic auto-pick. Warn so scripted callers don't silently

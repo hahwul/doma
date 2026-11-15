@@ -29,10 +29,6 @@ module Doma
       # `absent?`) but came with a remote — what `import --clone` fetches.
       clonable : Array({String, String}) = [] of {String, String}
 
-    # Reused across all v1 entries so we don't allocate a fresh empty
-    # hash per row.
-    private EMPTY_TTL_MAP = {} of String => Int64
-
     enum Mode
       Merge
       Replace
@@ -122,7 +118,7 @@ module Doma
           # this lookup matches the row add_tx will touch.
           # Snapshots only ever hold absolute paths; a blank or relative
           # one would otherwise canonicalize against the importer's cwd.
-          unless entry.path.starts_with?('/') || entry.path == "~" || entry.path.starts_with?("~/")
+          unless Doma::Validator.cwd_independent?(entry.path)
             raise Doma::ValidationError.new("path is not absolute: '#{entry.path}'")
           end
           abs = Doma::Validator.canonicalize(entry.path)
@@ -153,12 +149,7 @@ module Doma
             # group would otherwise skip the entry after earlier groups
             # (and the directory row) were already written.
             Doma::Validator.tags!(entry.tags)
-            ttl_map = entry.expirations || EMPTY_TTL_MAP
-            grouped = Hash(Int64?, Array(String)).new { |h, k| h[k] = [] of String }
-            entry.tags.each do |t|
-              grouped[ttl_map[t]?] << t
-            end
-            grouped.each do |ttl, tag_group|
+            entry.tags.group_by { |t| entry.expirations.try(&.[t]?) }.each do |ttl, tag_group|
               db.add_tx(cnn, entry.path, tag_group, validate_path: false, expires_at: ttl)
             end
           end

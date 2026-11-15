@@ -18,11 +18,9 @@ class Doma::Database
   NOT_EXPIRED_DT = "(dt.expires_at IS NULL OR dt.expires_at > #{NOW_EPOCH})"
 
   # "tag row has lapsed" — used by writes that sweep expired rows and
-  # by the count surfaced to users. _DT variant is for queries that
-  # have already aliased `directory_tags` as `dt`; the unqualified
-  # form is for `WHERE` on the table directly.
-  IS_EXPIRED_DT = "(dt.expires_at IS NOT NULL AND dt.expires_at <= #{NOW_EPOCH})"
-  IS_EXPIRED    = "(expires_at IS NOT NULL AND expires_at <= #{NOW_EPOCH})"
+  # by the count surfaced to users. Unqualified, for `WHERE` on the
+  # `directory_tags` table directly.
+  IS_EXPIRED = "(expires_at IS NOT NULL AND expires_at <= #{NOW_EPOCH})"
 
   # The scalar column list every Entry-hydrating read selects, in the
   # exact order `build_entry` destructures. Centralized so adding a
@@ -35,15 +33,10 @@ class Doma::Database
   # The row shape matching `ENTRY_COLUMNS` plus the trailing
   # GROUP_CONCAT column (nullable — a directory with no tags
   # concatenates to NULL). Kept beside the column list so the two can't
-  # fall out of sync.
-  #
-  # Two spellings of the same thing because they're used in two
-  # different positions: crystal-db's `as:` takes a *value* (a tuple of
-  # class objects), while a method's type restriction takes a *type*.
-  # An alias can't stand in for the former, so both live here rather
-  # than one being re-typed at each call site.
-  ENTRY_ROW = {Int64, String, String, String, Int64, Int64, String?}
+  # fall out of sync. `EntryRow` is the type (for restrictions);
+  # `ENTRY_ROW` is the value crystal-db's `as:` takes.
   alias EntryRow = {Int64, String, String, String, Int64, Int64, String?}
+  ENTRY_ROW = EntryRow.types
 
   # Tags are joined with the unit-separator (0x1f) rather than a comma
   # so that a tag containing a comma — which our validator rejects

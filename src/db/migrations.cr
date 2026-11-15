@@ -64,15 +64,14 @@ module Doma
 
     # Generates a unique 7-hex short_id, retrying on the (rare) collision.
     #
-    # Accepts either a pooled `DB::Database` or a specific `DB::Connection`,
-    # both of which expose `#scalar`. Callers running inside a transaction
-    # (migration backfill, `add_tx`, and bulk `import`) MUST pass their
-    # transaction's connection: a `DB::Database`-level SELECT runs on a
+    # Takes the transaction's connection, never the pool
+    # (migration backfill, `add_tx`, and bulk `import` all run inside a
+    # transaction): a `DB::Database`-level SELECT runs on a
     # *different* pool connection which — under WAL — can't see rows
     # inserted earlier in the same uncommitted transaction. Miss those
     # in-flight ids and a bulk import can generate a duplicate that then
     # trips the `short_id` UNIQUE index and rolls the whole import back.
-    def self.generate_short_id(db : DB::Database | DB::Connection) : String
+    def self.generate_short_id(db : DB::Connection) : String
       loop do
         # Random::Secure draws straight from the OS — no per-call PRNG
         # allocation + reseed like `Random.new` would incur, and this

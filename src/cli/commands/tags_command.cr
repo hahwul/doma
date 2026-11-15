@@ -91,13 +91,8 @@ module Doma::CLI
     # hierarchies were rendered half-flat. This recurses to the full
     # depth and aggregates counts at every internal node.
     private class TreeNode
-      property children : Hash(String, TreeNode)
-      property leaves : Array(Doma::Database::TagSummary)
-
-      def initialize
-        @children = {} of String => TreeNode
-        @leaves = [] of Doma::Database::TagSummary
-      end
+      getter children = {} of String => TreeNode
+      getter leaves = [] of Doma::Database::TagSummary
 
       # Sum of every leaf below this node, regardless of depth. Used for
       # the bracketed group-total in the rendered header.
@@ -114,7 +109,12 @@ module Doma::CLI
 
       tags.each do |t|
         if t.name.includes?('/')
-          insert_node(root, t.name.split('/'), t)
+          # Walk/create the parent segments; the last segment is the leaf.
+          # A bare `work` can coexist with `work/proj` — leaves and
+          # children render as siblings.
+          node = root
+          t.name.split('/')[0...-1].each { |seg| node = node.children[seg] ||= TreeNode.new }
+          node.leaves << t
         else
           flat << t
         end
@@ -133,21 +133,6 @@ module Doma::CLI
 
       puts "" unless root.children.empty? || flat.empty?
       flat.each { |t| puts "#{t.name}\t#{t.count}" }
-    end
-
-    private def insert_node(parent : TreeNode, segments : Array(String), tag : Doma::Database::TagSummary)
-      head, *rest = segments
-      if rest.empty?
-        # Leaf: this segment is the final piece of the tag name.
-        # `head` may collide with an internal node (e.g. `work` exists
-        # both as a bare tag and as a parent of `work/proj`). We attach
-        # it to the parent's leaves keyed by full name; the renderer
-        # treats children + leaves as siblings in display order.
-        parent.leaves << tag
-      else
-        node = parent.children[head] ||= TreeNode.new
-        insert_node(node, rest, tag)
-      end
     end
 
     private def render_subtree(node : TreeNode, indent : String, color : Bool)

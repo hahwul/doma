@@ -79,12 +79,9 @@ module Doma::CLI
       begin
         File.open(tmp, "w") { |f| Doma::Exporter.write(db, format, f, portable) }
         File.rename(tmp, path)
-      rescue ex : File::AccessDeniedError | File::Error | IO::Error
-        File.delete?(tmp)
-        raise Doma::Error.new("export failed: #{ex.message}")
       rescue ex
         File.delete?(tmp)
-        raise ex
+        raise ex.is_a?(IO::Error) ? Doma::Error.new("export failed: #{ex.message}") : ex
       end
     end
   end

@@ -21,17 +21,10 @@ module Doma
     # Layout: the result list fills the top, with the search box pinned to the
     # bottom row and a dim status/keyhint line just above it.
     class App
-      record Result, path : String?, cancelled : Bool do
+      # `path` is nil when the user cancelled (Esc / Ctrl-C).
+      record Result, path : String? do
         def self.cancelled : Result
-          new(nil, true)
-        end
-
-        def self.selected(path : String) : Result
-          new(path, false)
-        end
-
-        def selected? : Bool
-          !cancelled && !path.nil?
+          new(nil)
         end
       end
 
@@ -180,7 +173,7 @@ module Doma
 
       private def select_current : Result?
         sc = @scored[@cursor]?
-        sc ? Result.selected(sc.entry.path) : nil
+        sc ? Result.new(sc.entry.path) : nil
       end
 
       private def move(delta : Int32)

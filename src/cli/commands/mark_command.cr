@@ -58,10 +58,6 @@ module Doma::CLI
         )
       end
 
-      # Capture into a local so the closure-narrowing on `target_path`
-      # propagates; Crystal won't infer non-nil from `target_path || "."`
-      # when the source ivar is nilable.
-      path = target_path
       forwarded = [] of String
       # `--ttl DUR` overrides the 7d default; forward it verbatim so
       # `add` owns the duration grammar and validation (a bad `--ttl xyz`
@@ -75,7 +71,7 @@ module Doma::CLI
       tags.each { |t| forwarded << "-t" << t }
       # Path last, behind `--`, so a dash-prefixed `-p -n` isn't parsed
       # by `add` as a flag.
-      forwarded << "--" << (path || ".")
+      forwarded << "--" << (target_path.as?(String) || ".")
       AddCommand.new.run(forwarded)
     end
   end

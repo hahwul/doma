@@ -66,43 +66,25 @@ module Doma
       @@regex_cache[pattern] ||= compile_regex(pattern)
     end
 
-    # Compile a pattern to a Crystal regex. `**` is detected before `*`
-    # so we don't accidentally split it into two single-`*` tokens. The
-    # output is anchored on both ends — globs are whole-string matches.
+    # Compile a pattern to a Crystal regex. The alternation tries `**`
+    # before `*` so it isn't split into two single-`*` tokens; literal
+    # runs go through `Regex.escape`. Anchored on both ends — globs are
+    # whole-string matches.
     private def compile_regex(pattern : String) : Regex
       if pattern.size > MAX_PATTERN_LEN
         raise Doma::ValidationError.new(
           "tag pattern is too long (#{pattern.size} chars, max #{MAX_PATTERN_LEN})"
         )
       end
-      io = IO::Memory.new
-      io << "\\A"
-      i = 0
-      len = pattern.size
-      while i < len
-        ch = pattern[i]
-        case ch
-        when '*'
-          if i + 1 < len && pattern[i + 1] == '*'
-            io << ".*"
-            i += 2
-          else
-            io << "[^/]*"
-            i += 1
-          end
-        when '?'
-          io << "[^/]"
-          i += 1
-        when '.', '+', '(', ')', '[', ']', '{', '}', '|', '^', '$', '\\'
-          io << '\\' << ch
-          i += 1
-        else
-          io << ch
-          i += 1
+      body = pattern.gsub(/\*\*|[*?]|[^*?]+/) do |m|
+        case m
+        when "**" then ".*"
+        when "*"  then "[^/]*"
+        when "?"  then "[^/]"
+        else           Regex.escape(m)
         end
       end
-      io << "\\z"
-      Regex.new(io.to_s)
+      Regex.new("\\A#{body}\\z")
     end
   end
 end

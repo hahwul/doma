@@ -121,8 +121,7 @@ class Doma::Database
       # the same batching `add_tx` uses for its tag writes.
       unless tags.empty?
         placeholders = Doma::Sql.placeholders_for(tags.size)
-        args = [directory_id.as(DB::Any)]
-        tags.each { |tag| args << tag.as(DB::Any) }
+        args = [directory_id.as(DB::Any)] + tags.map(&.as(DB::Any))
         deleted = cnn.exec(
           "DELETE FROM directory_tags WHERE directory_id = ? " \
           "AND tag_id IN (SELECT id FROM tags WHERE name IN (#{placeholders}))",

@@ -117,9 +117,7 @@ module Doma::CLI
           failures = process_each(positional, json_mode ? results : nil) do |path|
             short_id_redirect_hint(preview_db, path)
             abs = Doma::Validator.path!(path)
-            applied = Doma::Validator.tags!(raw_tags).dup
-            applied.concat(derive_tags(abs, use_basename, use_git, git_explicit, use_project))
-            applied.uniq!
+            applied = (Doma::Validator.tags!(raw_tags) + derive_tags(abs, use_basename, use_git, git_explicit, use_project)).uniq
             summary = applied.empty? ? "(no tags)" : "tags: #{applied.join(", ")}"
             summary += " (#{ttl_label})" if ttl_label
             if json_mode
@@ -156,9 +154,7 @@ module Doma::CLI
           # User-supplied tags must validate strictly; auto-derived tags
           # (basename, git remote) flow through `sanitize_tag` so a repo
           # named `.dotfiles` doesn't blow up the whole `add`.
-          applied = Doma::Validator.tags!(raw_tags).dup
-          applied.concat(derive_tags(abs, use_basename, use_git, git_explicit, use_project))
-          applied.uniq!
+          applied = (Doma::Validator.tags!(raw_tags) + derive_tags(abs, use_basename, use_git, git_explicit, use_project)).uniq
 
           # Snapshot the pre-state so we can tell apart a real write from
           # a re-add of an already-tagged path. The latter currently
@@ -267,7 +263,7 @@ module Doma::CLI
     # `<cwd>/<id>` and failing with "not a directory". Pure no-op for
     # everyday path inputs.
     private def short_id_redirect_hint(db : Doma::Database, raw : String)
-      return if File.exists?(raw) || Dir.exists?(raw)
+      return if File.exists?(raw)
       return unless Doma::ShortIdResolver.looks_like?(raw)
 
       if active = Doma::ShortIdResolver.resolve(db, raw)
