@@ -96,7 +96,7 @@ module Doma
     # unbounded — done here, on `empty`, and on `add!` so housekeeping
     # is never a separate user step.
     def entries(*, prune : Bool = true) : Array(Entry)
-      with_lock do
+      with_lock(read_only: !prune) do
         raw = read_all
         cutoff = Time.utc.to_unix - DEFAULT_RETENTION_SECONDS
         kept, pruned = raw.partition { |e| e.deleted_at >= cutoff }
@@ -135,13 +135,15 @@ module Doma
       end
     end
 
-    # Restore a trashed entry back into the database. Returns the
-    # restored entry on success. Raises ConflictError when the path
-    # already exists and `merge` is false; with `merge: true` it folds
-    # the trashed tags into the live row (like `move`'s collision path).
-    def restore!(db : Doma::Database, entry : Entry, *, merge : Bool = false) : Entry
+    # Restore a trashed entry back into the database. Returns true when
+    # the tags were merged into an already-registered row, false on a
+    # fresh insert. Raises ConflictError when the path already exists
+    # and `merge` is false; with `merge: true` it folds the trashed tags
+    # into the live row (like `move`'s collision path).
+    def restore!(db : Doma::Database, entry : Entry, *, merge : Bool = false) : Bool
       with_lock do
         now = Time.utc.to_unix
+        merged = false
         db.transaction do |cnn|
           # Resolve `existing` inside the transaction: `db.transaction`
           # takes the write lock up front (`BEGIN IMMEDIATE`, see
@@ -158,6 +160,7 @@ module Doma
             )
           end
 
+          merged = !existing.nil?
           directory_id : Int64 = existing || begin
             cnn.exec(
               "INSERT INTO directories (path, basename, short_id, created_at, last_used_at) " \
@@ -199,19 +202,28 @@ module Doma
         end
 
         remove_from_file!(entry)
-        entry
+        merged
       end
     end
 
     # Permanently drop trashed entries, optionally only those older than
-    # `older_seconds`. Returns the count purged.
-    def empty!(*, older_seconds : Int64? = nil) : Int32
+    # `older_seconds`, or exactly the `only` set (what the user was shown
+    # and confirmed — anything trashed after that survives). Returns the
+    # count purged.
+    def empty!(*, older_seconds : Int64? = nil, only : Array(Entry)? = nil) : Int32
       with_lock do
         raw = read_all
         return 0 if raw.empty?
 
         kept, pruned =
-          if cutoff_age = older_seconds
+          if targets = only
+            remaining = targets.dup
+            raw.partition do |e|
+              i = remaining.index(e)
+              remaining.delete_at(i) if i
+              i.nil?
+            end
+          elsif cutoff_age = older_seconds
             cutoff = Time.utc.to_unix - cutoff_age
             raw.partition { |e| e.deleted_at >= cutoff }
           else
@@ -228,16 +240,23 @@ module Doma
       with_lock { remove_from_file!(entry) }
     end
 
-    private def with_lock(&)
+    # `read_only` callers (pure lookups) fall back to an unlocked read
+    # when the lock can't be created (read-only DOMA_HOME); writers get a
+    # clean ConfigError instead of a raw File::Error "internal error".
+    private def with_lock(*, read_only : Bool = false, &)
       Doma::Config.ensure_home!
       lock_path = File.join(Doma::Config.home, "trash.lock")
-      File.open(lock_path, "w") do |lock_file|
+      lock_file = begin
+        File.open(lock_path, "w")
+      rescue ex : File::Error
+        return yield if read_only
+        raise Doma::ConfigError.new("cannot use trash in #{Doma::Config.home}: #{ex.message}")
+      end
+      begin
         lock_file.flock_exclusive
-        begin
-          yield
-        ensure
-          lock_file.flock_unlock
-        end
+        yield
+      ensure
+        lock_file.close
       end
     end
 
@@ -295,10 +314,16 @@ module Doma
       File.rename(tmp, path)
     end
 
+    # Removes at most one matching line: two `rm`s of the same path in
+    # the same second write identical lines, and the loser's `discard!`
+    # must not take the winner's snapshot with it.
     private def remove_from_file!(target : Entry)
-      remaining = read_all.reject do |e|
+      remaining = read_all
+      i = remaining.rindex do |e|
         e.deleted_at == target.deleted_at && e.short_id == target.short_id && e.path == target.path
       end
+      return unless i
+      remaining.delete_at(i)
       rewrite!(remaining)
     end
   end

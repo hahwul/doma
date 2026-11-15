@@ -78,7 +78,7 @@ doma mark spike skim review                       # multiple temp tags on cwd at
 ## Recovering from `rm` (the trash)
 
 `doma rm <path>` defaults to a soft-delete: the row + tags are
-snapshotted into a trash store under `~/.config/doma/trash/` and the
+snapshotted into the trash file `<DOMA_HOME>/trash.jsonl` and the
 path disappears from `list` output. Anything older than 7 days is
 auto-pruned on the next trash op. `--hard` on either `rm` or
 `prune --gone` skips the snapshot and makes the deletion permanent.
@@ -264,7 +264,7 @@ Two of these matter most in practice:
 | "Forget the bookmark" | `doma rm <path> -t bookmark` (or wait for the TTL) |
 | "Show me what's expiring soon" | `doma list --include-expired` (then filter by `expires_at` in `--json`) |
 | "I deleted the wrong directory, get it back" | `doma trash list --json` (or human table) → `doma trash restore <short_id>` (within 7d) |
-| "Sweep dead paths" / "Sweep expired tags" | `doma prune --gone` / `doma prune --expired` (both reversible from trash unless `--hard`) |
+| "Sweep dead paths" / "Sweep expired tags" | `doma prune --gone` / `doma prune --expired` (`--gone` is reversible from trash unless `--hard`; `--expired` is permanent — `doma export` first if the user may want it back) |
 
 ## Stable identifiers
 

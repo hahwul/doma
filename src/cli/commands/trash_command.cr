@@ -62,6 +62,7 @@ module Doma::CLI
           puts p
           exit 0
         end
+        p.unknown_args { |before, after| reject_stray!(before + after) }
       end
 
       entries = Doma::Trash.entries
@@ -112,6 +113,8 @@ module Doma::CLI
         end
       end
 
+      reject_stray!(positional[1..]) if positional.size > 1
+
       entry =
         if positional.empty?
           # Bare `doma trash restore` = undo the most recent deletion,
@@ -128,8 +131,8 @@ module Doma::CLI
         end
 
       Doma::Database.open do |db|
-        Doma::Trash.restore!(db, entry, merge: merge)
-        suffix = merge ? " (merged into existing row)" : ""
+        merged = Doma::Trash.restore!(db, entry, merge: merge)
+        suffix = merged ? " (merged into existing row)" : ""
         Doma::Logger.success "restored #{entry.path}#{suffix}"
       end
     end
@@ -147,13 +150,21 @@ module Doma::CLI
           puts p
           exit 0
         end
+        # `trash empty 30d -y` must not silently become "purge everything".
+        p.unknown_args do |before, after|
+          stray = before + after
+          unless stray.empty?
+            raise Doma::ValidationError.new("unexpected argument '#{stray.first}' (did you mean --older #{stray.first}?)")
+          end
+        end
       end
 
       # Pre-count so we can both (a) skip the prompt entirely on an empty
       # trash and (b) phrase the prompt with a real number ("Purge 4
       # entries?" reads less abstract than "Purge everything?").
       cutoff = older.try { |age| Time.utc.to_unix - age }
-      pending = Doma::Trash.entries(prune: false).count { |e| cutoff.nil? || e.deleted_at < cutoff }
+      targets = Doma::Trash.entries(prune: false).select { |e| cutoff.nil? || e.deleted_at < cutoff }
+      pending = targets.size
 
       if pending == 0
         if json_mode
@@ -181,7 +192,9 @@ module Doma::CLI
         exit 1
       end
 
-      removed = Doma::Trash.empty!(older_seconds: older)
+      # Purge exactly what the prompt counted: an `rm` in another shell
+      # while the prompt waits must stay recoverable.
+      removed = Doma::Trash.empty!(only: targets)
       if json_mode
         puts %({"purged":#{removed}})
       else
@@ -191,6 +204,11 @@ module Doma::CLI
           Doma::Logger.success "purged #{removed} trash entr#{removed == 1 ? "y" : "ies"}#{scope_phrase}"
         end
       end
+    end
+
+    private def reject_stray!(stray : Array(String))
+      return if stray.empty?
+      raise Doma::ValidationError.new("unexpected argument '#{stray.first}'")
     end
 
     # Yes/no prompt with the standard escape hatches. `-y` / `--yes` /

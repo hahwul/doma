@@ -62,6 +62,13 @@ module Doma
         unless sqlite_file?(target)
           raise Doma::ConfigError.new("not a SQLite database: #{target}")
         end
+        # WAL must create `-wal`/`-shm` next to the file; in a read-only
+        # directory that fails as the same opaque ConnectionRefused.
+        # Already-present sidecars are fine.
+        parent = File.dirname(target)
+        unless File::Info.writable?(parent) || (File.exists?("#{target}-wal") && File.exists?("#{target}-shm"))
+          raise Doma::ConfigError.new("database directory is not writable (WAL needs it): #{parent}")
+        end
       else
         parent = File.dirname(target)
         if Dir.exists?(parent) && !File::Info.writable?(parent)
@@ -99,6 +106,10 @@ module Doma
       raw = open_with_retry(target)
       Migrations.run(raw)
       new(raw)
+    rescue ex : File::Error
+      # The stat checks above raise on EACCES (non-traversable parent)
+      # before any of them can produce a clean message.
+      raise Doma::ConfigError.new("cannot access database path (#{target}): #{ex.message}")
     end
 
     # Block form: open the database, yield it, and always close it — the
