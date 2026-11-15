@@ -134,6 +134,34 @@ describe "rm/info fixes" do
       r = doma(["info", "ace"], home, chdir: home)
       r[:status].exit_code.should eq(3)
       r[:err].should contain("not registered: #{File.join(home, "ace")}")
+
+      # Hex-shaped name: still a directory, not a short_id miss.
+      FileUtils.mkdir_p([File.join(home, "cafe"), File.join(home, "q", "cafebar")])
+      doma(["add", File.join(home, "q", "cafebar")], home)
+      r = doma(["info", "cafe"], home, chdir: home)
+      r[:status].exit_code.should eq(3)
+      r[:err].should contain("not registered: #{File.join(home, "cafe")}")
+      r[:err].should contain("doma add cafe")
+    end
+  end
+
+  it "#62: move names the stored source row even after it became a symlink" do
+    pending! "binary not built" unless File.exists?(FIX_BIN)
+    with_fix_home do |home|
+      app = File.join(home, "app")
+      v2 = File.join(home, "app-v2")
+      dest = File.join(home, "new")
+      FileUtils.mkdir_p([app, v2, dest])
+      doma(["add", app, "-t", "old"], home)
+      doma(["add", v2, "-t", "new"], home)
+      FileUtils.rm_rf(app)
+      File.symlink(v2, app)
+
+      doma(["move", app, dest], home)[:out].should contain("moved #{app} -> #{dest}")
+      listed_paths(home).sort.should eq([v2, dest].sort)
+
+      doma(["move", dest, v2], home)[:out].should contain("merged #{dest} into existing #{v2}")
+      listed_paths(home).should eq([v2])
     end
   end
 

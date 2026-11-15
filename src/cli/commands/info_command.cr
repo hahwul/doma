@@ -86,7 +86,10 @@ module Doma::CLI
             return
           end
 
-          if Doma::ShortIdResolver.looks_like?(raw)
+          # An existing `./<name>` was never read as a short_id (see
+          # `resolve_target`), so a hex-shaped dir name falls through to
+          # the not-registered answer below.
+          if Doma::ShortIdResolver.looks_like?(raw) && !File.exists?(raw)
             msg = "no entry with short_id '#{raw}'"
             if trashed = Doma::Trash.find_by_short_id(raw.downcase)
               raise Doma::NotFoundError.new(msg, hint: Doma::Trash.restore_hint(trashed))
