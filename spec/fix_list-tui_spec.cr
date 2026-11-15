@@ -127,5 +127,22 @@ describe "list/tui fixes" do
         r[:err].should_not contain("doma add ./alpha\n")
       end
     end
+
+    it "leaves expired tags out of the already-registered hint (#86)" do
+      pending! "binary not built" unless File.exists?(FIX_LT_BIN)
+      with_lt_home do |home|
+        beta = File.join(home, "beta").tap { |d| Dir.mkdir(d) }
+        Doma::Database.open(File.join(home, "doma.db")) do |db|
+          db.add(beta, ["old"], expires_at: Time.utc.to_unix - 100)
+        end
+        r = lt_run(["list", "-t", "./beta", "--pick"], home, chdir: home)
+        r[:err].should contain("already registered; it has no tags")
+        r[:err].should_not contain("#old")
+        Doma::Database.open(File.join(home, "doma.db")) { |db| db.add(beta, ["live"]) }
+        r = lt_run(["list", "-t", "./beta", "--pick"], home, chdir: home)
+        r[:err].should contain("pick it by tag: #live")
+        r[:err].should_not contain("#old")
+      end
+    end
   end
 end

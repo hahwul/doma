@@ -398,7 +398,11 @@ module Doma::CLI
         # Already registered (just not under that tag/query): pointing at
         # `doma add` would only print "no change".
         if entry = db.find_entry(Doma::Validator.canonicalize(candidate))
-          via = entry.tags.empty? ? "it has no tags (doma add #{candidate} -t TAG)" : "pick it by tag: #{entry.tags.map { |t| "##{t}" }.join(' ')}"
+          # find_entry includes expired tags; --pick would never match those.
+          now = Time.utc.to_unix
+          expired = db.tag_expirations(entry.id, include_past: true).select { |_, at| at <= now }
+          active = entry.tags.reject { |t| expired.has_key?(t) }
+          via = active.empty? ? "it has no tags (doma add #{candidate} -t TAG)" : "pick it by tag: #{active.map { |t| "##{t}" }.join(' ')}"
           return "#{entry.path} is already registered; #{via}"
         end
         return "to register this path, run: doma add #{candidate}"
