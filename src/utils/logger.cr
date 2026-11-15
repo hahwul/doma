@@ -1,5 +1,10 @@
 require "colorize"
 
+# `color_enabled?` (and the `color` flags derived from it) is the only
+# gate. Crystal's own default also turns Colorize off whenever STDERR
+# isn't a TTY, which stripped stdout color on `doma list 2>/dev/null`.
+Colorize.enabled = true
+
 module Doma
   module Logger
     extend self
@@ -15,15 +20,15 @@ module Doma
 
     def force_color=(value : Bool)
       @@force_color = value
-      # Colorize strips escapes on its own when not on a TTY.
-      Colorize.enabled = true if value
     end
 
     # Color is keyed off STDOUT specifically, even for stderr-bound calls,
     # because mixing colored stderr with non-tty stdout in a pipeline tends
     # to leak escape codes into grep/jq more often than the reverse.
     def color_enabled? : Bool
-      !@@no_color && (@@force_color || STDOUT.tty?)
+      # TERM=dumb mirrors Crystal's own default, which `Colorize.enabled =
+      # true` above overrides; `--color` still forces it.
+      !@@no_color && (@@force_color || (STDOUT.tty? && ENV["TERM"]? != "dumb"))
     end
 
     def info(msg : String)

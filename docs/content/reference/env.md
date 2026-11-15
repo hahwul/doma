@@ -9,7 +9,7 @@ weight = 3
 | `DOMA_HOME` | doma's config + state directory. | `~/.config/doma` |
 | `DOMA_DB` | Path to the SQLite database. | `<DOMA_HOME>/doma.db` |
 | `DOMA_CONFIG` | Path to `config.yml`. | `<DOMA_HOME>/config.yml` |
-| `NO_COLOR` | If set (any value), disables ANSI colors. Honored by default; `--color` overrides. | unset |
+| `NO_COLOR` | If set to a non-empty value, disables ANSI colors. Honored by default; `--color` overrides. | unset |
 | `COLUMNS` | Terminal width hint. Used by the picker for layout. | autodetected |
 | `SHELL` | Read by `setup install` to pick the right rc file. | from process env |
 
