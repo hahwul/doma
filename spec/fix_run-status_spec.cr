@@ -110,6 +110,9 @@ describe "run/status fixes" do
       rs(["run", "t", "-t", "t2", "echo", "hi"], home)[:err].should contain("did you mean: doma run t -t t2 -- echo hi")
       rs(["run", "-t", "a", "-t", "b", "echo", "hi"], home)[:err].should contain("did you mean: doma run -t a -t b -- echo hi")
       rs(["run", "t", "-x", "old", "echo", "hi"], home)[:err].should contain("did you mean: doma run t -x old -- echo hi")
+      rs(["run", "-t", "git", "git", "pull"], home)[:err].should contain("did you mean: doma run -t git -- git pull")
+      rs(["run", "-x", "old", "t", "-t", "t2", "echo", "hi"], home)[:err].should contain("did you mean: doma run t -t t2 -x old -- echo hi")
+      rs(["run", "--parallel", "--jobs", "4", "t", "-t", "t2", "echo", "hi"], home)[:err].should contain("did you mean: doma run t -t t2 -- echo hi")
     end
   end
 

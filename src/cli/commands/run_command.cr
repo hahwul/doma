@@ -90,9 +90,10 @@ module Doma::CLI
       # Capture before parse: a bare `--` is consumed by the parser, so
       # we can't tell afterwards whether the user supplied a separator.
       had_separator = args.includes?("--")
-      # Also before parse (it consumes args): a leading bare word is the
-      # tag in `run work -t api cmd`, but `-t`'s value in `run -t api cmd`.
-      first_word = args.find { |a| !a.starts_with?('-') }
+      # Also before parse (it consumes args): was a bare word typed before
+      # the first -t? It's the tag in `run work -t api cmd`, but part of
+      # the command in `run -t api cmd`.
+      tag_first = positional_before_tag_flag?(args)
       parser.parse(args)
       if jobs && !parallel
         raise Doma::ValidationError.new("--jobs requires --parallel")
@@ -116,7 +117,7 @@ module Doma::CLI
         raise Doma::ValidationError.new("command is required after '--'") if had_separator
         raise Doma::ValidationError.new(
           "no command to run — commands go after a '--' separator",
-          hint: missing_separator_hint(first_word, flag_tags, excludes, positional_tags)
+          hint: missing_separator_hint(tag_first, flag_tags, excludes, positional_tags)
         )
       end
 
@@ -283,6 +284,28 @@ module Doma::CLI
       end
     end
 
+    # True when a positional comes before the first -t/--tag token.
+    # Skips option values so `run -t git git pull` (value == command) and
+    # `run --jobs 4 t -t t2 cmd` (value looks positional) read right.
+    private def positional_before_tag_flag?(args : Array(String)) : Bool
+      skip = false
+      args.each do |a|
+        break if a == "--"
+        if skip
+          skip = false
+          next
+        end
+        case a
+        when "-t", "--tag"               then return false
+        when "-x", "--exclude", "--jobs" then skip = true
+        else
+          return false if a.starts_with?("-t") || a.starts_with?("--tag=")
+          return true unless a.starts_with?('-')
+        end
+      end
+      false
+    end
+
     # Builds a "did you mean" line for the no-`--` mistake by
     # reconstructing the user's likely intent. The first positional is the
     # tag when there's no `-t`, or when it was typed first (`run work -t
@@ -290,10 +313,10 @@ module Doma::CLI
     # cmd`). Every -t and -x is carried over so the suggestion never
     # widens the target set. Falls back to the generic form when there
     # isn't enough to reconstruct.
-    private def missing_separator_hint(first_word : String?, flag_tags : Array(String), excludes : Array(String), positional_tags : Array(String)) : String
+    private def missing_separator_hint(tag_first : Bool, flag_tags : Array(String), excludes : Array(String), positional_tags : Array(String)) : String
       tag = nil
       cmd = positional_tags
-      if positional_tags.size >= 2 && (flag_tags.empty? || first_word == positional_tags.first)
+      if positional_tags.size >= 2 && (flag_tags.empty? || tag_first)
         tag = positional_tags.first
         cmd = positional_tags[1..]
       end
