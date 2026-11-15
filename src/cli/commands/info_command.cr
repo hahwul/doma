@@ -45,6 +45,9 @@ module Doma::CLI
       # still carries the class of failure (3 not found, 2 ambiguous),
       # so `&&` chains behave exactly as before.
       begin
+        if positional.size > 1
+          raise Doma::ValidationError.new("info takes one path or short_id; got #{positional.size}")
+        end
         lookup(raw, json_mode)
       rescue ex : Doma::Error
         raise ex unless json_mode
@@ -76,7 +79,9 @@ module Doma::CLI
           # disambiguate with short_ids so the user can re-issue.
           # Runs before the short_id miss below so hex-looking names
           # (`cafe`, `added`) still find their directory.
-          if name_like?(raw) && (info = resolve_by_search(db, raw))
+          # An existing `./<name>` *is* a filesystem path, so it gets the
+          # plain not-registered answer rather than some other entry.
+          if name_like?(raw) && !Dir.exists?(canonical) && (info = resolve_by_search(db, raw))
             render_entry(db, info, json_mode, raw)
             return
           end
@@ -100,7 +105,7 @@ module Doma::CLI
           end
           raise Doma::NotFoundError.new(
             "not registered: #{canonical}",
-            hint: "to register it, run: doma add #{raw}"
+            hint: "to register it, run: doma add #{shell_arg(raw)}"
           )
         end
 
@@ -147,7 +152,7 @@ module Doma::CLI
     # registered; canonical_path is set in both cases (used by the
     # trash fallback and the not-found message).
     private def resolve_target(db : Doma::Database, raw : String) : {String, Doma::Entry?}
-      if !File.exists?(raw) && Doma::ShortIdResolver.looks_like?(raw)
+      if !File.exists?(raw) && Doma::ShortIdResolver.looks_like?(raw) && !registered_path?(db, raw)
         path = Doma::ShortIdResolver.resolve(db, raw)
         # Non-resolving short_id-shaped input comes back as raw with no
         # entry so the caller can raise a clean "no entry with short_id"
@@ -155,8 +160,22 @@ module Doma::CLI
         return {path || raw, path ? db.find_entry(path) : nil}
       end
 
-      canonical = Doma::Validator.canonicalize(raw)
+      canonical = db.row_path(raw)
       {canonical, db.find_entry(canonical)}
+    end
+
+    # A registered hex-named dir that's gone from disk is still that
+    # row — don't let its name resolve as another entry's short_id.
+    private def registered_path?(db : Doma::Database, raw : String) : Bool
+      !db.find_entry(db.row_path(raw)).nil?
+    rescue Doma::ValidationError
+      false # relative input with no cwd: only the short_id reading is left
+    end
+
+    # Single-quote `raw` for a copy-pasteable hint when it has shell
+    # metacharacters (spaces, quotes, ...); plain paths stay readable.
+    private def shell_arg(raw : String) : String
+      raw.matches?(/\A[A-Za-z0-9_.\/~+:@%,=-]+\z/) ? raw : "'#{raw.gsub("'", %q('\''))}'"
     end
 
     # True for inputs the user clearly didn't mean as a filesystem
