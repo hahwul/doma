@@ -79,19 +79,15 @@ module Doma::CLI
     # `a/b/c/d/e/f:1` and `bookmark:1` doesn't help a user gauge what
     # they actually work on.
     private def roll_up_by_prefix(tags : Array(Doma::Database::TagSummary), limit : Int32) : Array(Doma::Database::TagSummary)
-      buckets = {} of String => Int64
+      buckets = Hash(String, Int64).new(0_i64)
       tags.each do |t|
-        key = if idx = t.name.index('/')
-                "#{t.name[0...idx]}/*"
-              else
-                t.name
-              end
-        buckets[key] = (buckets[key]? || 0_i64) + t.count
+        head, sep, _ = t.name.partition('/')
+        buckets[sep.empty? ? t.name : "#{head}/*"] += t.count
       end
       buckets.to_a
-        .sort_by! { |pair| {-pair[1], pair[0]} }
+        .sort_by! { |(name, count)| {-count, name} }
         .first(limit)
-        .map { |pair| Doma::Database::TagSummary.new(pair[0], pair[1]) }
+        .map { |(name, count)| Doma::Database::TagSummary.new(name, count) }
     end
 
     private def render_text(stats : Doma::Database::Stats, top_tags : Array(Doma::Database::TagSummary), group_prefix : Bool)
@@ -117,28 +113,15 @@ module Doma::CLI
       end
 
       puts ""
-      if stats.recent.empty?
-        puts label.call("Recent:") + " (none)"
-      else
-        puts label.call("Recent:")
-        stats.recent.each do |entry|
-          ts = Doma::TimeFormatter.absolute(entry[:created_at])
-          path_str = color ? entry[:path].colorize(:cyan).to_s : entry[:path]
-          puts "  #{ts}  #{path_str}"
-        end
-      end
-
+      render_paths(label.call("Recent:"), "(none)", stats.recent.map { |r| {r[:path], r[:created_at]} }, color)
       puts ""
-      if stats.most_used.empty?
-        puts label.call("Most used:") + " (run `doma cd` to start tracking)"
-      else
-        puts label.call("Most used:")
-        stats.most_used.each do |entry|
-          ts = Doma::TimeFormatter.absolute(entry[:last_used_at])
-          path_str = color ? entry[:path].colorize(:cyan).to_s : entry[:path]
-          puts "  #{ts}  #{path_str}"
-        end
-      end
+      render_paths(label.call("Most used:"), "(run `doma cd` to start tracking)", stats.most_used.map { |r| {r[:path], r[:last_used_at]} }, color)
+    end
+
+    private def render_paths(heading : String, empty_note : String, rows : Array({String, Int64}), color : Bool)
+      return puts("#{heading} #{empty_note}") if rows.empty?
+      puts heading
+      rows.each { |(path, at)| puts "  #{Doma::TimeFormatter.absolute(at)}  #{color ? path.colorize(:cyan).to_s : path}" }
     end
   end
 end

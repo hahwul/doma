@@ -83,7 +83,10 @@ module Doma::CLI
       puts "ID       AGE   PATH                                                TAGS"
       entries.each do |e|
         id = e.display_id.ljust(7)
-        age = humanize_age(now - e.deleted_at).rjust(5)
+        # Compact age ("3d", "5h", "now") in the same `Nu` form as TTLs,
+        # so `trash list` and `list --include-expired` read alike.
+        delta = now - e.deleted_at
+        age = (delta < 60 ? "now" : Doma::Duration.compact(delta)).rjust(5)
         # Truncate from the left with an ellipsis so the *end* of the
         # path (the part that disambiguates similar entries) stays
         # visible. Final ljust pads short paths to the same column width.
@@ -115,21 +118,13 @@ module Doma::CLI
           # the overwhelmingly common "I just rm'd the wrong thing" case
           # (no need to `trash list`, copy a hex id, and retype it).
           # entries() is newest-first, so the head is the last thing rm'd.
-          newest = Doma::Trash.entries.first?
-          unless newest
-            raise Doma::NotFoundError.new("trash is empty — nothing to restore")
-          end
-          newest
+          Doma::Trash.entries.first? || raise Doma::NotFoundError.new("trash is empty — nothing to restore")
         else
           prefix = positional.first.downcase
           unless prefix.matches?(/\A[0-9a-f]+\z/)
             raise Doma::ValidationError.new("short_id must be hex: '#{positional.first}'")
           end
-          found = Doma::Trash.find_by_short_id(prefix)
-          unless found
-            raise Doma::NotFoundError.new("no trash entry matching '#{prefix}'")
-          end
-          found
+          Doma::Trash.find_by_short_id(prefix) || raise Doma::NotFoundError.new("no trash entry matching '#{prefix}'")
         end
 
       Doma::Database.open do |db|
@@ -157,12 +152,8 @@ module Doma::CLI
       # Pre-count so we can both (a) skip the prompt entirely on an empty
       # trash and (b) phrase the prompt with a real number ("Purge 4
       # entries?" reads less abstract than "Purge everything?").
-      pending = if cutoff_age = older
-                  cutoff = Time.utc.to_unix - cutoff_age
-                  Doma::Trash.entries(prune: false).count { |e| e.deleted_at < cutoff }
-                else
-                  Doma::Trash.entries(prune: false).size
-                end
+      cutoff = older.try { |age| Time.utc.to_unix - age }
+      pending = Doma::Trash.entries(prune: false).count { |e| cutoff.nil? || e.deleted_at < cutoff }
 
       if pending == 0
         if json_mode
@@ -197,8 +188,7 @@ module Doma::CLI
         if removed == 0
           Doma::Logger.info "nothing to purge"
         else
-          scope = older.nil? ? "" : " (older than threshold)"
-          Doma::Logger.success "purged #{removed} trash entr#{removed == 1 ? "y" : "ies"}#{scope}"
+          Doma::Logger.success "purged #{removed} trash entr#{removed == 1 ? "y" : "ies"}#{scope_phrase}"
         end
       end
     end
@@ -220,16 +210,6 @@ module Doma::CLI
       STDOUT.flush
       reply = STDIN.gets || ""
       reply.strip.downcase.in?({"y", "yes"})
-    end
-
-    # ------------------------------------------------------------------
-    # Helpers
-    # ------------------------------------------------------------------
-
-    # Compact age ("3d", "5h", "now") in the same `Nu` form as TTLs, so
-    # `trash list` and `list --include-expired` read alike.
-    private def humanize_age(seconds : Int64) : String
-      seconds < 60 ? "now" : Doma::Duration.compact(seconds)
     end
   end
 end

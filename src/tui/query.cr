@@ -85,11 +85,9 @@ module Doma
           scored << Scored.new(entry, total, positions.uniq!.sort!)
         end
 
-        # Crystal's sort_by is not guaranteed stable; carry the original index
-        # so equal scores keep their incoming (recency) order.
-        scored.map_with_index { |s, i| {s, i} }
-          .sort_by! { |pair| {-pair[0].score, pair[1]} }
-          .map(&.[0])
+        # `sort_by!` is stable, so equal scores keep their incoming
+        # (recency) order.
+        scored.sort_by! { |s| -s.score }
       end
 
       # Case-insensitive substring match on the path or the `#tag` list —

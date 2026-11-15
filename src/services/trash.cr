@@ -16,8 +16,7 @@ module Doma
   module Trash
     extend self
 
-    # Default retention. Issue #5 picked 7d as the recovery window;
-    # tweakable via the constructor in case that turns out wrong.
+    # Default retention. Issue #5 picked 7d as the recovery window.
     DEFAULT_RETENTION_SECONDS = 7_i64 * 86_400_i64
 
     # Per-line record. JSON keys are intentionally explicit so future
@@ -93,25 +92,21 @@ module Doma
     end
 
     # All currently-recoverable entries (newest first). Lazy-prunes
-    # anything older than `retention_seconds` so the file doesn't grow
+    # anything older than the retention window so the file doesn't grow
     # unbounded — done here, on `empty`, and on `add!` so housekeeping
     # is never a separate user step.
-    def entries(*, retention_seconds : Int64 = DEFAULT_RETENTION_SECONDS, prune : Bool = true) : Array(Entry)
+    def entries(*, prune : Bool = true) : Array(Entry)
       with_lock do
         raw = read_all
-        now = Time.utc.to_unix
-        cutoff = now - retention_seconds
+        cutoff = Time.utc.to_unix - DEFAULT_RETENTION_SECONDS
         kept, pruned = raw.partition { |e| e.deleted_at >= cutoff }
         rewrite!(kept) if prune && !pruned.empty?
         # Newest first. `deleted_at` has 1-second granularity, so two
-        # deletions in the same second tie; break the tie by append order
-        # (the file is written chronologically, so a later index is the
-        # more recent deletion). Without this, `sort_by` — which is not
-        # stable — orders same-second entries arbitrarily, and "undo the
-        # latest" (bare `trash restore`) could resurrect the wrong one.
-        kept.map_with_index { |entry, i| {entry, i} }
-          .sort_by! { |(entry, i)| {-entry.deleted_at, -i} }
-          .map(&.first)
+        # deletions in the same second tie; the file is written
+        # chronologically, so reversing first and relying on `sort_by!`
+        # being stable puts the later append (the more recent deletion)
+        # first — "undo the latest" (bare `trash restore`) depends on it.
+        kept.reverse.sort_by! { |e| -e.deleted_at }
       end
     end
 
@@ -172,62 +167,33 @@ module Doma
             cnn.scalar("SELECT id FROM directories WHERE path = ?", entry.path).as(Int64)
           end
 
-          # Two-pass tag write to cut the per-tag round-trip cost from 3
-          # statements (INSERT OR IGNORE INTO tags + SELECT id + INSERT
-          # INTO directory_tags) down to ~2 amortized:
-          #   pass 1) prefetch every existing tag id with one IN-list
-          #           lookup; INSERT OR IGNORE only the names that
-          #           actually need a new row, then re-resolve those ids
-          #           in a second IN-list query
-          #   pass 2) INSERT INTO directory_tags as one multi-row VALUES
-          #           statement so we hit SQLite once for the whole tag
-          #           set instead of N times
+          # Two multi-row statements for the whole tag set: INSERT OR
+          # IGNORE every tag name (UNIQUE on `tags.name` keeps concurrent
+          # restores safe), resolve the ids in one IN-list lookup, then
+          # one INSERT for the join table.
+          #
+          # For a fresh restore (no live row) the join insert simply
+          # re-applies the snapshot's TTLs — the user opted in to that
+          # deadline once, and `prune_expired` lifts any now lapsed. For a
+          # `--merge` restore onto an existing live row the tag may already
+          # be present, so the conflict resolves to DO NOTHING: the *live*
+          # binding's TTL wins. Clobbering it with `excluded.expires_at`
+          # could replay a long-stale snapshot deadline onto a live tag —
+          # e.g. expire a tag the user has since made permanent. This
+          # matches `move_path`'s merge, which likewise keeps the
+          # destination's existing binding.
           unless entry.tags.empty?
-            existing_ids = fetch_tag_ids(cnn, entry.tags)
-
-            missing = entry.tags.reject { |t| existing_ids.has_key?(t) }
-            unless missing.empty?
-              # Single multi-row INSERT OR IGNORE so a brand-new restore
-              # with N tags pays one SQL call rather than N. ON CONFLICT
-              # on `tags.name` (UNIQUE) means concurrent restores remain
-              # safe.
-              args = [] of DB::Any
-              missing.each do |t|
-                args << t.as(DB::Any)
-                args << now.as(DB::Any)
-              end
-              cnn.exec(
-                "INSERT OR IGNORE INTO tags (name, created_at) VALUES " \
-                "#{Doma::Sql.placeholders_for(missing.size, "(?, ?)")}",
-                args: args
-              )
-              existing_ids.merge!(fetch_tag_ids(cnn, missing))
-            end
-
-            # Multi-row INSERT for the join table. For a fresh restore
-            # (no live row) this simply re-applies the snapshot's TTLs —
-            # the user opted in to that deadline once, and `prune_expired`
-            # lifts any now lapsed. For a `--merge` restore onto an
-            # existing live row the tag may already be present, so the
-            # conflict resolves to DO NOTHING: the *live* binding's TTL
-            # wins. Clobbering it with `excluded.expires_at` could replay
-            # a long-stale snapshot deadline onto a live tag — e.g. expire
-            # a tag the user has since made permanent. This matches
-            # `move_path`'s merge, which likewise keeps the destination's
-            # existing binding.
-            dt_args = [] of DB::Any
-            entry.tags.each do |tag|
-              tag_id = existing_ids[tag]
-              dt_args << directory_id.as(DB::Any)
-              dt_args << tag_id.as(DB::Any)
-              exp = entry.expirations[tag]?
-              dt_args << (exp.nil? ? nil.as(DB::Any) : exp.as(DB::Any))
-            end
+            cnn.exec(
+              "INSERT OR IGNORE INTO tags (name, created_at) VALUES " \
+              "#{Doma::Sql.placeholders_for(entry.tags.size, "(?, ?)")}",
+              args: entry.tags.flat_map { |t| [t, now] of DB::Any }
+            )
+            ids = fetch_tag_ids(cnn, entry.tags)
             cnn.exec(
               "INSERT INTO directory_tags (directory_id, tag_id, expires_at) VALUES " \
               "#{Doma::Sql.placeholders_for(entry.tags.size, "(?, ?, ?)")} " \
               "ON CONFLICT(directory_id, tag_id) DO NOTHING",
-              args: dt_args
+              args: entry.tags.flat_map { |t| [directory_id, ids[t], entry.expirations[t]?] of DB::Any }
             )
           end
         end

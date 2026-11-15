@@ -146,17 +146,6 @@ module Doma::CLI
     private TTL_VALUES = %w[30m 1h 4h 1d 7d 2w 30d]
 
     # ------------------------------------------------------------------
-    # Derivations from COMMAND_SPEC
-    # ------------------------------------------------------------------
-
-    # Filter a flag list down to long-form flags fish should complete:
-    # `-h` and `--help` are handled by fish natively, and short flags
-    # aren't part of fish's per-command flag table.
-    private def fish_long_flags(flags : Array(String)) : Array(String)
-      flags.select { |f| f.starts_with?("--") && f != "--help" }
-    end
-
-    # ------------------------------------------------------------------
     # Per-shell generators. Native idioms (compgen / _values /
     # `complete -c`) stay distinct — the syntactic distance is large
     # enough that a unified emitter would obscure more than dedupe.
@@ -501,14 +490,12 @@ module Doma::CLI
                "-a '#{CONFIG_KEYS.join(' ')}' -d 'config key'"
       lines << ""
 
-      # Per-command long-flag pool. Commands with no long flags (besides
-      # --help, which fish handles natively) are silently skipped.
+      # Per-command long-flag pool. fish handles -h/--help natively, and
+      # short flags aren't part of its per-command flag table.
       COMMAND_SPEC.each do |spec|
-        long = fish_long_flags(spec.flags)
-        next if long.empty?
-        long.each do |f|
-          name = f.lstrip('-')
-          lines << "complete -c doma -n '__fish_seen_subcommand_from #{spec.name}' -l #{name}"
+        spec.flags.each do |f|
+          next unless f.starts_with?("--") && f != "--help"
+          lines << "complete -c doma -n '__fish_seen_subcommand_from #{spec.name}' -l #{f.lstrip('-')}"
         end
       end
 

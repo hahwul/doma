@@ -289,11 +289,7 @@ module Doma::CLI
     end
 
     private def require_arg(args : Array(String), name : String, usage : String) : String
-      v = args.shift?
-      if v.nil?
-        raise Doma::ValidationError.new("missing #{name}", "Usage: #{usage}")
-      end
-      v
+      args.shift? || raise Doma::ValidationError.new("missing #{name}", "Usage: #{usage}")
     end
   end
 end

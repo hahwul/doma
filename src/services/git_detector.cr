@@ -136,8 +136,7 @@ module Doma
     #   git@github.com:owner/repo.git
     #   ssh://git@github.com/owner/repo
     private def parse_remote(url : String) : NamedTuple(host: String?, repo: String?)
-      stripped = url.strip.rstrip('/')
-      stripped = stripped.rchop(".git") if stripped.ends_with?(".git")
+      stripped = url.strip.rstrip('/').rchop(".git")
 
       # Host excludes any `:port` so ssh://host:2222 and git@host: tag alike.
       if m = stripped.match(/\A[a-z]+:\/\/(?:[^@\/]+@)?([^\/:]+)(?::\d+)?\/(.+?)\/([^\/]+)\z/i)

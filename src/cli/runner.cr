@@ -263,10 +263,7 @@ module Doma
         end
         puts ""
         puts "Commands:"
-        COMMAND_LISTING.each do |row|
-          name, desc = row
-          puts "  #{name.ljust(24)} #{desc}"
-        end
+        COMMAND_LISTING.each { |(name, desc)| puts "  #{name.ljust(24)} #{desc}" }
         puts ""
         puts "Global flags:"
         puts "  -q, --quiet             Suppress success/info output"

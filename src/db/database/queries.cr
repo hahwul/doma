@@ -17,11 +17,13 @@ class Doma::Database
   # them consistent means future tweaks (sort orders, additional
   # columns) only need to land in one place.
   def directories(tag : String? = nil, *, sort : SortBy = SortBy::Path, include_expired : Bool = false) : Array(Entry)
-    order = order_clause(sort, prefix: "d.")
+    order = order_clause(sort)
     tag_select = include_expired ? TAGS_GROUP_CONCAT_ALL : TAGS_GROUP_CONCAT_ACTIVE
 
     rows = if tag
-             op = tag_match_clause(tag)
+             # GLOB (shell-style `*`/`?`) over LIKE so `_`/`%`, valid
+             # in tag names, needn't be escaped.
+             op = Doma::TagGlob.pattern?(tag) ? "GLOB" : "="
              # The expired-row filter on the JOIN is what hides
              # paths whose `crystal` tag has expired. With
              # include_expired=true we drop it so an operator can
@@ -166,7 +168,7 @@ class Doma::Database
             INNER JOIN tags t ON t.id = dt.tag_id
             WHERE t.name LIKE ? ESCAPE '\\'#{tag_expired_pred}
         )
-        #{order_clause(sort, prefix: "d.")}
+        #{order_clause(sort)}
         SQL
     )
     rows.map { |row| build_entry(row) }
@@ -181,16 +183,7 @@ class Doma::Database
     # that want already-lapsed TTLs included so they can display
     # them. The default keeps the old export-time behavior of only
     # surfacing future expirations.
-    future_only = include_past ? "" : " AND dt.expires_at > #{NOW_EPOCH}"
-    rows = @db.query_all(
-      "SELECT t.name, dt.expires_at FROM directory_tags dt " \
-      "INNER JOIN tags t ON t.id = dt.tag_id " \
-      "WHERE dt.directory_id = ? " \
-      "  AND dt.expires_at IS NOT NULL" \
-      "#{future_only}",
-      directory_id, as: {String, Int64}
-    )
-    rows.to_h
+    tag_expirations_bulk([directory_id], include_past: include_past)[directory_id]? || {} of String => Int64
   end
 
   # Bulk variant of `tag_expirations`. Hydrates a `directory_id =>
@@ -292,18 +285,10 @@ class Doma::Database
   # from the standard GROUP_CONCAT column shape).
   # ------------------------------------------------------------------
 
-  # SQLite's GLOB operator supports `*` (any chars) and `?` (any one
-  # char) — same syntax users already know from shell. We pick GLOB
-  # over LIKE so users don't have to remember to escape `_`/`%`,
-  # which are valid characters inside tag names.
-  private def tag_match_clause(tag : String) : String
-    Doma::TagGlob.pattern?(tag) ? "GLOB" : "="
-  end
-
-  private def order_clause(sort : SortBy, *, prefix : String) : String
+  private def order_clause(sort : SortBy) : String
     case sort
-    in SortBy::Path   then "ORDER BY #{prefix}path"
-    in SortBy::Recent then "ORDER BY #{prefix}last_used_at DESC, #{prefix}path ASC"
+    in SortBy::Path   then "ORDER BY d.path"
+    in SortBy::Recent then "ORDER BY d.last_used_at DESC, d.path ASC"
     end
   end
 

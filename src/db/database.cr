@@ -35,7 +35,6 @@ module Doma
   #   queries       — list / search / stats and the row-mapping helpers
   class Database
     getter db : DB::Database
-    getter path : String
 
     def self.open(path : String? = nil) : Database
       target = path || Doma::Config.db_path
@@ -99,7 +98,7 @@ module Doma
       # fine — a short backoff loop is enough to ride that out.
       raw = open_with_retry(target)
       Migrations.run(raw)
-      new(raw, target)
+      new(raw)
     end
 
     # Block form: open the database, yield it, and always close it — the
@@ -146,7 +145,7 @@ module Doma
       Doma::Error.new("cannot open database (#{target}): #{message}")
     end
 
-    def initialize(@db : DB::Database, @path : String)
+    def initialize(@db : DB::Database)
     end
 
     def close

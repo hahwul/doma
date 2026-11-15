@@ -53,7 +53,7 @@ module Doma::CLI
         end
 
         result = TuiCommand.run_app(db, entries, initial_query(query, tag))
-        if result.selected? && (path = result.path)
+        if path = result.path
           db.bump_used_safe(path)
           TuiCommand.deliver(path)
           selected = true

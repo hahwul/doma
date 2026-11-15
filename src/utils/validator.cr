@@ -192,8 +192,7 @@ module Doma
     end
 
     private def strip_trailing_slash(path : String) : String
-      return path if path == "/"
-      path.ends_with?('/') ? path.rchop('/') : path
+      path == "/" ? path : path.rchop('/')
     end
   end
 end
