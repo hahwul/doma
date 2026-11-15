@@ -62,8 +62,8 @@ module Doma::CLI
     #               verbatim by bash and zsh flag pools; fish filters
     #               to long-form only, dropping --help.
     #   actions     sub-action keywords (e.g. `install init completion`
-    #               for setup). Used by bash's flag pool and by zsh /
-    #               fish's separate _values / -a blocks.
+    #               for setup). Completed only as the word after the
+    #               command (bash case arm, zsh _values, fish -a).
     # ------------------------------------------------------------------
 
     private record CmdSpec,
@@ -93,7 +93,7 @@ module Doma::CLI
         %w[-t --tag --query -h --help]),
       CmdSpec.new("info", "Show one entry's details (default: cwd)",
         %w[--json -h --help]),
-      CmdSpec.new("cd", "Resolve a directory (tag or short_id prefix)",
+      CmdSpec.new("cd", "Resolve a directory by tag (shell wrapper)",
         %w[-h --help]),
       CmdSpec.new("stats", "Top tags and recent paths",
         %w[--top --recent --used --group-by-prefix --json -h --help]),
@@ -124,6 +124,10 @@ module Doma::CLI
     # commands where the first positional is *unambiguously* a tag.
     private TAG_FIRST_ARG = %w[cd run rename status]
 
+    # Aliases runner.cr dispatches to a canonical command. Every per-command
+    # arm also matches these, so `ls`/`mv`/`remove` complete like the original.
+    private ALIASES = {"list" => %w[ls], "move" => %w[mv], "rm" => %w[remove]}
+
     # Subcommands whose selector accepts `@sets` next to tags (and the
     # space-joined names to offer there).
     private SET_CMDS  = %w[list ls run status]
@@ -144,6 +148,20 @@ module Doma::CLI
     # from the list command so completion can't lag the parser.
     private BY_VALUES  = ListCommand::BY_CHOICES
     private TTL_VALUES = %w[30m 1h 4h 1d 7d 2w 30d]
+
+    # Flags whose value is free-form (a number, duration or query): offer
+    # nothing rather than the flag pool.
+    private FREE_VALUE_FLAGS = %w[--jobs --top --recent --used --older --query]
+
+    # `names` plus their aliases, in shell-case order.
+    private def with_aliases(names : Array(String)) : Array(String)
+      names.flat_map { |n| [n] + ALIASES.fetch(n, [] of String) }
+    end
+
+    # Every command name (aliases included) whose flags contain `flag`.
+    private def cmds_with_flag(flag : String) : String
+      with_aliases(COMMAND_SPEC.select(&.flags.includes?(flag)).map(&.name)).join(' ')
+    end
 
     # ------------------------------------------------------------------
     # Per-shell generators. Native idioms (compgen / _values /
@@ -186,6 +204,16 @@ module Doma::CLI
           __doma_ltrim
         }
 
+        # COMPREPLY from `compgen -d|-f|-c`: split on newlines only (names
+        # may hold spaces), and let readline escape them and append `/` to
+        # directories (compopt needs bash 4+; 3.2 skips it).
+        __doma_paths() {
+          local IFS=$'\\n'
+          compopt -o filenames 2>/dev/null
+          COMPREPLY=( $(compgen "$1" -- "$cur") )
+          __doma_ltrim
+        }
+
         _doma() {
           local cur prev words cword
           if declare -F _init_completion >/dev/null 2>&1; then
@@ -213,10 +241,32 @@ module Doma::CLI
 
           local cmd="${words[1]}"
 
+          # Past `--` the words belong to the wrapped command (`run TAG --
+          # cmd`): a command name, then files, never doma's own flags.
+          local i
+          for (( i = 2; i < cword; i++ )); do
+            if [ "${words[i]}" = "--" ]; then
+              if [ "$i" -eq $(( cword - 1 )) ]; then __doma_paths -c; else __doma_paths -f; fi
+              return
+            fi
+          done
+
           # Flags that take a tag argument across multiple commands.
           case "$prev" in
             -t|--tag|-x|--exclude)
               __doma_reply "$(__doma_tag_words "$cmd")"
+              return
+              ;;
+            -p|--path)
+              __doma_paths -d
+              return
+              ;;
+            -o|--output)
+              __doma_paths -f
+              return
+              ;;
+            #{FREE_VALUE_FLAGS.join('|')})
+              COMPREPLY=()
               return
               ;;
             --by)
@@ -235,18 +285,16 @@ module Doma::CLI
           # not value completion, even at this position.
           if [ "$cword" -eq 2 ] && [[ "$cur" != -* ]]; then
             case "$cmd" in
-              #{TAG_FIRST_ARG.join('|')})
+              #{with_aliases(TAG_FIRST_ARG).join('|')})
                 __doma_reply "$(__doma_tag_words "$cmd")"
                 return
                 ;;
-              #{PATH_FIRST_ARG.join('|')})
-                COMPREPLY=( $(compgen -d -- "$cur") )
-                __doma_ltrim
+              #{with_aliases(PATH_FIRST_ARG).join('|')})
+                __doma_paths -d
                 return
                 ;;
-              #{FILE_FIRST_ARG.join('|')})
-                COMPREPLY=( $(compgen -f -- "$cur") )
-                __doma_ltrim
+              #{with_aliases(FILE_FIRST_ARG).join('|')})
+                __doma_paths -f
                 return
                 ;;
         #{bash_first_arg_action_cases.chomp}
@@ -292,15 +340,15 @@ module Doma::CLI
     end
 
     # Builds the per-command `cmd) COMPREPLY=...` arms of the bash flag
-    # pool. Commands with neither flags nor actions are omitted — the
-    # `*) ;;` default catches them.
+    # pool. Actions are left out: they complete at cword 2 above, so here
+    # they could only be re-offered as values. Commands without flags are
+    # omitted — the `*) ;;` default catches them.
     private def bash_flag_pool_body : String
       String.build do |sb|
         COMMAND_SPEC.each do |spec|
-          words = spec.actions + spec.flags
-          next if words.empty?
-          label = "#{spec.name})".ljust(8)
-          sb << "    #{label}COMPREPLY=( $(compgen -W \"#{words.join(' ')}\" -- \"$cur\") ) ;;\n"
+          next if spec.flags.empty?
+          label = "#{with_aliases([spec.name]).join('|')})".ljust(8)
+          sb << "    #{label}COMPREPLY=( $(compgen -W \"#{spec.flags.join(' ')}\" -- \"$cur\") ) ;;\n"
         end
       end
     end
@@ -332,21 +380,31 @@ module Doma::CLI
             _wanted tags expl 'doma tag' compadd -a tags
           }
 
+          # Past `--` the words belong to the wrapped command (`run TAG -- cmd`).
+          local dd=${words[(i)--]}
+          if (( dd > 2 && dd < CURRENT )); then
+            shift dd words
+            (( CURRENT -= dd ))
+            _normal
+            return
+          fi
+
+          # First positional — unless a flag is being typed there.
           case $cmd in
-            #{TAG_FIRST_ARG.join('|')})
-              if (( CURRENT == 3 )); then
+            #{with_aliases(TAG_FIRST_ARG).join('|')})
+              if (( CURRENT == 3 )) && [[ $PREFIX != -* ]]; then
                 _doma_tags
                 return
               fi
               ;;
-            #{PATH_FIRST_ARG.join('|')})
-              if (( CURRENT == 3 )); then
+            #{with_aliases(PATH_FIRST_ARG).join('|')})
+              if (( CURRENT == 3 )) && [[ $PREFIX != -* ]]; then
                 _path_files -/
                 return
               fi
               ;;
-            #{FILE_FIRST_ARG.join('|')})
-              if (( CURRENT == 3 )); then
+            #{with_aliases(FILE_FIRST_ARG).join('|')})
+              if (( CURRENT == 3 )) && [[ $PREFIX != -* ]]; then
                 _files
                 return
               fi
@@ -359,6 +417,9 @@ module Doma::CLI
             -t|--tag|-x|--exclude) _doma_tags; return ;;
             --by)     _values 'sort key' #{BY_VALUES.join(' ')}; return ;;
             --ttl)    _values 'duration' #{TTL_VALUES.join(' ')}; return ;;
+            -p|--path)   _path_files -/; return ;;
+            -o|--output) _files; return ;;
+            #{FREE_VALUE_FLAGS.join('|')}) return 1 ;;
           esac
 
           # Per-command flag pool.
@@ -394,7 +455,8 @@ module Doma::CLI
     end
 
     # zsh action-dispatch arms (setup/config/trash). config also drops
-    # into a CURRENT==4 sub-case for the config key list.
+    # into a CURRENT==4 sub-case for the config key list, setup for the
+    # shell name.
     private def zsh_action_cases : String
       String.build do |sb|
         COMMAND_SPEC.each do |spec|
@@ -414,30 +476,35 @@ module Doma::CLI
             sb << "        esac\n"
             sb << "      fi\n"
           end
+          if spec.name == "setup"
+            sb << "      if (( CURRENT == 4 )); then\n"
+            sb << "        _values 'shell' #{ShellArg::SUPPORTED.join(' ')}\n"
+            sb << "        return\n"
+            sb << "      fi\n"
+          end
           sb << "      ;;\n"
         end
       end
     end
 
-    # zsh flag pool arms — emitted only for commands with flags AND no
-    # actions. Action commands are handled by the dispatcher arms above.
+    # zsh flag pool arms — one per command with flags. Action commands
+    # reach theirs after the action word (`trash empty --older`).
     private def zsh_flag_pool_body : String
       String.build do |sb|
         COMMAND_SPEC.each do |spec|
           next if spec.flags.empty?
-          next unless spec.actions.empty?
-          label = "#{spec.name})".ljust(8)
+          label = "#{with_aliases([spec.name]).join('|')})".ljust(8)
           sb << "    #{label}flags=(#{spec.flags.join(' ')}) ;;\n"
         end
       end
     end
 
-    # Fish condition for "the tag positional of `sub`": only while no
-    # positional has been typed yet (`rename` takes two), so tags aren't
-    # offered after `--` or as a second, rejected positional.
+    # Fish condition for "the first positional of `sub`" (aliases too):
+    # only while no positional has been typed yet (`rename` takes two),
+    # so nothing is offered after `--` or as a second, rejected positional.
     private def fish_positional(sub : String) : String
       max = sub == "rename" ? 3 : 2
-      "__fish_seen_subcommand_from #{sub}; and test (count (commandline -opc)) -le #{max}"
+      "__fish_seen_subcommand_from #{with_aliases([sub]).join(' ')}; and test (count (commandline -opc)) -le #{max}"
     end
 
     private def fish_script : String
@@ -462,10 +529,20 @@ module Doma::CLI
         lines << "complete -c doma -n '#{fish_positional(sub)}' " \
                  "-a '(command doma tags --names 2>/dev/null)' -d 'tag'"
       end
+      # Path-as-first-arg subcommands and path-valued flags
+      # (`complete -c doma -f` above turns file completion off).
+      PATH_FIRST_ARG.each do |sub|
+        lines << "complete -c doma -n '#{fish_positional(sub)}' -a '(__fish_complete_directories)'"
+      end
+      FILE_FIRST_ARG.each do |sub|
+        lines << "complete -c doma -n '#{fish_positional(sub)}' -F"
+      end
+      lines << "complete -c doma -n '__fish_seen_subcommand_from #{cmds_with_flag("--path")}' -s p -l path -x -a '(__fish_complete_directories)'"
+      lines << "complete -c doma -n '__fish_seen_subcommand_from #{cmds_with_flag("--output")}' -s o -l output -r -F"
       lines << ""
 
-      # -t/--tag value completion across the suite.
-      lines << "complete -c doma -s t -l tag -x -a '(command doma tags --names 2>/dev/null)' -d 'tag'"
+      # -t/--tag value completion, only where the command takes it.
+      lines << "complete -c doma -n '__fish_seen_subcommand_from #{cmds_with_flag("--tag")}' -s t -l tag -x -a '(command doma tags --names 2>/dev/null)' -d 'tag'"
       lines << "complete -c doma -n '__fish_seen_subcommand_from #{SET_CMDS.join(' ')}' -s x -l exclude -x -a '(command doma tags --names 2>/dev/null)' -d 'exclude tag'"
       # `@sets` next to tags wherever the selector takes them.
       sets = "-a '#{SET_NAMES}' -d 'set'"
@@ -474,8 +551,8 @@ module Doma::CLI
       (TAG_FIRST_ARG & SET_CMDS).each do |sub|
         lines << "complete -c doma -n '#{fish_positional(sub)}' #{sets}"
       end
-      lines << "complete -c doma -l by -x -a '#{BY_VALUES.join(' ')}' -d 'sort key'"
-      lines << "complete -c doma -l ttl -x -a '#{TTL_VALUES.join(' ')}' -d 'duration'"
+      lines << "complete -c doma -n '__fish_seen_subcommand_from #{cmds_with_flag("--by")}' -l by -x -a '#{BY_VALUES.join(' ')}' -d 'sort key'"
+      lines << "complete -c doma -n '__fish_seen_subcommand_from #{cmds_with_flag("--ttl")}' -l ttl -x -a '#{TTL_VALUES.join(' ')}' -d 'duration'"
       lines << ""
 
       # Action dispatchers (setup, config, trash). Plus the secondary
@@ -486,8 +563,10 @@ module Doma::CLI
         lines << "complete -c doma -n '__fish_seen_subcommand_from #{spec.name}; and not __fish_seen_subcommand_from #{actions_str}' " \
                  "-a '#{actions_str}' -d '#{spec.name} action'"
       end
-      lines << "complete -c doma -n '__fish_seen_subcommand_from config; and __fish_seen_subcommand_from get set unset' " \
+      lines << "complete -c doma -n '__fish_seen_subcommand_from config; and __fish_seen_subcommand_from get set unset; and test (count (commandline -opc)) -le 3' " \
                "-a '#{CONFIG_KEYS.join(' ')}' -d 'config key'"
+      lines << "complete -c doma -n '__fish_seen_subcommand_from setup; and __fish_seen_subcommand_from install init completion; and test (count (commandline -opc)) -le 3' " \
+               "-a '#{ShellArg::SUPPORTED.join(' ')}' -d 'shell'"
       lines << ""
 
       # Per-command long-flag pool. fish handles -h/--help natively, and
@@ -495,7 +574,7 @@ module Doma::CLI
       COMMAND_SPEC.each do |spec|
         spec.flags.each do |f|
           next unless f.starts_with?("--") && f != "--help"
-          lines << "complete -c doma -n '__fish_seen_subcommand_from #{spec.name}' -l #{f.lstrip('-')}"
+          lines << "complete -c doma -n '__fish_seen_subcommand_from #{with_aliases([spec.name]).join(' ')}' -l #{f.lstrip('-')}"
         end
       end
 
