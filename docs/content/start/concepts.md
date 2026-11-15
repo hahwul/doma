@@ -55,7 +55,7 @@ Re-tagging refreshes the clock. Adding a tag without `--ttl` makes it permanent.
 
 ## Soft delete
 
-`doma rm <path>` doesn't immediately destroy the row — it goes into a trash store under `~/.config/doma/trash/`, recoverable for 7 days via `doma trash list` / `doma trash restore <id>`. Same for `prune --gone`.
+`doma rm <path>` doesn't immediately destroy the row — it goes into a trash file at `~/.config/doma/trash.jsonl` (`<DOMA_HOME>/trash.jsonl`), recoverable for 7 days via `doma trash list` / `doma trash restore <id>`. Same for `prune --gone`.
 
 This matters in two real cases:
 
@@ -79,9 +79,9 @@ That last one is what makes `doma cd` possible — and the same primitive an AI 
 
 ## Where data lives
 
-Single SQLite file: `~/.config/doma/doma.db`. Override with `DOMA_DB`. Strict YAML config at `~/.config/doma/config.yml` (optional — defaults are sensible). Trash store under `~/.config/doma/trash/`. Schema migrations run transparently on open (`PRAGMA user_version`).
+Single SQLite file: `~/.config/doma/doma.db`. Override with `DOMA_DB`. Strict YAML config at `~/.config/doma/config.yml` (optional — defaults are sensible). Trash file at `<DOMA_HOME>/trash.jsonl` — it follows `DOMA_HOME`, not `DOMA_DB`, so databases sharing a home share one trash. Schema migrations run transparently on open (`PRAGMA user_version`).
 
-`doma doctor` prints all of this in one shot when you want to know what doma's actually doing.
+`doma doctor` prints the home, config and database paths in one shot when you want to know what doma's actually doing.
 
 ## What doma is *not*
 

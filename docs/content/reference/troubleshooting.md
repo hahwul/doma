@@ -77,15 +77,16 @@ If you wanted that tag, add it explicitly with `-t TAG`.
 
 ## Database locked / "another doma is running"
 
-doma uses SQLite WAL with `busy_timeout`, so concurrent reads from multiple shells work fine. A persistent lock usually means a previous process crashed mid-write. Check for stale `*.db-shm` / `*.db-wal` files next to `doma.db`, and if no doma is actually running, removing them is safe — SQLite will recreate on next open.
+doma uses SQLite WAL with `busy_timeout`, so concurrent reads from multiple shells work fine. A lock is released when the process holding it exits, so a persistent lock means some doma (or other SQLite client) is still running — find and stop it. **Don't delete `*.db-wal` / `*.db-shm`**: the `-wal` file can hold committed writes not yet copied into `doma.db`, and deleting it loses them. Running any doma command replays it; to fold it in explicitly, `sqlite3 ~/.config/doma/doma.db 'PRAGMA wal_checkpoint(TRUNCATE);'`.
 
 ## Reporting a bug
 
 Include the output of `doma doctor` and `doma version` in the issue. Those answer 80% of "what does your environment look like?" questions before we have to ask.
 
-If the problem is reproducible from a fresh DB, even better — point `DOMA_DB` at a scratch location and reproduce there:
+If the problem is reproducible from a fresh DB, even better — point `DOMA_HOME` and `DOMA_DB` at a scratch location and reproduce there (the trash lives under `DOMA_HOME`, so a scratch `DOMA_DB` alone would still write `rm` snapshots into your real trash):
 
 ```bash
-DOMA_DB=/tmp/doma-repro.db doma add /some/path -t test
-DOMA_DB=/tmp/doma-repro.db doma list
+export DOMA_HOME=/tmp/doma-repro DOMA_DB=/tmp/doma-repro/doma.db
+doma add /some/path -t test
+doma list
 ```

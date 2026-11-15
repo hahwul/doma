@@ -20,11 +20,11 @@ module Doma::CLI
       parser = OptionParser.new do |p|
         p.banner = "Usage: doma prune (--gone | --expired) [--hard]"
         p.on("--gone", "Remove every entry whose path no longer exists on disk") do
-          raise Doma::ValidationError.new("--gone and --expired cannot be combined") if mode
+          raise Doma::ValidationError.new("--gone and --expired cannot be combined") if mode && mode != :gone
           mode = :gone
         end
         p.on("--expired", "Remove every tag whose TTL has elapsed") do
-          raise Doma::ValidationError.new("--gone and --expired cannot be combined") if mode
+          raise Doma::ValidationError.new("--gone and --expired cannot be combined") if mode && mode != :expired
           mode = :expired
         end
         # Mirrors `rm --hard`. With it, --gone skips the trash snapshot
@@ -37,6 +37,14 @@ module Doma::CLI
         p.on("-h", "--help", "Show help") do
           puts p
           exit 0
+        end
+        # prune is a class-level sweep; a stray path (`prune --gone ~/x`)
+        # must not silently widen into "every dead entry".
+        p.unknown_args do |before, after|
+          extra = before + after
+          unless extra.empty?
+            raise Doma::ValidationError.new("prune takes no positional arguments: #{extra.join(' ')} (use `doma rm <path>` for one entry)")
+          end
         end
       end
       parser.parse(args)
@@ -102,12 +110,15 @@ module Doma::CLI
           pending.each { |(_, snap)| Doma::Trash.discard!(snap) }
           raise ex
         end
-        sample_ids = pending.first(3).map { |(_, snap)| snap.display_id }.join(", ")
-        more = pending.size > 3 ? ", ..." : ""
-        Doma::Logger.success(
-          "trashed #{removed} missing path(s) " \
-          "(restore with `doma trash restore #{sample_ids}#{more}`)"
-        )
+        # `trash restore` takes one id, so only print a pasteable
+        # command when there is exactly one.
+        hint =
+          if pending.size == 1
+            "restore with `doma trash restore #{pending.first[1].display_id}`"
+          else
+            "restore each with `doma trash restore <id>`; ids in `doma trash list`"
+          end
+        Doma::Logger.success "trashed #{removed} missing path(s) (#{hint})"
       end
     end
 

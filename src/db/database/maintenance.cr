@@ -25,6 +25,10 @@ class Doma::Database
     rows.compact_map do |row|
       id, short_id, path, basename = row
       Dir.exists?(path) ? nil : Entry.new(id, short_id, path, basename, [] of String)
+    rescue File::Error
+      # EACCES on a parent (locked dir, TCC, unmounted share): the path
+      # may well still exist, so it is not "dead" — never sweep it.
+      nil
     end
   end
 
