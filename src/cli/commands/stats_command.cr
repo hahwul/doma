@@ -37,6 +37,10 @@ module Doma::CLI
           puts p
           exit 0
         end
+        p.unknown_args do |before, after|
+          extra = before + after
+          raise Doma::ValidationError.new("stats takes no positional arguments: #{extra.join(' ')}") unless extra.empty?
+        end
       end
       parser.parse(args)
 
@@ -107,8 +111,11 @@ module Doma::CLI
         top_tags.each do |tag|
           bar_width = max == 0 ? 0 : ((tag.count.to_f / max) * 24).to_i
           bar = "█" * bar_width
-          tag_label = color ? "##{tag.name}".colorize(:yellow).to_s : "##{tag.name}"
-          puts "  #{tag_label.ljust(24)} #{tag.count.to_s.rjust(4)}  #{bar}"
+          # Pad the plain text, then color: `ljust` on a colorized string
+          # counts the invisible ANSI bytes and shifts long tags' columns.
+          padded = "##{tag.name}".ljust(24)
+          tag_label = color ? padded.colorize(:yellow).to_s : padded
+          puts "  #{tag_label} #{tag.count.to_s.rjust(4)}  #{bar}"
         end
       end
 

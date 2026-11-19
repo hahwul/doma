@@ -85,7 +85,7 @@ module Doma::CLI
           # the directory on disk yet" and "I'm syncing from another
           # host" — the previous bare error pushed users to make a
           # placeholder dir or hand-edit the database.
-          unless Dir.exists?(new_abs)
+          unless Doma::Validator.directory?(new_abs)
             raise Doma::ValidationError.new(
               "not a directory: #{new_abs}",
               hint: "pass --allow-missing if the destination isn't on this machine yet " \

@@ -261,7 +261,9 @@ module Doma::CLI
       # the link, and make sure a custom DOMA_CONFIG's directory exists.
       path = File.realpath(path) if File.symlink?(path) && File.exists?(path)
       # Write atomically so a crash mid-write doesn't truncate the file.
-      tmp = "#{path}.tmp"
+      # Per-process name: two `config set`s sharing one tmp file would
+      # rename (or clean up) each other's and fail with ENOENT.
+      tmp = "#{path}.#{Process.pid}.tmp"
       write_or_config_error(path) do
         Dir.mkdir_p(File.dirname(path))
         File.write(tmp, settings.to_yaml)

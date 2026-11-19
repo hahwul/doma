@@ -198,12 +198,14 @@ class Doma::Database
     # `Array(DB::Any)` is the type the driver wants for splatted
     # parameters; we widen the Int64 ids into it before passing.
     args = uniq_ids.map { |id| id.as(DB::Any) }
+    # Name order, like the tag lists, so `export` output stays diffable.
     rows = @db.query_all(
       "SELECT dt.directory_id, t.name, dt.expires_at FROM directory_tags dt " \
       "INNER JOIN tags t ON t.id = dt.tag_id " \
       "WHERE dt.directory_id IN (#{placeholders}) " \
       "  AND dt.expires_at IS NOT NULL" \
-      "#{future_only}",
+      "#{future_only} " \
+      "ORDER BY t.name",
       args: args, as: {Int64, String, Int64}
     )
     rows.each do |row|

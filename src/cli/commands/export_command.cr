@@ -49,8 +49,15 @@ module Doma::CLI
         if raw = output
           path = Doma::Validator.canonicalize(raw)
           validate_output_path!(path)
-          write_atomic(db, format, path, portable)
-          Doma::Logger.success "exported to #{path}"
+          if File.exists?(path) && !File.file?(path)
+            # A device or pipe (`-o /dev/stdout`) can't take a temp file
+            # beside it or be renamed over: write straight through, and
+            # keep the success line out of what may be the data stream.
+            io_error { File.open(path, "w") { |f| Doma::Exporter.write(db, format, f, portable) } }
+          else
+            write_atomic(db, format, path, portable)
+            Doma::Logger.success "exported to #{path}"
+          end
         else
           Doma::Exporter.write(db, format, STDOUT, portable)
         end
@@ -61,28 +68,33 @@ module Doma::CLI
     # ValidationError, so the user gets "output path is a directory"
     # instead of the raw rename/open error the runtime would surface.
     private def validate_output_path!(path : String)
-      if Dir.exists?(path)
+      if Doma::Validator.directory?(path)
         raise Doma::ValidationError.new("output path is a directory: #{path}")
       end
       parent = File.dirname(path)
-      unless Dir.exists?(parent)
+      unless Doma::Validator.directory?(parent)
         raise Doma::ValidationError.new("output directory does not exist: #{parent}")
       end
     end
 
     # Atomic write via temp + rename so a crashed export never leaves a
-    # half-written file in place of a previous good snapshot. Translates
-    # IO failures into a friendly Doma::Error so the runner's generic
-    # rescue (which prints "internal error:") never sees them.
+    # half-written file in place of a previous good snapshot.
     private def write_atomic(db : Doma::Database, format : Doma::Exporter::Format, path : String, portable : Bool)
       tmp = "#{path}.#{Process.pid}.tmp"
-      begin
+      io_error do
         File.open(tmp, "w") { |f| Doma::Exporter.write(db, format, f, portable) }
         File.rename(tmp, path)
-      rescue ex
+      ensure
         File.delete?(tmp)
-        raise ex.is_a?(IO::Error) ? Doma::Error.new("export failed: #{ex.message}") : ex
       end
+    end
+
+    # Translates IO failures into a friendly Doma::Error so the runner's
+    # generic rescue (which prints "internal error:") never sees them.
+    private def io_error(&)
+      yield
+    rescue ex : IO::Error
+      raise Doma::Error.new("export failed: #{ex.message}")
     end
   end
 end
