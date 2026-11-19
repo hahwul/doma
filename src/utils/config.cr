@@ -65,6 +65,9 @@ module Doma
     rescue ex : ConfigError
       raise ex
     rescue ex
+      # `mkdir_p` checks then creates, so concurrent first runs race: the
+      # loser gets EEXIST for a directory that is there by now.
+      return if ex.is_a?(File::AlreadyExistsError) && Dir.exists?(home)
       raise ConfigError.new("cannot create DOMA_HOME (#{target}): #{ex.message}")
     end
   end
@@ -218,8 +221,11 @@ module Doma
           value = $2
           allowed = ENUM_VALUES[short_name]?
           allowed ? "invalid value '#{value}' (allowed: #{allowed.join(", ")})" : "invalid enum value '#{value}'"
-        when /Expected (\w+), not (\w+)/
-          "expected #{$1}, got #{$2}"
+        when /Expected (\w+), not (?:[\w:]+::)?(\w+)/
+          "expected #{$1}, got #{$2.downcase}"
+        when /Couldn't parse \((?:[\w:]+::)?(\w+) \| Nil\)/
+          # A nilable field given the wrong shape (`auto_tag: 5`).
+          "invalid value (expected #{EXPECTED_SHAPES[$1]? || $1.downcase})"
         else
           raw
         end
@@ -233,6 +239,11 @@ module Doma
     VALID_KEYS  = %w[db_path selector auto_tag]
     ENUM_VALUES = {
       "SelectorMode" => SelectorMode.values.map(&.to_s.downcase),
+    }
+    EXPECTED_SHAPES = {
+      "AutoTag" => "basename / git / project, each true or false",
+      "Bool"    => "true or false",
+      "String"  => "a string",
     }
   end
 end

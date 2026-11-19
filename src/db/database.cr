@@ -81,6 +81,8 @@ module Doma
         unless Dir.exists?(parent)
           begin
             FileUtils.mkdir_p(parent)
+          rescue File::AlreadyExistsError
+            # Lost the check-then-create race to a concurrent first run.
           rescue ex
             raise Doma::ConfigError.new("cannot create database directory (#{parent}): #{ex.message}")
           end

@@ -17,6 +17,10 @@ module Doma::CLI
           puts p
           exit 0
         end
+        p.unknown_args do |before, after|
+          extra = before + after
+          raise Doma::ValidationError.new("doctor takes no positional arguments: #{extra.join(' ')}") unless extra.empty?
+        end
       end
       parser.parse(args)
 

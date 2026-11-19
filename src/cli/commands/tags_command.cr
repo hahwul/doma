@@ -29,6 +29,14 @@ module Doma::CLI
           puts p
           exit 0
         end
+        # `doma tags work` used to list every tag as if `work` filtered it.
+        p.unknown_args do |before, after|
+          extra = before + after
+          unless extra.empty?
+            raise Doma::ValidationError.new("tags takes no positional arguments: #{extra.join(' ')}",
+              hint: "to see what carries a tag: doma list -t #{extra.first}")
+          end
+        end
       end
       parser.parse(args)
 

@@ -81,7 +81,7 @@ module Doma::CLI
           # (`cafe`, `added`) still find their directory.
           # An existing `./<name>` *is* a filesystem path, so it gets the
           # plain not-registered answer rather than some other entry.
-          if name_like?(raw) && !Dir.exists?(canonical) && (info = resolve_by_search(db, raw))
+          if name_like?(raw) && !dir?(canonical) && (info = resolve_by_search(db, raw))
             render_entry(db, info, json_mode, raw)
             return
           end
@@ -142,13 +142,22 @@ module Doma::CLI
       # doesn't silently disappear from the detail view. The render
       # layer marks "expired" rows distinctly.
       ttl_map = db.tag_expirations(info.id, include_past: true)
-      exists = Dir.exists?(info.path)
+      exists = dir?(info.path)
 
       if json_mode
         render_json(info, ttl_map, exists)
       else
         render_text(info, ttl_map, exists, raw)
       end
+    end
+
+    # `Dir.exists?` raises on EACCES (parent without search permission).
+    # The path may well exist, so it isn't reported gone — same call as
+    # `list --check`.
+    private def dir?(path : String) : Bool
+      Dir.exists?(path)
+    rescue File::Error
+      true
     end
 
     # Returns {canonical_path, Entry?}. Entry is nil if not

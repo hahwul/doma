@@ -1,6 +1,7 @@
 require "option_parser"
 require "../../db/database"
 require "../../services/trash"
+require "../../tui/text"
 require "../../utils/duration"
 require "../../utils/errors"
 require "../../utils/logger"
@@ -91,9 +92,11 @@ module Doma::CLI
         # Truncate from the left with an ellipsis so the *end* of the
         # path (the part that disambiguates similar entries) stays
         # visible. Final ljust pads short paths to the same column width.
-        path = e.path.size > 50 ? "…#{e.path[-49..-1]}" : e.path
+        # Display width, not `size`: a CJK/Hangul char takes two columns.
+        path = Doma::TUI::Text.display_width(e.path) > 50 ? "…#{Doma::TUI::Text.tail_fit(e.path, 49)}" : e.path
+        pad = " " * (51 - Doma::TUI::Text.display_width(path))
         tags = e.tags.empty? ? "-" : e.tags.join(",")
-        puts "#{id}  #{age}  #{path.ljust(51)} #{tags}"
+        puts "#{id}  #{age}  #{path}#{pad} #{tags}"
       end
     end
 

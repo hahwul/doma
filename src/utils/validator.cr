@@ -146,7 +146,7 @@ module Doma
 
     # `Dir.exists?` raises (EACCES) under a non-traversable parent instead
     # of returning false; surface that as a per-path ValidationError.
-    private def directory?(abs : String) : Bool
+    def directory?(abs : String) : Bool
       Dir.exists?(abs)
     rescue ex : File::Error
       raise ValidationError.new("cannot access #{abs}: #{ex.message}")
