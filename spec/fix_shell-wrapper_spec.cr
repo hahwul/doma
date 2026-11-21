@@ -43,6 +43,19 @@ private FISH_INIT  = "doma setup init fish | source\n"
 
 describe "shell wrapper regressions" do
   {"bash", "zsh", "fish"}.each do |shell|
+    it "[#{shell}] accepts picker options without a tag" do
+      pending! "binary not built" unless File.exists?(SW_BIN)
+      pending! "#{shell} not installed" unless Process.find_executable(shell)
+      sw_seed do |home|
+        init = shell == "fish" ? FISH_INIT : POSIX_INIT
+        result = sw_sh(shell, init + "doma cd --first --query work2 && printf '%s' \"$PWD\"", home)
+        result[:status].exit_code.should eq(0)
+        result[:out].should eq(File.join(home, "work2"))
+      end
+    end
+  end
+
+  {"bash", "zsh", "fish"}.each do |shell|
     it "[#{shell}] preserves embedded and trailing newlines in the selected path" do
       pending! "binary not built" unless File.exists?(SW_BIN)
       pending! "#{shell} not installed" unless Process.find_executable(shell)
