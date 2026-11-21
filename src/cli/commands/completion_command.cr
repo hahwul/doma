@@ -247,12 +247,15 @@ module Doma::CLI
 
           # Past `--` the words belong to the wrapped command (`run TAG --
           # cmd`): a command name, then files, never doma's own flags.
-          local i
+          local i move_flags=0
           for (( i = 2; i < cword; i++ )); do
-            if [ "${words[i]}" = "--" ]; then
-              if [ "$i" -eq $(( cword - 1 )) ]; then __doma_paths -c; else __doma_paths -f; fi
-              return
-            fi
+            case "${words[i]}" in
+              --)
+                if [ "$i" -eq $(( cword - 1 )) ]; then __doma_paths -c; else __doma_paths -f; fi
+                return
+                ;;
+              --allow-missing) move_flags=$(( move_flags + 1 )) ;;
+            esac
           done
 
           # Flags that take a tag argument across multiple commands.
@@ -283,11 +286,12 @@ module Doma::CLI
               ;;
           esac
 
-          # First positional after the subcommand: complete tags for
-          # commands that take a tag there. Skip if the user is typing
-          # a flag (cur starts with `-`) — they want flag completion,
-          # not value completion, even at this position.
-          if [ "$cword" -eq 2 ] && [[ "$cur" != -* ]]; then
+          # Complete the first positional, and the destination for move.
+          local last_positional=2
+          case "$cmd" in
+            #{with_aliases(["move"]).join('|')}) last_positional=$(( 3 + move_flags )) ;;
+          esac
+          if (( cword >= 2 && cword <= last_positional )) && [[ "$cur" != -* ]]; then
             case "$cmd" in
               #{with_aliases(TAG_FIRST_ARG).join('|')})
                 __doma_reply "$(__doma_tag_words "$cmd")"
@@ -393,7 +397,19 @@ module Doma::CLI
             return
           fi
 
-          # First positional — unless a flag is being typed there.
+          # Complete the first positional, and the destination for move.
+          local last_positional=3
+          case $cmd in
+            #{with_aliases(["move"]).join('|')})
+              last_positional=4
+              local i
+              for (( i = 3; i < CURRENT; i++ )); do
+                if [[ $words[i] = --allow-missing ]]; then
+                  (( last_positional += 1 ))
+                fi
+              done
+              ;;
+          esac
           case $cmd in
             #{with_aliases(TAG_FIRST_ARG).join('|')})
               if (( CURRENT == 3 )) && [[ $PREFIX != -* ]]; then
@@ -402,7 +418,7 @@ module Doma::CLI
               fi
               ;;
             #{with_aliases(PATH_FIRST_ARG).join('|')})
-              if (( CURRENT == 3 )) && [[ $PREFIX != -* ]]; then
+              if (( CURRENT >= 3 && CURRENT <= last_positional )) && [[ $PREFIX != -* ]]; then
                 _path_files -/
                 return
               fi
@@ -503,12 +519,12 @@ module Doma::CLI
       end
     end
 
-    # Fish condition for "the first positional of `sub`" (aliases too):
-    # only while no positional has been typed yet (`rename` takes two),
-    # so nothing is offered after `--` or as a second, rejected positional.
+    # Complete each command's positional slots, including aliases.
     private def fish_positional(sub : String) : String
-      max = sub == "rename" ? 3 : 2
-      "__fish_seen_subcommand_from #{with_aliases([sub]).join(' ')}; and test (count (commandline -opc)) -le #{max}"
+      max = sub.in?({"move", "rename"}) ? 3 : 2
+      words = "commandline -opc"
+      words = "string match -v -- --allow-missing (#{words})" if sub == "move"
+      "__fish_seen_subcommand_from #{with_aliases([sub]).join(' ')}; and test (count (#{words})) -le #{max}"
     end
 
     private def fish_script : String
