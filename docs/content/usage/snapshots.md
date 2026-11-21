@@ -48,7 +48,7 @@ doma import doma.json                  # merge with existing data
 doma import doma.json --replace        # wipe DB first, then import
 ```
 
-The whole import runs in one transaction — a malformed entry rolls everything back.
+The whole import runs in one transaction. With `--replace`, an invalid entry aborts the import and preserves the existing database.
 
 `--replace` requires `--yes` when stdin isn't a TTY:
 
@@ -56,7 +56,7 @@ The whole import runs in one transaction — a malformed entry rolls everything 
 doma import doma.json --replace --yes
 ```
 
-Import skips the "directory exists on disk" check: a snapshot from machine A may reference paths machine B doesn't have, and those entries are registered anyway (`doma list --check` marks them `[gone]`). An entry with an invalid tag or a non-absolute path is warned about and skipped.
+Import skips the "directory exists on disk" check: a snapshot from machine A may reference paths machine B doesn't have, and those entries are registered anyway (`doma list --check` marks them `[gone]`). A merge import warns about and skips entries with invalid tags or non-absolute paths.
 
 ### Cloning what's missing
 
