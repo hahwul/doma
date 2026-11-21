@@ -103,7 +103,7 @@ module Doma::CLI
           snap ? {e.id, snap} : nil
         end
         # Trash first (see `rm`): a failed trash write must not lose rows.
-        pending.each { |(_, snap)| Doma::Trash.add!(snap) }
+        Doma::Trash.add!(pending.map(&.[1]))
         removed = begin
           db.remove_ids!(pending.map { |(id, _)| id })
         rescue ex
