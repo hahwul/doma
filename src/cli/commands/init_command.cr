@@ -94,7 +94,9 @@ module Doma::CLI
           __doma_cd_file="$(command mktemp "${TMPDIR:-/tmp}/doma.cd.XXXXXX")" || return $?
           DOMA_CD_FILE="$__doma_cd_file" command doma ${__doma_g[@]+"${__doma_g[@]}"} "$@"
           __doma_rc=$?
-          __doma_target="$(command cat "$__doma_cd_file" 2>/dev/null)"
+          # A suffix keeps command substitution from stripping trailing newlines.
+          __doma_target="$(command cat "$__doma_cd_file" 2>/dev/null; builtin printf '.')"
+          __doma_target="${__doma_target%.}"
           command rm -f "$__doma_cd_file"
           if [ -n "$__doma_target" ]; then
             builtin cd -- "$__doma_target" || return $?
@@ -150,7 +152,7 @@ module Doma::CLI
           command doma $__doma_g $argv
           set -l __doma_rc $status
           set -e DOMA_CD_FILE
-          set -l __doma_target (command cat $__doma_cd_file 2>/dev/null)
+          set -l __doma_target (builtin string collect --no-trim-newlines 2>/dev/null < "$__doma_cd_file")
           command rm -f $__doma_cd_file
           if test -n "$__doma_target"
             builtin cd -- $__doma_target; or return $status

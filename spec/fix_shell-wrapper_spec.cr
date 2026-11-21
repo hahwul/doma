@@ -42,6 +42,26 @@ private POSIX_INIT = %(eval "$(doma setup init bash)"\n)
 private FISH_INIT  = "doma setup init fish | source\n"
 
 describe "shell wrapper regressions" do
+  {"bash", "zsh", "fish"}.each do |shell|
+    it "[#{shell}] preserves embedded and trailing newlines in the selected path" do
+      pending! "binary not built" unless File.exists?(SW_BIN)
+      pending! "#{shell} not installed" unless Process.find_executable(shell)
+      sw_seed do |home|
+        path = File.join(home, "line\nbreak\n")
+        Dir.mkdir(path)
+        # A trimmed selection must not silently change to a different directory.
+        Dir.mkdir(path.chomp)
+        init = shell == "fish" ? FISH_INIT : POSIX_INIT
+        setup = init + "doma add \"$TEST_DIR\" -t newline"
+        sw_sh(shell, setup, home, {"TEST_DIR" => path})[:status].success?.should be_true
+
+        result = sw_sh(shell, init + "doma cd newline --first && printf '%s' \"$PWD\"", home)
+        result[:status].exit_code.should eq(0)
+        result[:out].should eq(path)
+      end
+    end
+  end
+
   # /bin/bash is 3.2 on macOS: empty arrays trip `set -u` there.
   {"bash", "zsh", "/bin/bash"}.each do |shell|
     it "[#{shell}] cd --help prints usage, globals before cd, extra args, cd failure, aliased cat" do
