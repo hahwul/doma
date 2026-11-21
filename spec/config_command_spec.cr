@@ -150,6 +150,25 @@ describe "doma config" do
     end
   end
 
+  it "rejects multi-document configs without rewriting them" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      path = File.join(home, "config.yml")
+      env = {"DOMA_HOME" => home}
+      {"first", "bogus"}.each do |selector|
+        content = "---\nselector: #{selector}\n---\nauto_tag:\n  git: true\n"
+        File.write(path, content)
+
+        get = run(["config", "get", "selector"], env)
+        get[:status].exit_code.should eq(5)
+        get[:err].should contain("expected one YAML document")
+        run(["config", "set", "selector", "first"], env)[:status].exit_code.should eq(5)
+        run(["config", "unset", "selector"], env)[:status].exit_code.should eq(5)
+        File.read(path).should eq(content)
+      end
+    end
+  end
+
   it "[unset] cleans up the parent map when no siblings remain" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     with_home do |home|
