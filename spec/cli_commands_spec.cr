@@ -1524,12 +1524,14 @@ describe "doma add flags" do
   it "[--dry-run] resolves tags but writes nothing" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     with_home do |home|
-      r = run(["add", "/tmp", "-t", "preview", "--dry-run"], {"DOMA_HOME" => home})
+      state = File.join(home, "state")
+      database = File.join(home, "data", "custom.db")
+      env = {"DOMA_HOME" => state, "DOMA_DB" => database}
+      r = run(["add", "/tmp", "-t", "preview", "--dry-run"], env)
       r[:status].exit_code.should eq(0)
       r[:out].should contain("[dry-run] would add")
-
-      list = run(["list", "--paths"], {"DOMA_HOME" => home})
-      list[:out].should be_empty
+      File.exists?(state).should be_false
+      File.exists?(File.dirname(database)).should be_false
     end
   end
 
