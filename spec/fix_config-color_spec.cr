@@ -67,12 +67,13 @@ describe "fix: config-color" do
     end
   end
 
-  it "#82 config get db_path stays empty when DOMA_DB overrides it" do
+  it "config get db_path prints DOMA_DB when no path is set in the file" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     with_home do |home|
-      r = run(["config", "get", "db_path"], home, {"DOMA_DB" => File.join(home, "other.db")})
+      path = File.join(home, "other.db")
+      r = run(["config", "get", "db_path"], home, {"DOMA_DB" => path})
       r[:status].exit_code.should eq(0)
-      r[:out].strip.should eq("")
+      r[:out].chomp.should eq(path)
     end
   end
 

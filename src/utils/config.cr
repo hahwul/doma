@@ -31,7 +31,7 @@ module Doma
       File.join(home, "config.yml")
     end
 
-    def db_path : String
+    def db_path(settings : Settings? = nil) : String
       # A blank value on either source (`DOMA_DB=""`, `db_path: ""` in
       # config.yml, or `config set db_path ""`) used to be truthy and
       # resolve to the cwd via `File.expand_path("")`, breaking every
@@ -40,7 +40,7 @@ module Doma
       if env = ENV["DOMA_DB"]?.presence
         return Validator.expand_home(env)
       end
-      if cfg = Settings.current.db_path.try(&.presence)
+      if cfg = (settings || Settings.current).db_path.try(&.presence)
         # A relative `db_path` is relative to the config file, not the
         # cwd — otherwise every directory silently gets its own empty db.
         cfg = File.join(File.dirname(config_path), cfg) unless Validator.cwd_independent?(cfg)
