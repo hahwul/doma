@@ -108,12 +108,11 @@ module Doma::CLI
       # Consult an existing database for a preview. A first-time preview
       # can treat a missing database as empty without creating one.
       if dry_run
-        failures = 0
         db_path = Doma::Config.db_path
         preview_db = Doma::Database.open(db_path) if File.exists?(db_path)
-        begin
-          results = [] of JsonRow
-          failures = process_each(positional, json_mode ? results : nil) do |path|
+        results = [] of JsonRow
+        failures = begin
+          process_each(positional, json_mode ? results : nil) do |path|
             short_id_redirect_hint(preview_db, path)
             abs = Doma::Validator.path!(path)
             user_tags = Doma::Validator.tags!(raw_tags)
@@ -136,10 +135,10 @@ module Doma::CLI
               Doma::Logger.info "[dry-run] would add #{abs} #{summary}"
             end
           end
-          puts results.to_json if json_mode
         ensure
           preview_db.try &.close
         end
+        puts results.to_json if json_mode
         exit 2 if failures > 0
         return
       end
