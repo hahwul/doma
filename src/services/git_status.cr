@@ -60,7 +60,9 @@ module Doma
     def probe(path : String) : Status
       # git exits non-zero (128) outside a work tree; 0 for both clean
       # and dirty repos. So success cleanly separates repo from non-repo.
-      capture(path, ["status", "--porcelain=v2", "--branch", "--show-stash"]).try { |text| parse(text) } || NON_GIT
+      # The dirty count is per file and must hold even if the user's git
+      # config hides untracked files or collapses them into directories.
+      capture(path, ["status", "--porcelain=v2", "--branch", "--show-stash", "--untracked-files=all"]).try { |text| parse(text) } || NON_GIT
     end
 
     # stdout of `git -C path <args>`, or nil when git exits non-zero or
