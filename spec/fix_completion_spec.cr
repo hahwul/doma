@@ -8,6 +8,17 @@ private DOMA_BIN = File.expand_path("../bin/doma", __DIR__)
 private ZSH_OK   = !Process.find_executable("zsh").nil?
 private FISH_OK  = !Process.find_executable("fish").nil?
 
+private MOVE_LINES = [
+  "doma move d/plain d/wi",
+  "doma mv d/plain d/wi",
+  "doma move --allow-missing d/p",
+  "doma mv --allow-missing d/plain d/wi",
+  "doma move d/plain --allow-missing d/wi",
+  "doma mv --allow-missing d/plain --allow-missing d/wi",
+  "doma mv --allow-missing d/plain d/plain d/wi",
+  "doma mv d/plain --allow",
+]
+
 private def script(shell : String) : String
   res = IO::Memory.new
   Process.run(DOMA_BIN, ["setup", "completion", shell], output: res)
@@ -99,6 +110,32 @@ describe "completion fixes" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     res = bash(["doma ls --pi", "doma mv d/p", "doma remove d/p"])
     res.should eq(["--pick|", "d/plain|", "d/plain|"])
+  end
+
+  it "completes the move destination in bash" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    bash(MOVE_LINES).should eq([
+      "d/with\\ space|", "d/with\\ space|", "d/plain|", "d/with\\ space|",
+      "d/with\\ space|", "d/with\\ space|", "|", "--allow-missing|",
+    ])
+  end
+
+  it "completes the move destination in zsh" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    pending! "zsh not on PATH" unless ZSH_OK
+    res = zsh(MOVE_LINES)
+    res[0..5].should eq(Array.new(6, "_path_files -/"))
+    res[6].should_not contain("_path_files")
+    res[7].should contain("--allow-missing")
+  end
+
+  it "completes the move destination in fish" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    pending! "fish not on PATH" unless FISH_OK
+    fish(MOVE_LINES).should eq([
+      "d/with space/", "d/with space/", "d/plain/", "d/with space/",
+      "d/with space/", "d/with space/", "--allow-missing",
+    ])
   end
 
   it "[#60] bash doesn't re-offer action words at value positions" do
