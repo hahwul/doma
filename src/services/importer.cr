@@ -51,10 +51,11 @@ module Doma
       apply(db, snapshot, mode, dry_run)
     end
 
-    # Nothing to preserve at `path`: missing, or an empty directory (which
-    # `git clone` accepts as a destination).
+    # A missing path or empty directory can be cloned into. Inspect the
+    # entry itself so a dangling symlink still counts as occupied.
     def absent?(path : String) : Bool
-      !Dir.exists?(path) || Dir.empty?(path)
+      info = File.info?(path, follow_symlinks: false)
+      !info || (info.directory? && Dir.empty?(path))
     rescue File::Error
       # Exists but unreadable: not something to clone into.
       false
