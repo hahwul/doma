@@ -105,22 +105,20 @@ module Doma::CLI
       # config-on auto-tagging, which is meant to be magic.
       git_explicit = auto_git == true
 
-      # Dry-run path: resolve everything but never open a writable db.
-      # Done as a separate branch (rather than a flag inside the loop)
-      # because there's no point even touching the database for a preview.
+      # Consult an existing database for a preview. A first-time preview
+      # can treat a missing database as empty without creating one.
       if dry_run
-        # Read-only DB just to check for short_id collisions in the
-        # pre-validation hint. Same rationale as the non-dry-run branch.
-        failures = 0
-        Doma::Database.open do |preview_db|
-          results = [] of JsonRow
-          failures = process_each(positional, json_mode ? results : nil) do |path|
+        db_path = Doma::Config.db_path
+        preview_db = Doma::Database.open(db_path) if File.exists?(db_path)
+        results = [] of JsonRow
+        failures = begin
+          process_each(positional, json_mode ? results : nil) do |path|
             short_id_redirect_hint(preview_db, path)
             abs = Doma::Validator.path!(path)
             user_tags = Doma::Validator.tags!(raw_tags)
             derived = derive_tags(abs, use_basename, use_git, git_explicit, use_project) - user_tags
             applied = (user_tags + derived).uniq
-            _, unchanged = plan(preview_db, abs, user_tags, derived, expires_at)
+            unchanged = preview_db.try { |db| plan(db, abs, user_tags, derived, expires_at)[1] } || false
             summary = summarize(user_tags, derived, ttl_label)
             if json_mode
               results << JsonRow{
@@ -137,8 +135,10 @@ module Doma::CLI
               Doma::Logger.info "[dry-run] would add #{abs} #{summary}"
             end
           end
-          puts results.to_json if json_mode
+        ensure
+          preview_db.try &.close
         end
+        puts results.to_json if json_mode
         exit 2 if failures > 0
         return
       end
@@ -285,17 +285,18 @@ module Doma::CLI
     # them at the correct command instead of canonicalizing
     # `<cwd>/<id>` and failing with "not a directory". Pure no-op for
     # everyday path inputs.
-    private def short_id_redirect_hint(db : Doma::Database, raw : String)
+    private def short_id_redirect_hint(db : Doma::Database?, raw : String)
       return if File.exists?(raw)
       return unless Doma::ShortIdResolver.looks_like?(raw)
 
-      if active = Doma::ShortIdResolver.resolve(db, raw)
+      if active = db.try { |database| Doma::ShortIdResolver.resolve(database, raw) }
         raise Doma::ValidationError.new(
           "looks like a short_id, not a path: #{raw}",
           "already registered as #{active}. " \
           "To re-tag, run: doma add #{active} -t <tag>"
         )
       end
+      return unless File.exists?(Doma::Trash.file_path)
       if entry = Doma::Trash.find_by_short_id(raw.downcase)
         raise Doma::ValidationError.new(
           "looks like a short_id, not a path: #{raw}",
