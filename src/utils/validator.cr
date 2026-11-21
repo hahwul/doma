@@ -126,9 +126,8 @@ module Doma
       )
     end
 
-    # Canonicalize a user-supplied path. By default the path must exist; pass
-    # `must_exist: false` for import flows that may reference paths from
-    # other machines.
+    # Canonicalize a directory path. Pass `must_exist: false` to allow an
+    # absent path, such as the destination of a planned move.
     #
     # Leading/trailing spaces are legal in directory names, so the path is
     # used as given (like `canonicalize`); only a blank one is rejected.
@@ -138,7 +137,7 @@ module Doma
       if abs.bytesize > MAX_PATH_LEN
         raise ValidationError.new("path exceeds #{MAX_PATH_LEN} bytes")
       end
-      if must_exist && !directory?(abs)
+      if (must_exist || File.exists?(abs)) && !directory?(abs)
         raise ValidationError.new("not a directory: #{abs}")
       end
       abs

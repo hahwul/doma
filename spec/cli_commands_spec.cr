@@ -239,6 +239,28 @@ describe "doma move" do
     end
   end
 
+  it "allows a missing move destination but rejects an existing file" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      source = File.join(home, "source")
+      file = File.join(home, "file")
+      missing = File.join(home, "future")
+      Dir.mkdir(source)
+      File.write(file, "keep")
+      env = {"DOMA_HOME" => home}
+      run(["add", source, "-t", "p"], env)[:status].success?.should be_true
+
+      rejected = run(["move", source, file, "--allow-missing"], env)
+      rejected[:status].exit_code.should eq(2)
+      rejected[:err].should contain("not a directory")
+      run(["list", "-t", "p", "--paths"], env)[:out].chomp.should eq(File.realpath(source))
+      File.read(file).should eq("keep")
+
+      run(["move", source, missing, "--allow-missing"], env)[:status].success?.should be_true
+      run(["list", "-t", "p", "--paths"], env)[:out].chomp.should eq(File.join(File.realpath(home), "future"))
+    end
+  end
+
   it "echoes the canonical stored path, not the raw argument" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     with_home do |home|
