@@ -135,6 +135,19 @@ describe Doma::GitDetector do
     end
   end
 
+  {
+    "ssh://git@git.example.com:2222/widget.git",
+    "git@git.example.com:widget.git",
+    "git@git.example.com:/widget.git",
+    "https://git.example.com/widget.git",
+  }.each do |url|
+    it "extracts tags from a remote without an owner namespace (#{url})" do
+      with_fake_repo(url) do |dir|
+        Doma::GitDetector.detect(dir).to_tags.should eq(["git.example.com", "widget"])
+      end
+    end
+  end
+
   it "passes self-hosted hosts through unchanged" do
     with_fake_repo("git@git.example.com:team/widget.git") do |dir|
       info = Doma::GitDetector.detect(dir)

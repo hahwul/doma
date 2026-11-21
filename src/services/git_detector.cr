@@ -141,12 +141,12 @@ module Doma
       stripped = url.strip.rstrip('/').rchop(".git")
 
       # Host excludes any `:port` so ssh://host:2222 and git@host: tag alike.
-      if m = stripped.match(/\A[a-z]+:\/\/(?:[^@\/]+@)?([^\/:]+)(?::\d+)?\/(.+?)\/([^\/]+)\z/i)
-        return {host: host_label(m[1]), repo: m[3]}
+      if m = stripped.match(/\A[a-z]+:\/\/(?:[^@\/]+@)?([^\/:]+)(?::\d+)?\/(?:.*\/)?([^\/]+)\z/i)
+        return {host: host_label(m[1]), repo: m[2]}
       end
       # scp-like, with or without `user@` (`github.com:o/r`).
-      if m = stripped.match(/\A(?:[^@\/]+@)?([^:\/]+):(?!\/\/)(.+?)\/([^\/]+)\z/)
-        return {host: host_label(m[1]), repo: m[3]}
+      if m = stripped.match(/\A(?:[^@\/]+@)?([^:\/]+):(?!(?:\/\/|:))(?:.*\/)?([^\/]+)\z/)
+        return {host: host_label(m[1]), repo: m[2]}
       end
       {host: nil, repo: nil}
     end
