@@ -336,12 +336,12 @@ module Doma
         @termisu.set_cell(0, y, marker, fg: Termisu::Color.cyan, attr: base)
 
         hint = scored.entry.tags.empty? ? "" : Text.sanitize(scored.entry.tags.map { |t| "##{t}" }.join(" "))
-        hint_room = hint.empty? ? 0 : Math.min(Text.display_width(hint), (@width // 3).clamp(8, 60))
-        label_limit = @width - (hint.empty? ? 1 : hint_room + 3)
+        hint_room = Text.tag_hint_width(hint, @width)
+        label_limit = @width - (hint_room.zero? ? 1 : hint_room + 3)
 
         draw_path(2, y, scored, base, selected, label_limit)
 
-        unless hint.empty?
+        if hint_room > 0
           draw_text(@width - hint_room, y, hint, fg: Termisu::Color.bright_black, attr: base, max_x: @width)
         end
       end
@@ -390,7 +390,7 @@ module Doma
         prompt, text =
           case @mode
           when .add_path? then {"add path › ", @buffer}
-          when .add_tags? then {"tags (space-separated) › ", @buffer}
+          when .add_tags? then {Text.tag_prompt(@width), @buffer}
           else                 {"› ", @query}
           end
 

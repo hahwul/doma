@@ -17,6 +17,19 @@ module Doma
         Termisu::UnicodeWidth.codepoint_width(c.ord).to_i
       end
 
+      def tag_hint_width(text : String, columns : Int32) : Int32
+        preferred = (columns // 3).clamp(8, 60)
+        # Leave two columns for the marker, four for the path, and three for the gap.
+        available = Math.max(columns - 9, 0)
+        Math.min(display_width(text), Math.min(preferred, available))
+      end
+
+      def tag_prompt(columns : Int32) : String
+        full = "tags (space-separated) › "
+        # Leave four columns for input and one for the cursor.
+        columns >= display_width(full) + 5 ? full : "tags › "
+      end
+
       # The longest suffix of `text` that fits in `room` columns, so the end
       # being typed (and the cursor after it) stays visible.
       def tail_fit(text : String, room : Int) : String

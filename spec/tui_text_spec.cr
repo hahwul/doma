@@ -64,6 +64,17 @@ describe Doma::TUI::Text do
     Doma::TUI::Text.display_width("ab한글").should eq(6)
   end
 
+  it "reserves path space before assigning columns to a tag hint" do
+    Doma::TUI::Text.tag_hint_width("#longtag", 12).should eq(3)
+    Doma::TUI::Text.tag_hint_width("#longtag", 80).should eq(8)
+  end
+
+  it "leaves room to type in the narrow tag prompt" do
+    prompt = Doma::TUI::Text.tag_prompt(24)
+    Doma::TUI::Text.display_width(prompt).should be <= 19
+    Doma::TUI::Text.tag_prompt(80).should contain("space-separated")
+  end
+
   it "tail_fit keeps the end that fits by columns" do
     Doma::TUI::Text.tail_fit("ab한글", 4).should eq("한글")
     Doma::TUI::Text.tail_fit("ab한글", 3).should eq("글")
