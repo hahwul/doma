@@ -73,7 +73,11 @@ module Doma
         end
       in Exporter::Format::Yaml
         begin
-          Snapshot.from_yaml(content)
+          documents = YAML::Nodes.parse_all(content)
+          unless documents.size == 1
+            raise ImportError.new("malformed snapshot#{label}: invalid YAML — expected one document")
+          end
+          Snapshot.new(YAML::ParseContext.new, documents.first.nodes.first)
         rescue ex : YAML::Error
           raise ImportError.new("malformed snapshot#{label}: invalid YAML — #{ex.message}")
         end
