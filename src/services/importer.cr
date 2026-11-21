@@ -10,7 +10,7 @@ module Doma
   # Loads a snapshot back into the database. The whole operation runs inside
   # a single SQLite transaction so a torn import — a malformed entry, a
   # crashed process, anything — can never replace existing rows with
-  # garbage. The user gets either the full new state or the original.
+  # garbage. Merge imports may skip invalid entries.
   module Importer
     extend self
 
@@ -185,6 +185,9 @@ module Doma
             clonable << {abs, remote}
           end
         rescue ex : Doma::ValidationError
+          if mode == Mode::Replace
+            raise ImportError.new("cannot replace database: invalid entry #{entry.path} (#{ex.message})")
+          end
           skipped += 1
           skipped_messages << "import: skipped #{entry.path} (#{ex.message})"
         end
