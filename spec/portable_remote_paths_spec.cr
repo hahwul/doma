@@ -8,11 +8,11 @@ describe Doma::GitDetector do
     begin
       config = File.join(git_dir, "config")
       ["repo.git", "repos/repo.git", "./repo.git", "../repo.git", "./repos/name:repo.git"].each do |url|
-        File.write(config, %[\[remote "origin"\]\n\turl = #{url}\n])
+        File.write(config, %([remote "origin"]\n\turl = #{url}\n))
         Doma::GitDetector.origin_url(dir).should be_nil
       end
       ["/srv/git/repo.git", "file:///srv/git/repo.git", "host:repo.git"].each do |url|
-        File.write(config, %[\[remote "origin"\]\n\turl = #{url}\n])
+        File.write(config, %([remote "origin"]\n\turl = #{url}\n))
         Doma::GitDetector.origin_url(dir).should eq(url)
       end
     ensure
