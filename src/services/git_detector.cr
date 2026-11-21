@@ -50,14 +50,16 @@ module Doma
     #   - `.git` must be a directory: a linked worktree or submodule (a
     #     `.git` *file*) is part of another repo, and re-cloning it would
     #     produce an unrelated full clone on the default branch
-    #   - a relative remote (`../bare.git`) means nothing elsewhere
+    #   - a relative local remote means nothing elsewhere
     # Secrets never leave: http(s) userinfo is dropped whole (tokens sit in
     # the user slot there), other schemes lose only the password.
     def origin_url(path : String) : String?
       git_dir = File.join(path, ".git")
       return unless Dir.exists?(git_dir)
       url = read_origin_url(git_dir)
-      return if url.nil? || url.starts_with?('.')
+      # Git recognizes URLs and SCP-style remotes by a colon before the
+      # first slash. Otherwise, only absolute local paths are portable.
+      return unless url && (url.starts_with?('/') || url.matches?(/\A[^\/:]+:/))
       url.sub(%r{\A(https?://)[^/@]+@}i, "\\1")
         .sub(%r{\A([a-z][a-z0-9+.-]*://[^/@:]+):[^/@]*@}i, "\\1@")
     rescue IO::Error
