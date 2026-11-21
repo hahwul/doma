@@ -4,7 +4,7 @@ description = "Export and import doma's database — for backup, version control
 weight = 8
 +++
 
-doma stores its state in a single SQLite file. For backup, version control, or moving between machines, use the snapshot commands — they produce a portable JSON or YAML payload.
+doma stores its state in a single SQLite file. For backup, version control, or moving between machines, use the snapshot commands — they produce a portable JSON or YAML payload. A snapshot file contains one document.
 
 ## Export
 
