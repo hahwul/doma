@@ -75,6 +75,16 @@ module Doma::CLI
       unless Doma::Validator.directory?(parent)
         raise Doma::ValidationError.new("output directory does not exist: #{parent}")
       end
+
+      database = Doma::Validator.canonicalize(Doma::Config.db_path)
+      output_info = File.info?(path)
+      # Compare the files too, since a case-insensitive filesystem can
+      # resolve a differently spelled path to the same database file.
+      {database, "#{database}-wal", "#{database}-shm", "#{database}-journal"}.each do |protected_path|
+        if path == protected_path || (output_info && File.info?(protected_path).try(&.same_file?(output_info)))
+          raise Doma::ValidationError.new("output path overlaps the active database: #{path}")
+        end
+      end
     end
 
     # Atomic write via temp + rename so a crashed export never leaves a

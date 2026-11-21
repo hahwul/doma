@@ -90,6 +90,27 @@ describe "bug hunt round 1" do
     end
   end
 
+  it "refuses to export over the active database or its sidecars" do
+    pending! "binary not built" unless File.exists?(R1_BIN)
+    with_r1_dir do |dir, home|
+      db_path = File.join(dir, "custom.db")
+      env = {"DOMA_DB" => db_path}
+      r1(["add", dir, "-t", "keep"], home, env: env)[:status].success?.should be_true
+      alias_path = File.join(dir, "backup.json")
+      File.symlink(db_path, alias_path)
+
+      [db_path, alias_path, "#{db_path}-wal", "#{db_path}-shm"].each do |target|
+        result = r1(["export", "-o", target], home, env: env)
+        result[:status].exit_code.should eq(2)
+        result[:err].should contain("output path overlaps the active database")
+      end
+
+      result = r1(["list", "--json"], home, env: env)
+      result[:status].success?.should be_true
+      JSON.parse(result[:out]).as_a.first["tags"].as_a.map(&.as_s).should eq(["keep"])
+    end
+  end
+
   it "stats keeps the count column aligned for long tags when colored" do
     pending! "binary not built" unless File.exists?(R1_BIN)
     with_r1_dir do |dir, home|
