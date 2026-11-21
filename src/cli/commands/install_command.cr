@@ -3,6 +3,7 @@ require "../../services/installer"
 require "../../utils/errors"
 require "../../utils/logger"
 require "../../utils/runtime"
+require "./shell_arg"
 
 module Doma::CLI
   # One-shot setup for the shell wrapper that makes `doma cd` actually
@@ -26,7 +27,7 @@ module Doma::CLI
           exit 0
         end
         p.unknown_args do |before, after|
-          shell ||= before.first? || after.first?
+          shell = ShellArg.positional!(before, after)
         end
       end
       parser.parse(args)

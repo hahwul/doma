@@ -1154,6 +1154,24 @@ end
 # ---------- setup dispatch ----------
 
 describe "doma setup dispatch" do
+  it "rejects extra shell arguments for each setup action" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      env = {"HOME" => home, "DOMA_HOME" => home}
+      %w[init completion install].each do |action|
+        args = ["setup", action]
+        args << "--yes" if action == "install"
+        [["bash", "fish"], ["bash", "--", "fish"]].each do |shells|
+          result = run(args + shells, env)
+          result[:status].exit_code.should eq(2)
+          result[:err].should contain("unexpected argument 'fish'")
+          result[:out].should be_empty
+          File.exists?(File.join(home, ".bashrc")).should be_false
+        end
+      end
+    end
+  end
+
   it "[no action] prints the setup help" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     r = run(["setup"])

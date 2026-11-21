@@ -1,11 +1,17 @@
 require "../../utils/errors"
 
 module Doma::CLI
-  # Shared plumbing for the `setup` subcommands that take a shell name
-  # (`init`, `completion`): one supported-shell list and one place for
-  # the missing/unsupported error shapes, so the two can't drift.
+  # Shared positional parsing and shell choices for `setup` actions.
   module ShellArg
     SUPPORTED = %w[bash zsh fish]
+
+    def self.positional!(before : Array(String), after : Array(String)) : String?
+      args = before + after
+      if extra = args[1]?
+        raise Doma::ValidationError.new("unexpected argument '#{extra}' (expected at most one shell)")
+      end
+      args.first?
+    end
 
     # Validates the positional shell argument, raising the canonical
     # error for a missing or unknown value. Returns the shell name so
