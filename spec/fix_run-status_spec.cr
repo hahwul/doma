@@ -138,12 +138,16 @@ describe "run/status fixes" do
   it "status reports a git spawn failure instead of 'not a git repo' (73)" do
     pending! "binary not built" unless File.exists?(FIX_RS_BIN)
     with_rs_home do |home|
-      repos = (1..30).map { |i| rs_repo(File.join(home, "r#{i}")) }
-      rs(["add"] + repos + ["-t", "g"], home)
+      rs(["add", home, "-t", "g"], home)[:status].success?.should be_true
+      # Pass the PATH lookup and fail during spawn with EACCES: the
+      # executable script points to a non-executable interpreter.
+      git = File.join(home, "git")
+      File.write(git, "#!/dev/null\n")
+      File.chmod(git, 0o755)
       out_io = IO::Memory.new
       err_io = IO::Memory.new
-      status = Process.run("sh", ["-c", "ulimit -n 30; exec \"$0\" status g --jobs 30", FIX_RS_BIN],
-        env: rs_env(home), output: out_io, error: err_io)
+      status = Process.run(FIX_RS_BIN, ["status", "g"],
+        env: rs_env(home).merge({"PATH" => home}), output: out_io, error: err_io)
       out_io.to_s.should_not contain("not a git repo")
       status.success?.should be_false
       err_io.to_s.should contain("could not run git")
