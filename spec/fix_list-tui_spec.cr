@@ -57,6 +57,27 @@ describe "list/tui fixes" do
   end
 
   describe "doma list" do
+    it "uses the last --by value for JSON output and picking" do
+      pending! "binary not built" unless File.exists?(FIX_LT_BIN)
+      with_lt_home do |home|
+        lt_run(["add", home, "-t", "work"], home)[:status].success?.should be_true
+
+        flat = lt_run(["list", "--by", "path", "--json"], home)
+        repeated = lt_run(["list", "--by", "tag", "--by", "path", "--json"], home)
+        flat[:status].success?.should be_true
+        repeated[:status].success?.should be_true
+        JSON.parse(flat[:out]).as_a.map(&.["path"].as_s).should eq([home])
+        JSON.parse(repeated[:out]).should eq(JSON.parse(flat[:out]))
+
+        recent = lt_run(["list", "--by", "recent", "--pick", "--first"], home)
+        repeated_pick = lt_run(["list", "--by", "tag", "--by", "recent", "--pick", "--first"], home)
+        recent[:status].success?.should be_true
+        repeated_pick[:status].success?.should be_true
+        recent[:out].lines.should eq([home])
+        repeated_pick[:out].should eq(recent[:out])
+      end
+    end
+
     it "scopes the TTL footer to the filter, and shows it when an expired tag empties the result (#8)" do
       pending! "binary not built" unless File.exists?(FIX_LT_BIN)
       with_lt_home do |home|

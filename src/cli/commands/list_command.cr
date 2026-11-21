@@ -62,18 +62,13 @@ module Doma::CLI
           Doma::Validator.split_tag_flag!(t, "-x").each { |x| excludes << x }
         end
         p.on("--by SORT", "Sort by 'path' (default), 'recent' ('used'/'recency'), or 'tag' (group)") do |val|
+          # Grouped rows still use path order within each tag.
+          group_by_tag = val == "tag"
           case val
-          when "path"
+          when "path", "tag"
             sort = Doma::Database::SortBy::Path
           when "recent", "used", "recency"
             sort = Doma::Database::SortBy::Recent
-          when "tag"
-            # `tag` is a *grouping* mode rather than a flat sort: one
-            # entry can carry N tags and shows up under each. Internal
-            # row order within a group still uses path-asc so the output
-            # is stable across runs.
-            group_by_tag = true
-            sort = Doma::Database::SortBy::Path
           else
             raise Doma::ValidationError.new(
               "--by must be 'path', 'recent' (aliases: 'used', 'recency'), or 'tag', got '#{val}'"
