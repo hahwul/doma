@@ -22,7 +22,7 @@ module Doma::CLI
           exit 0
         end
         p.unknown_args do |before, after|
-          shell ||= before.first? || after.first?
+          shell = ShellArg.positional!(before, after)
         end
       end
       parser.parse(args)
