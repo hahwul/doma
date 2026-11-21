@@ -64,7 +64,7 @@ module Doma::CLI
       puts "  get <key>            Print current value (default if unset)"
       puts "  set <key> <value>    Persist value to config.yml"
       puts "  unset <key>          Remove the key (revert to default)"
-      puts "  list                 Show all settings with source (default/file)"
+      puts "  list                 Show all settings with their source"
       puts "  edit                 Open config.yml in $EDITOR / $VISUAL"
       puts "  path                 Print the resolved config path"
       puts ""
@@ -119,14 +119,14 @@ module Doma::CLI
       settings = load_file
       width = KEYS.max_of(&.size)
       KEYS.each do |key|
-        source = settings[key].nil? ? "default" : "file"
-        marker = source == "file" ? "*" : " "
+        source = setting_source(settings, key)
+        marker = source == "default" ? " " : "*"
         value = effective_value(settings, key)
         value = "(empty)" if value.empty?
         puts "#{marker} #{key.ljust(width)}  #{value.ljust(8)}  (#{source})"
       end
       puts ""
-      puts "* = customized (from #{Doma::Config.config_path})"
+      puts "* = customized (config file #{Doma::Config.config_path})"
     end
 
     private def cmd_edit(args : Array(String))
@@ -277,14 +277,21 @@ module Doma::CLI
 
     private def effective_value(settings : Doma::Settings, key : String) : String
       case key
-      # Blank counts as unset, same as `Config.db_path`.
-      when "db_path"           then settings.db_path.presence || (ENV["DOMA_DB"]?.presence ? "" : File.join(Doma::Config.home, "doma.db"))
+      when "db_path"           then Doma::Config.db_path(settings)
       when "selector"          then settings.selector.to_s.downcase
       when "auto_tag.basename" then settings.auto_tag.basename.to_s
       when "auto_tag.git"      then settings.auto_tag.git.to_s
       when "auto_tag.project"  then settings.auto_tag.project.to_s
       else                          ""
       end
+    end
+
+    private def setting_source(settings : Doma::Settings, key : String) : String
+      if key == "db_path"
+        return "environment" if ENV["DOMA_DB"]?.presence
+        return settings.db_path.presence ? "file" : "default"
+      end
+      settings[key].nil? ? "default" : "file"
     end
 
     # ------------------------------------------------------------------

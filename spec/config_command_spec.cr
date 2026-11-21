@@ -42,6 +42,29 @@ describe "doma config" do
     end
   end
 
+  it "reports the database path and source used by database commands" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    with_home do |home|
+      config_dir = File.join(home, "settings")
+      Dir.mkdir(config_dir)
+      config_path = File.join(config_dir, "config.yml")
+      env = {"DOMA_HOME" => home, "DOMA_CONFIG" => config_path}
+
+      File.write(config_path, "db_path: relative.db\n")
+      path = File.join(config_dir, "relative.db")
+      run(["config", "get", "db_path"], env)[:out].chomp.should eq(path)
+      run(["config", "list"], env)[:out].should match(/db_path\s+#{Regex.escape(path)}\s+\(file\)/)
+
+      override = File.join(home, "override.db")
+      env["DOMA_DB"] = override
+      run(["config", "get", "db_path"], env)[:out].chomp.should eq(override)
+      run(["config", "list"], env)[:out].should match(/db_path\s+#{Regex.escape(override)}\s+\(environment\)/)
+      run(["add", home], env)[:status].success?.should be_true
+      File.exists?(override).should be_true
+      File.exists?(path).should be_false
+    end
+  end
+
   it "[set] writes a bool to config.yml and get returns it" do
     pending! "binary not built" unless File.exists?(DOMA_BIN)
     with_home do |home|
