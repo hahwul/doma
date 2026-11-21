@@ -28,6 +28,10 @@ module Doma
       # fails fast with a clear lock error rather than a corrupt
       # half-applied schema.
       db.using_connection do |cnn|
+        # Current schemas can be read while another connection writes.
+        # Older schemas are rechecked after taking the lock.
+        next if cnn.scalar("PRAGMA user_version").as(Int64) == CURRENT_VERSION
+
         cnn.exec("BEGIN IMMEDIATE")
         begin
           version = cnn.scalar("PRAGMA user_version").as(Int64).to_i

@@ -187,6 +187,25 @@ describe Doma::Migrations do
   end
 
   describe "concurrent migration safety" do
+    it "opens a current database while another connection holds the write lock" do
+      with_temp_path do |path|
+        Doma::Database.open(path) { |db| db.add("/registered/project", ["work"], validate_path: false) }
+
+        DB.open("sqlite3://#{path}") do |writer|
+          writer.using_connection do |connection|
+            connection.exec("BEGIN IMMEDIATE")
+            begin
+              Doma::Database.open(path) do |reader|
+                reader.directories.map(&.path).should eq(["/registered/project"])
+              end
+            ensure
+              connection.exec("ROLLBACK")
+            end
+          end
+        end
+      end
+    end
+
     it "serializes parallel Database.open on a fresh path without ALTER races" do
       # Pre-fix: four shells each running `doma add` on a fresh DB
       # raced inside Migrations.run, all reading user_version=0 and
