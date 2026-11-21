@@ -10,7 +10,7 @@ module Doma
   # Soft-delete recovery store. `rm` writes a snapshot of the entry here
   # before dropping it from sqlite; `doma trash restore` reads it back
   # and re-inserts. The format is JSONL because:
-  #   - append-only writes are crash-safe (no half-written file)
+  #   - a malformed record can be skipped without hiding the rest
   #   - a user can `cat`/`grep` it without tooling
   #   - migrations are unnecessary — older lines are still valid JSON
   module Trash
@@ -87,7 +87,12 @@ module Doma
       return if additions.empty?
       with_lock do
         recoverable_entries(prune: true) if prune
-        File.open(file_path, "a") do |io|
+        File.open(file_path, "a+") do |io|
+          # A previous partial write may have left no record separator.
+          if io.size > 0
+            io.seek(-1, IO::Seek::End)
+            io << '\n' unless io.read_byte == 0x0a
+          end
           additions.each { |addition| io.puts addition.to_json }
         end
       end

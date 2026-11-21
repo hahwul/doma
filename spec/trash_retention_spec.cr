@@ -1,6 +1,24 @@
 require "./spec_helper"
 
 describe "Trash retention" do
+  it "keeps new snapshots readable after an unterminated record" do
+    with_temp_db do |db|
+      now = Time.utc.to_unix
+      previous = Doma::Trash::Entry.new(now, "0000001", "/previous", "previous", 0_i64, [] of String, {} of String => Int64)
+      db.add("/next", ["keep"], validate_path: false)
+      snapshot = Doma::Trash.snapshot(db, "/next") || raise "expected a trash snapshot"
+
+      {
+        previous.to_json => [snapshot, previous],
+        "{\"path\":"     => [snapshot],
+      }.each do |tail, expected|
+        File.write(Doma::Trash.file_path, tail)
+        Doma::Trash.add!(snapshot)
+        Doma::Trash.entries.should eq(expected)
+      end
+    end
+  end
+
   it "prunes expired records when a new entry is trashed" do
     with_temp_db do |_|
       now = Time.utc.to_unix
