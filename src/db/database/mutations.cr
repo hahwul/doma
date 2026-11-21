@@ -166,7 +166,7 @@ class Doma::Database
   # side validates badly.
   def move_path(old_path : String, new_path : String, *, validate_path : Bool = true) : Symbol
     old_abs = row_path(old_path)
-    new_abs = validate_path ? Validator.path!(new_path) : Validator.canonicalize(new_path)
+    new_abs = Validator.path!(new_path, must_exist: validate_path)
     return :noop if old_abs == new_abs
 
     result : Symbol = :moved

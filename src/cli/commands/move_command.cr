@@ -20,7 +20,7 @@ module Doma::CLI
 
       parser = OptionParser.new do |p|
         p.banner = "Usage: doma move <old-path> <new-path> [--allow-missing]"
-        p.on("--allow-missing", "Skip the existence check on <new-path>") { allow_missing = true }
+        p.on("--allow-missing", "Allow a missing <new-path>") { allow_missing = true }
         p.on("-h", "--help", "Show help") do
           puts p
           STDOUT.puts ""
@@ -86,11 +86,11 @@ module Doma::CLI
           # host" — the previous bare error pushed users to make a
           # placeholder dir or hand-edit the database.
           unless Doma::Validator.directory?(new_abs)
-            raise Doma::ValidationError.new(
-              "not a directory: #{new_abs}",
-              hint: "pass --allow-missing if the destination isn't on this machine yet " \
-                    "(e.g. cross-host snapshot, or you haven't done the disk move yet)"
-            )
+            hint = unless File.exists?(new_abs)
+              "pass --allow-missing if the destination isn't on this machine yet " \
+              "(e.g. cross-host snapshot, or you haven't done the disk move yet)"
+            end
+            raise Doma::ValidationError.new("not a directory: #{new_abs}", hint: hint)
           end
         end
 
