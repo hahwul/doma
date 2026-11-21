@@ -77,6 +77,9 @@ module Doma::CLI
             esac
             if [ $# -le 1 ]; then
               set -- list --pick
+            elif [ "${2#-}" != "$2" ]; then
+              shift
+              set -- list --pick "$@"
             else
               local __doma_tag="$2"
               shift 2
@@ -132,6 +135,9 @@ module Doma::CLI
             end
             if test (count $argv) -le 1
               set argv list --pick
+            else if builtin string match --quiet -- '-*' "$argv[2]"
+              set -e argv[1]
+              set argv list --pick $argv
             else
               set -l __doma_tag $argv[2]
               set -e argv[1..2]
