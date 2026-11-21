@@ -244,7 +244,10 @@ module Doma::CLI
       {load_file, false}
     rescue ex : Doma::ConfigError
       begin
-        root = YAML.parse(File.read(Doma::Config.config_path)).as_h
+        path = Doma::Config.config_path
+        node = Doma::Settings.config_document(File.read(path), path)
+        raise ex unless node
+        root = YAML::Any.new(YAML::ParseContext.new, node).as_h
         head, _, tail = key.partition('.')
         parent = tail.empty? ? root : root[YAML::Any.new(head)]?.try(&.as_h?)
         raise ex unless parent && parent.delete(YAML::Any.new(tail.empty? ? head : tail))

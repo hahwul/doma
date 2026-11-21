@@ -189,9 +189,8 @@ module Doma
       unless File.file?(path)
         raise ConfigError.new("config path is not a file: #{path}")
       end
-      content = File.read(path)
-      return new if content.strip.empty?
-      from_yaml(content)
+      node = config_document(File.read(path), path)
+      node ? new(YAML::ParseContext.new, node) : new
     rescue ex : YAML::ParseException
       raise ConfigError.new(format_parse_error(path, ex))
     rescue ex : YAML::Error
@@ -200,6 +199,15 @@ module Doma
       # Permission denied and friends — same actionable shape as a
       # parse failure instead of leaking an internal error.
       raise ConfigError.new("cannot read config (#{path}): #{ex.message}")
+    end
+
+    # Validate the whole stream before callers read or repair its settings.
+    def self.config_document(content : String, path : String) : YAML::Nodes::Node?
+      documents = YAML::Nodes.parse_all(content)
+      if documents.size > 1
+        raise ConfigError.new("invalid config (#{path}): expected one YAML document")
+      end
+      documents.first?.try(&.nodes.first)
     end
 
     # Wrap the raw YAML parser message in something a user can act on.
