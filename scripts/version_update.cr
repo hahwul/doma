@@ -110,7 +110,12 @@ puts "  #{PKGBUILD_FILE.ljust(25)} #{pkgbuild_v || "Not found"}"
 puts
 
 # Check if versions match
-versions = [shard_v, doma_v, snapcraft_v, pkgbuild_v].compact
+versions = [shard_v, doma_v, snapcraft_v, pkgbuild_v]
+if versions.includes?(nil)
+  STDERR.puts "Each version file must contain a readable version."
+  exit 1
+end
+
 unique_versions = versions.uniq
 
 if unique_versions.size > 1
@@ -119,7 +124,7 @@ if unique_versions.size > 1
   puts
 end
 
-current_version = shard_v || doma_v || snapcraft_v || "unknown"
+current_version = shard_v
 puts "Current version: #{current_version}"
 puts
 

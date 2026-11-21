@@ -30,6 +30,30 @@ describe "tooling fixes" do
     end
   end
 
+  %w[version_check version_update].each do |script|
+    it "fails #{script} when a required version file is missing" do
+      dir = File.tempname("doma-version")
+      FileUtils.mkdir_p(File.join(dir, "src"))
+      FileUtils.mkdir_p(File.join(dir, "snap"))
+      files = {
+        "shard.yml"           => "version: 0.6.0\n",
+        "src/doma.cr"         => "VERSION = \"0.6.0\"\n",
+        "snap/snapcraft.yaml" => "version: 0.6.0\n",
+      }
+      files.each { |path, contents| File.write(File.join(dir, path), contents) }
+      begin
+        log = IO::Memory.new
+        status = Process.run("crystal", ["run", File.join(ROOT, "scripts/#{script}.cr")],
+          chdir: dir, input: IO::Memory.new("0.7.0\n"), output: log, error: log)
+        status.success?.should be_false, log.to_s
+        log.to_s.should contain("Not found")
+        files.each { |path, contents| File.read(File.join(dir, path)).should eq(contents) }
+      ensure
+        FileUtils.rm_rf(dir)
+      end
+    end
+  end
+
   it "[#67] shard.lock no longer pins the ameba commit that fails on Crystal 1.22" do
     File.read(File.join(ROOT, "shard.lock")).should_not contain("77bf37bb")
   end

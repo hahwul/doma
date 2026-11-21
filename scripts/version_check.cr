@@ -45,10 +45,9 @@ puts "Doma version: #{doma_v || "Not found"}"
 puts "Snapcraft version: #{snapcraft_v || "Not found"}"
 puts "PKGBUILD version: #{pkgbuild_v || "Not found"}"
 
-versions = [shard_v, doma_v, snapcraft_v, pkgbuild_v].compact
-
-if versions.empty?
-  puts "No versions found!"
+versions = [shard_v, doma_v, snapcraft_v, pkgbuild_v]
+if versions.includes?(nil)
+  STDERR.puts "Each version file must contain a readable version."
   exit 1
 end
 
