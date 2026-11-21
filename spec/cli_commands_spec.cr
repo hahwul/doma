@@ -2523,6 +2523,7 @@ describe "doma export --portable / import --clone" do
         preview[:out].should contain("would clone #{origin}")
         Dir.exists?(target).should be_false
 
+        Dir.mkdir(target)
         r = run(["import", snapshot, "--clone"], env)
         r[:status].exit_code.should eq(0)
         Dir.exists?(File.join(target, ".git")).should be_true
@@ -2552,6 +2553,31 @@ describe "doma export --portable / import --clone" do
       r[:err].should contain("its parent failed to clone")
       Dir.exists?(target).should be_false
       run(["list", "-t", "p", "--paths"], {"DOMA_HOME" => home})[:out].chomp.should eq(Doma::Validator.canonicalize(target))
+    end
+  end
+
+  it "[--clone] leaves files and dangling symlinks at destination paths alone" do
+    pending! "binary not built" unless File.exists?(DOMA_BIN)
+    pending! "git not on PATH" unless STATUS_GIT_OK
+    with_home do |home|
+      file = File.join(home, "file")
+      link = File.join(home, "link")
+      missing = File.join(home, "missing")
+      File.write(file, "keep")
+      File.symlink(missing, link)
+      snapshot = File.join(home, "snap.json")
+      entries = [file, link].map { |path| {path: path, tags: ["p"], remote: File.join(home, "no-such-origin")} }
+      File.write(snapshot, {version: 2, entries: entries}.to_json)
+      env = {"DOMA_HOME" => home}
+
+      preview = run(["import", snapshot, "--clone", "--dry-run"], env)
+      preview[:status].exit_code.should eq(0)
+      preview[:out].should_not contain("would clone")
+      result = run(["import", snapshot, "--clone"], env)
+      result[:status].exit_code.should eq(0)
+      run(["list", "-t", "p", "--paths"], env)[:out].lines.should eq([File.realpath(file), File.join(File.realpath(home), "link")])
+      File.read(file).should eq("keep")
+      File.readlink(link).should eq(missing)
     end
   end
 end
