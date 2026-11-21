@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta name="description" content="A workbench for sets of project directories — put them on the cutting board" />
+        <title>doma — Directory tag manager (Crystal CLI)</title>
+        <meta property="og:title" content="doma">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://doma.hahwul.com/">
+  <meta property="og:description" content="A workbench for sets of project directories — put them on the cutting board">
+  <meta property="og:image" content="https://doma.hahwul.com/images/og-default.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="doma">
+  <meta name="twitter:description" content="A workbench for sets of project directories — put them on the cutting board">
+  <meta name="twitter:image" content="https://doma.hahwul.com/images/og-default.png">
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+            rel="icon"
+            type="image/png"
+            href="/icons/favicon-96x96.png"
+            sizes="96x96"
+        />
+        <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg" />
+        <link rel="shortcut icon" href="/icons/favicon.ico" />
+        <link
+            rel="apple-touch-icon"
+            sizes="180x180"
+            href="/icons/apple-touch-icon.png"
+        />
+        <meta name="apple-mobile-web-app-title" content="Doma" />
+        <link rel="manifest" href="/icons/site.webmanifest" />
+        <link
+            href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Next:ital,wght@0,400..700;1,400..700&family=Atkinson+Hyperlegible+Mono:wght@400..700&display=swap"
+            rel="stylesheet"
+        />
+        <link rel="stylesheet" href="https://doma.hahwul.com/assets/css/01-variables.css?v=21059188">
+<link rel="stylesheet" href="https://doma.hahwul.com/assets/css/02-base.css?v=21059188">
+<link rel="stylesheet" href="https://doma.hahwul.com/assets/css/03-layout.css?v=21059188">
+<link rel="stylesheet" href="https://doma.hahwul.com/assets/css/04-content.css?v=21059188">
+<link rel="stylesheet" href="https://doma.hahwul.com/assets/css/05-components.css?v=21059188">
+<link rel="stylesheet" href="https://doma.hahwul.com/assets/css/06-responsive.css?v=21059188">
+<link rel="stylesheet" href="https://doma.hahwul.com/assets/css/07-landing.css?v=21059188">
+    </head>
+    <body class="landing-body">
+        <header class="landing-header">
+            <a href="https://doma.hahwul.com/" class="logo" aria-label="doma home">
+                <img src="/images/board-mark.png" alt="" width="44" height="44" />
+                <span class="wordmark">doma</span>
+            </a>
+            <nav>
+                <a href="https://doma.hahwul.com/start/">Docs</a>
+                <a
+                    href="https://github.com/hahwul/doma"
+                    class="github-link"
+                    target="_blank"
+                    rel="noopener"
+                    aria-label="GitHub"
+                >
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
+                    </svg>
+                </a>
+            </nav>
+        </header>
+
+        <main>
+            <!-- Hero: the board itself, dithered live. The pointer is the lamp. -->
+            <section class="hero" data-board-stage>
+                <div class="hero-inner">
+                    <div class="hero-copy">
+                        <h1 class="hero-title pixel">
+                            Put your directories on the cutting board.
+                        </h1>
+                        <p class="hero-sub">
+                            doma is a workbench for sets of project
+                            directories. Label them once, then check or run a
+                            whole label at a time.
+                        </p>
+                        <div class="hero-actions">
+                            <a href="https://doma.hahwul.com/start/" class="btn">Read the docs</a>
+                            <code class="install" title="Select to copy"
+                                ><span aria-hidden="true">$ </span>brew install hahwul/doma/doma</code
+                            >
+                        </div>
+                        <p class="hero-meta">
+                            One static binary. No runtime dependencies. MIT
+                            licensed.
+                        </p>
+                    </div>
+                    <div class="hero-board">
+                        <canvas
+                            class="board-canvas"
+                            data-board="pool"
+                            role="img"
+                            aria-label="A wooden cutting board with a handle, drawn in dithered pixels"
+                        ></canvas>
+                    </div>
+                </div>
+            </section>
+            <div class="ramp" aria-hidden="true"></div>
+
+            <!-- The loop: label, look, run, retry -->
+            <section class="loop">
+                <h2 class="pixel">Label once. Then work on the whole set.</h2>
+                <div class="loop-grid">
+                    <ol class="steps">
+                        <li>
+                            <h3>Label</h3>
+                            <p>
+                                Tag a directory with whatever makes sense: a
+                                language, a client, this week's spike. Tags
+                                can expire on their own.
+                            </p>
+                            <code>doma add . -t crystal -t work</code>
+                        </li>
+                        <li>
+                            <h3>Look</h3>
+                            <p>
+                                See every repo under a label at once: branch,
+                                ahead and behind, uncommitted files, stashes,
+                                last commit.
+                            </p>
+                            <code>doma status work</code>
+                        </li>
+                        <li>
+                            <h3>Run</h3>
+                            <p>
+                                Run a command in each one. Whatever fails is
+                                listed again at the end.
+                            </p>
+                            <code>doma run work --parallel -- git fetch</code>
+                        </li>
+                        <li>
+                            <h3>Retry</h3>
+                            <p>
+                                Sets like <code>@failed</code> and
+                                <code>@dirty</code> are worked out when you
+                                ask, so you only redo what needs it.
+                            </p>
+                            <code>doma run @failed -- make test</code>
+                        </li>
+                    </ol>
+
+                    <figure class="term" role="img" aria-label="A terminal session: doma status, doma run, then a retry of what failed">
+<pre><span class="p">$</span> <span class="cmd">doma status crystal</span>
+/Users/me/Projects/doma   <span class="hi">● 2 dirty</span>  main  ↑1  8m ago
+/Users/me/Projects/hwaro  ✔ clean  main  3d ago
+/Users/me/Projects/noir   ✔ clean  main  ≡1 stashed  1w ago
+
+<span class="dim">3 repos · 1 dirty · 1 ahead</span>
+
+<span class="p">$</span> <span class="cmd">doma run crystal -- shards build</span>
+<span class="dim">▶ /Users/me/Projects/doma</span>
+✓ /Users/me/Projects/doma (exit 0)
+<span class="dim">▶ /Users/me/Projects/hwaro</span>
+<span class="hi">✗ /Users/me/Projects/hwaro (exit 1)</span>
+<span class="dim">▶ /Users/me/Projects/noir</span>
+✓ /Users/me/Projects/noir (exit 0)
+
+2 ok · 1 failed
+<span class="hi">  ✗ /Users/me/Projects/hwaro (exit 1)</span>
+
+<span class="p">$</span> <span class="cmd">doma run @failed -- shards build</span></pre>
+                    </figure>
+                </div>
+            </section>
+
+            <!-- Why -->
+            <section class="why">
+                <h2 class="pixel">Why a cutting board</h2>
+                <p>
+                    I kept losing track of where things lived — twelve Crystal
+                    repos in one folder, seven shell experiments in another, the
+                    security write-ups elsewhere. <code>cd</code>'s history
+                    wasn't enough; fuzzy finders forgot what mattered the moment
+                    I cleared the terminal. So I wrote a cutting board: pin the
+                    directories I care about, label them with whatever tags make
+                    sense (<code>crystal</code>, <code>work/proj-a</code>,
+                    <code>reading-this-week</code>), and let the tool do the
+                    recall.
+                </p>
+            </section>
+
+            <!-- The word, and the dark end of the board again -->
+            <div class="ramp ramp-up" aria-hidden="true"></div>
+            <section class="word">
+                <div class="word-inner">
+                    <span class="word-hangul pixel" lang="ko">도마</span>
+                    <div class="word-entry">
+                        <p class="word-pron">/do·ma/, noun, Korean</p>
+                        <p class="word-def">
+                            The cutting board: the workbench where ingredients
+                            get gathered, grouped, and chopped before going into
+                            the pan. The metaphor stuck.
+                        </p>
+                    </div>
+                </div>
+                <footer class="landing-footer">
+                    <div class="footer-mark">
+                        <a href="https://www.hahwul.com" target="_blank" rel="noopener" aria-label="hahwul">
+                            <span class="hahwul-img" role="img" aria-label="hahwul"></span>
+                        </a>
+                        <p class="footer-love">Built with Love</p>
+                    </div>
+                </footer>
+            </section>
+        </main>
+        <script src="/assets/js/board.js"></script>
+    </body>
+</html>

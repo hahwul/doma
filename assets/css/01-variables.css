@@ -1,0 +1,74 @@
+/* =============================================================================
+   Design tokens — doma documentation theme.
+
+   Direction: the board, dithered.
+
+   Five tones of one piece of wood, dark to light, and nothing else. Any
+   tone in between is made the way a 1-bit screen makes it: by dithering
+   two neighbours. Edges are hard, corners are square, shadows are
+   checkerboards. docs/tools/render-board.js reads these five values to
+   draw the static marks — rerun it after changing them.
+   ============================================================================= */
+
+:root {
+    /* The wood — dark to light */
+    --bark: #1b130b;
+    --walnut: #6b3f1d;
+    --husk: #a8743a;
+    --oak: #dba255;
+    --sap: #f8ecd0;
+
+    /* The one tint allowed outside the five: a flat fill for places where
+       text sits on it and a dither pattern would hurt legibility. */
+    --shade: #efdfba;
+
+    /* Roles */
+    --page: var(--sap);
+    --ink: var(--bark);
+    --rule: var(--oak);
+
+    /* One "fat pixel". Borders, dither cells and offsets are multiples. */
+    --px: 2px;
+    --shadow: calc(var(--px) * 3);
+
+    /* Ink for the dither fills below; set it on any element to recolor. */
+    --dither-ink: var(--bark);
+
+    /* Layout */
+    --header-h: 60px;
+    --sidebar-w: 264px;
+    --toc-w: 220px;
+
+    /* Typography. Galmuri11 is a bitmap face: it is only crisp at multiples
+       of 12px, so --font-pixel text is always sized 12 / 24 / 36 / 48 / 60. */
+    --font-pixel: "Galmuri11", "Atkinson Hyperlegible Mono", monospace;
+    --font-sans:
+        "Atkinson Hyperlegible Next", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    --font-mono: "Atkinson Hyperlegible Mono", "SF Mono", Menlo, Consolas, monospace;
+}
+
+/* Only the bold cut is loaded: it is the display face, and the regular
+   weight is three times the download for text this site sets in sans. */
+@font-face {
+    font-family: "Galmuri11";
+    font-style: normal;
+    font-weight: 700;
+    font-display: swap;
+    src: url("https://cdn.jsdelivr.net/npm/galmuri@2.40.3/dist/Galmuri11-Bold.woff2")
+        format("woff2");
+}
+
+/* Dither fills, 25 / 50 / 75 percent ink, as ready-made `background`
+   layers (the tile is two fat pixels square). Declared on every element
+   rather than :root so a local --dither-ink takes effect: a custom
+   property that references another is resolved where it is declared. */
+*,
+*::before,
+*::after {
+    --dither-25: conic-gradient(var(--dither-ink) 25%, transparent 0) 0 0 /
+        calc(var(--px) * 2) calc(var(--px) * 2);
+    --dither-50: repeating-conic-gradient(var(--dither-ink) 0 25%, transparent 0 50%) 0 0 /
+        calc(var(--px) * 2) calc(var(--px) * 2);
+    --dither-75: conic-gradient(transparent 25%, var(--dither-ink) 0) 0 0 /
+        calc(var(--px) * 2) calc(var(--px) * 2);
+}

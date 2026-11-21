@@ -1,0 +1,289 @@
+/* =============================================================================
+   Search — sits on the dark header
+   ============================================================================= */
+
+.docs-search {
+    position: relative;
+    margin-right: 0.5rem;
+}
+
+.docs-search-input {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 200px;
+    max-width: 32vw;
+    padding: 0.4rem 0.7rem;
+    border: var(--px) solid var(--husk);
+    border-radius: 0;
+    background: var(--bark);
+    color: var(--sap);
+    font-family: var(--font-sans);
+    font-size: 0.9rem;
+}
+
+.docs-search-input::placeholder {
+    color: var(--husk);
+    opacity: 1;
+}
+
+.docs-search-input:focus {
+    outline: none;
+    border-color: var(--oak);
+}
+
+.docs-search-results {
+    --slab: var(--page);
+    position: absolute;
+    /* Clear of the header's dithered lower edge. */
+    top: calc(100% + 1.9rem);
+    right: 0;
+    width: 380px;
+    max-width: min(380px, 90vw);
+    max-height: 60vh;
+    overflow-y: auto;
+    /* The frame, inside the slab so the shadow strip stays clear. */
+    box-shadow: inset 0 0 0 var(--px) var(--bark);
+    padding: var(--px);
+    z-index: 150;
+}
+
+.docs-search-results[hidden] {
+    display: none;
+}
+
+.docs-search-result {
+    display: block;
+    padding: 0.6rem 0.85rem;
+    border-bottom: 1px solid var(--rule);
+    color: var(--ink);
+}
+
+.docs-search-result:last-child {
+    border-bottom: none;
+}
+
+.docs-search-result:hover,
+.docs-search-result.is-active {
+    background: var(--bark);
+    color: var(--sap);
+}
+
+.docs-search-result-title {
+    display: block;
+    font-weight: 700;
+    font-size: 0.94rem;
+    margin-bottom: 0.15rem;
+}
+
+.docs-search-result-snippet {
+    display: block;
+    font-size: 0.84rem;
+    color: var(--walnut);
+    line-height: 1.45;
+}
+
+.docs-search-result:hover .docs-search-result-snippet,
+.docs-search-result.is-active .docs-search-result-snippet {
+    color: var(--oak);
+}
+
+.docs-search-result-snippet mark {
+    background: var(--oak);
+    color: var(--bark);
+    padding: 0 0.1em;
+}
+
+.docs-search-empty {
+    padding: 0.8rem 0.85rem;
+    color: var(--walnut);
+    font-size: 0.9rem;
+}
+
+/* =============================================================================
+   Buttons — a slab you can press
+   ============================================================================= */
+
+.btn {
+    --slab: var(--oak);
+    display: inline-flex;
+    align-items: center;
+    padding: 0.7rem 1.2rem;
+    color: var(--bark);
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1.2;
+    cursor: pointer;
+}
+
+/* A tone darker — it has to read on the dark hero and the light 404 alike. */
+.btn:hover {
+    --slab: var(--husk);
+    color: var(--bark);
+}
+
+.btn:active {
+    transform: translate(var(--px), var(--px));
+}
+
+/* =============================================================================
+   Info boxes — the heavier the dither bar, the louder the note
+   ============================================================================= */
+
+.info-box {
+    --slab: var(--shade);
+    position: relative;
+    padding: 0.9rem 1.15rem 0.9rem 1.9rem;
+    margin: 1.5rem 0;
+    font-size: 0.94rem;
+    line-height: 1.6;
+}
+
+.info-box::before {
+    content: "";
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: calc(var(--px) * 4);
+    background: var(--dither-25);
+}
+
+.info-box.tip::before {
+    background: var(--dither-50);
+}
+
+.info-box.warning::before {
+    background: var(--dither-75);
+}
+
+.info-box.danger::before {
+    background: var(--bark);
+}
+
+.info-box p {
+    margin: 0;
+}
+
+/* =============================================================================
+   Page index — the pages of a section, one per ruled row
+   ============================================================================= */
+
+ul.page-list,
+ul.section-list {
+    list-style: none;
+    padding: 0;
+    margin: 1.5rem 0 2rem;
+}
+
+ul.page-list li,
+ul.section-list li {
+    margin: 0;
+    border-bottom: 1px solid var(--rule);
+}
+
+.docs-main ul.page-list li a,
+.docs-main ul.section-list li a {
+    display: block;
+    padding: 0.7rem 0.6rem;
+    font-weight: 700;
+    color: var(--ink);
+    text-decoration: none;
+}
+
+.docs-main ul.page-list li a:hover,
+.docs-main ul.section-list li a:hover {
+    background: var(--bark);
+    color: var(--sap);
+}
+
+/* =============================================================================
+   Docs footer
+   ============================================================================= */
+
+.docs-footer {
+    margin-top: 4.5rem;
+    font-size: 0.84rem;
+    color: var(--walnut);
+}
+
+.docs-footer::before {
+    --dither-ink: var(--husk);
+    content: "";
+    display: block;
+    height: calc(var(--px) * 2);
+    margin-bottom: 1.4rem;
+    background: var(--dither-50);
+}
+
+.docs-footer a {
+    color: var(--walnut);
+}
+
+/* hahwul mark — Built with Love (matches dalfox docs footer) */
+.footer-mark {
+    text-align: center;
+    margin-top: 1.5rem;
+    width: 100%;
+}
+
+.footer-mark a {
+    display: inline-block;
+    line-height: 0;
+}
+
+.footer-mark .hahwul-img {
+    display: inline-block;
+    width: 80px;
+    height: 80px;
+    /* Recolor the logo to the footer text tone by masking with its alpha. */
+    background-color: var(--walnut);
+    -webkit-mask: url("../../images/hahwul.webp") center / contain no-repeat;
+    mask: url("../../images/hahwul.webp") center / contain no-repeat;
+}
+
+.footer-mark .hahwul-img:hover {
+    background-color: var(--bark);
+}
+
+.footer-love {
+    margin-top: 0.85rem;
+    color: var(--walnut);
+    font-family: "Bradley Hand", "Snell Roundhand", "Apple Chancery", cursive;
+    font-size: 0.95rem;
+    letter-spacing: 0.02em;
+}
+
+/* =============================================================================
+   Not found
+   ============================================================================= */
+
+.lost {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    /* Clear of the fixed header and its dithered edge. */
+    padding: calc(var(--header-h) + 3rem) 1.25rem 3rem;
+    text-align: center;
+}
+
+/* The canvas sizes itself to its parent: cap it at the 2x drawing. */
+.lost-board {
+    display: flex;
+    justify-content: center;
+    width: min(100%, 400px);
+}
+
+.lost h1 {
+    font-size: 60px;
+    line-height: 1;
+    margin: 1rem 0 0.75rem;
+}
+
+.lost p {
+    margin: 0 0 1.75rem;
+    font-size: 1.1rem;
+    color: var(--walnut);
+}
