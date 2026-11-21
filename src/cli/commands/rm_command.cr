@@ -46,6 +46,7 @@ module Doma::CLI
 
       missing = 0
       failures = 0
+      prune_trash = true
       Doma::Database.open do |db|
         # Validate up front so an invalid tag name fails fast with a
         # clear error. A name already stored is exempt: older versions
@@ -70,7 +71,10 @@ module Doma::CLI
             # write fails the row must survive, otherwise a soft `rm`
             # silently becomes a hard one.
             entry = hard ? nil : Doma::Trash.snapshot(db, abs)
-            entry.try { |e| Doma::Trash.add!(e) }
+            if entry
+              Doma::Trash.add!(entry, prune: prune_trash)
+              prune_trash = false
+            end
             removed = begin
               db.remove_path(path)
             rescue ex

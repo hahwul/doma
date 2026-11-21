@@ -81,12 +81,14 @@ module Doma
       )
     end
 
-    # Append a snapshot to the trash file. Lazy mkdir so callers that
-    # never trash anything don't pay for a directory creation.
-    def add!(entry : Entry)
+    # Append snapshots to the trash file after applying retention.
+    def add!(entry : Entry | Array(Entry), *, prune : Bool = true)
+      additions = entry.is_a?(Entry) ? [entry] : entry
+      return if additions.empty?
       with_lock do
+        recoverable_entries(prune: true) if prune
         File.open(file_path, "a") do |io|
-          io.puts entry.to_json
+          additions.each { |addition| io.puts addition.to_json }
         end
       end
     end
@@ -97,16 +99,12 @@ module Doma
     # is never a separate user step.
     def entries(*, prune : Bool = true) : Array(Entry)
       with_lock(read_only: !prune) do
-        raw = read_all
-        cutoff = Time.utc.to_unix - DEFAULT_RETENTION_SECONDS
-        kept, pruned = raw.partition { |e| e.deleted_at >= cutoff }
-        rewrite!(kept) if prune && !pruned.empty?
         # Newest first. `deleted_at` has 1-second granularity, so two
         # deletions in the same second tie; the file is written
         # chronologically, so reversing first and relying on `sort_by!`
         # being stable puts the later append (the more recent deletion)
         # first — "undo the latest" (bare `trash restore`) depends on it.
-        kept.reverse.sort_by! { |e| -e.deleted_at }
+        recoverable_entries(prune).reverse.sort_by! { |e| -e.deleted_at }
       end
     end
 
@@ -263,6 +261,14 @@ module Doma
     # ------------------------------------------------------------------
     # Internals
     # ------------------------------------------------------------------
+
+    private def recoverable_entries(prune : Bool) : Array(Entry)
+      raw = read_all
+      cutoff = Time.utc.to_unix - DEFAULT_RETENTION_SECONDS
+      kept = raw.select { |e| e.deleted_at >= cutoff }
+      rewrite!(kept) if prune && kept.size != raw.size
+      kept
+    end
 
     # Resolve a batch of tag names to their ids in one round-trip.
     # Returns the names that already exist; callers compare against the
